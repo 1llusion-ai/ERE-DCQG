@@ -408,6 +408,19 @@ or {{"consistency":"no","reason":"brief reason"}}"""
 # 5. PATH COVERAGE CHECK
 # ═══════════════════════════════════════════════════════════════
 
+def _simple_stem(word):
+    """Simple English stemmer for matching event triggers to question words."""
+    w = word.lower().strip(".,;:!?\"'")
+    if len(w) <= 3:
+        return w
+    for suffix in ['ing', 'tion', 'sion', 'ment', 'ness', 'ity', 'ence', 'ance',
+                   'ized', 'ised', 'ated', 'ened', 'ified', 'ally', 'edly',
+                   'ies', 'ed', 'er', 'es', 'ly', 's']:
+        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+            return w[:-len(suffix)]
+    return w
+
+
 def check_path_coverage_lexical(generated_question, path_events):
     """
     Lexical overlap check: how many path events are referenced in the question.
@@ -415,25 +428,33 @@ def check_path_coverage_lexical(generated_question, path_events):
     """
     q_lower = generated_question.lower()
     q_words = set(q_lower.split())
+    q_stems = {_simple_stem(w) for w in q_words}
     covered = []
     for e in path_events:
         trigger = e["trigger"].lower()
-        trigger_words = set(trigger.split())
+        trigger_stem = _simple_stem(trigger)
         # Direct match
         if trigger in q_lower:
             covered.append(e["id"])
             continue
-        # Stem match (first 4 chars for words >= 4)
+        # Stem match
+        if trigger_stem in q_stems:
+            covered.append(e["id"])
+            continue
+        # Substring containment
+        matched = False
         for qw in q_words:
-            if len(qw) >= 4 and len(trigger) >= 4:
-                if qw[:4] == trigger[:4] or trigger in qw or qw in trigger:
+            if len(qw) >= 3 and len(trigger) >= 3:
+                if trigger in qw or qw in trigger or trigger_stem in qw or qw in trigger_stem:
                     covered.append(e["id"])
+                    matched = True
                     break
+        if matched:
+            continue
         # Entity/type match
-        if e["id"] not in covered:
-            etype = e.get("type", "").lower()
-            if etype and len(etype) >= 4 and etype in q_lower:
-                covered.append(e["id"])
+        etype = e.get("type", "").lower()
+        if etype and len(etype) >= 4 and etype in q_lower:
+            covered.append(e["id"])
     return len(covered), covered
 
 
@@ -453,7 +474,7 @@ def path_coverage_judge(generated_question, supporting_sentences, path_events, d
         for i, s in enumerate(supporting_sentences[:6])
     )
 
-    min_required = {"Easy": 1, "Medium": 2, "Hard": 3}.get(difficulty, 1)
+    min_required = {"Easy": 1, "Medium": 2, "Hard": 2}.get(difficulty, 1)
 
     prompt = f"""Question: "{generated_question}"
 Path events: {path_str}

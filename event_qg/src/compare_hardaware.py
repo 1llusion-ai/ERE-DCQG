@@ -4,8 +4,9 @@ PathQG Hard-Aware: difficulty-controlled question generation with monotonicity e
 Changes from compare.py:
 - Difficulty-specific few-shot examples and constraints
 - Hard: requires binding 2+ prior events, bans shortcut phrases
-- Medium: requires start event + 1 intermediate event mention
+- Medium: requires 1 prior event, connect 2+ sentences
 - Easy: 1-hop OK, simple questions
+- CrossQG-style structured prompts with Difficulty Definition + Examples
 - New path_faithfulness_judge: NeedIntermediateEvents, EvidenceHopsUsed, CanAnswerFromSingleSentence
 - Difficulty monotonicity: Easy > Medium > Hard on solver_correct
 """
@@ -65,6 +66,16 @@ Question: "After the government announced budget cuts and citizens protested, wh
 - Note: the gold answer "cancel" is NEVER mentioned in the question."""
 
 # ═══════════════════════════════════════════════════════════════
+# DIFFICULTY DEFINITIONS (CrossQG-style)
+# ═══════════════════════════════════════════════════════════════
+
+DIFFICULTY_DEFINITIONS_HA = {
+    "Easy": "Easy questions are straightforward, answerable from a single sentence in the context.",
+    "Medium": "Medium questions require connecting information from 2-3 sentences.",
+    "Hard": "Hard questions require synthesizing information across multiple sentences and reasoning chains.",
+}
+
+# ═══════════════════════════════════════════════════════════════
 # BANNED SHORTCUT PHRASES (Hard only)
 # ═══════════════════════════════════════════════════════════════
 
@@ -104,103 +115,131 @@ def fmt_ctx(supporting):
 
 
 def prompt_pathqg_easy(item):
-    """Easy: 1-hop, simple question. Use the path but only require one connection."""
+    """Easy: 1-hop, simple question. CrossQG-style structured prompt."""
     events = item["events"]
     path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
     final = events[-1]["trigger"]
-    first = events[0]["trigger"]
     ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    gold_trigger = item.get("answer_trigger", "") or item.get("gold_answer_trigger", "")
 
-    return f"""{FEW_SHOT_EASY}
+    return f"""{DIFFICULTY_DEFINITIONS_HA["Easy"]}
 
-Now generate an Easy question:
-Difficulty: Easy
-Events: {path_str}
-Context: {ctx}
+{FEW_SHOT_EASY}
+
+Context:
+{ctx}
+
+Target answer:
+"{gold_trigger}"
+
+Event Path:
+{path_str}
+
+Relation Sequence:
+{rel_str}
 
 Requirements for Easy:
-- Ask about what happened to someone/something after a single event.
+- Ask about what happened after a single event.
 - A 1-hop question is acceptable.
-- The answer is the final event: "{final}".
-- You MAY mention the first event "{first}" or another event as context.
-- Question must start with a question word (What/Who/When/Where/Why/How) and end with "?".
-- Do NOT use the word "{final}" or its direct synonyms in the question.
-- Output ONLY: {{"question": "...", "reasoning_type": "direct"}}"""
+- Reference at least 1 path event.
+- The answer is the final event. Do NOT use it in the question.
+- Question must start with a question word and end with "?".
+
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "direct"}}"""
 
 
 def prompt_pathqg_medium(item):
-    """Medium: must reference start event + at least one intermediate event."""
+    """Medium: 1 prior event, connect 2+ sentences. CrossQG-style structured prompt."""
     events = item["events"]
     path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
     final = events[-1]["trigger"]
-
-    # Identify key events to reference
-    if len(events) >= 3:
-        start_event = events[0]["trigger"]
-        mid_event = events[1]["trigger"]
-        event_hint = f'Your question MUST reference both the start event "{start_event}" AND an intermediate event like "{mid_event}".'
-    else:
-        start_event = events[0]["trigger"]
-        event_hint = f'Your question MUST reference the start event "{start_event}".'
-
+    prior_events = [e["trigger"] for e in events[:-1]]
+    prior_list = ", ".join(f'"{t}"' for t in prior_events)
     ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    gold_trigger = item.get("answer_trigger", "") or item.get("gold_answer_trigger", "")
 
-    return f"""{FEW_SHOT_MEDIUM}
+    return f"""{DIFFICULTY_DEFINITIONS_HA["Medium"]}
 
-Now generate a Medium question:
-Difficulty: Medium
-Events: {path_str}
-Context: {ctx}
+{FEW_SHOT_MEDIUM}
+
+Context:
+{ctx}
+
+Target answer:
+"{gold_trigger}"
+
+Event Path:
+{path_str}
+
+Relation Sequence:
+{rel_str}
 
 Requirements for Medium:
 - Ask about the final event in a way that requires understanding how it connects to earlier events.
-- {event_hint}
-- Your question MUST reference at least 2 different path events from the list above.
-- The solver should need to understand the relationship between at least two events.
-- The answer is the final event: "{final}". Do NOT use this word in the question.
+- Reference at least 1 PRIOR event from: {prior_list} (not the final event).
+- The question should connect information from at least 2 context sentences.
+- The solver should need to understand the relationship between events.
+- Do NOT use the target answer in the question.
 - Question must start with a question word and end with "?".
-- Output ONLY: {{"question": "...", "reasoning_type": "chain"}}"""
+
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "chain"}}"""
 
 
 def prompt_pathqg_hard(item):
-    """Hard: must bind 2+ prior events, cannot be answered from a single sentence."""
+    """Hard: 2+ prior events, cross-sentence. CrossQG-style structured prompt."""
     events = item["events"]
     path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
     final = events[-1]["trigger"]
-
-    # List all prior events for binding
     prior_events = [e["trigger"] for e in events[:-1]]
     prior_list = ", ".join(f'"{t}"' for t in prior_events)
-
     ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    gold_trigger = item.get("answer_trigger", "") or item.get("gold_answer_trigger", "")
 
-    return f"""{FEW_SHOT_HARD}
+    return f"""{DIFFICULTY_DEFINITIONS_HA["Hard"]}
 
-Now generate a Hard question:
-Difficulty: Hard
-Events: {path_str}
-Context: {ctx}
+{FEW_SHOT_HARD}
 
-CRITICAL Requirements for Hard (you MUST follow ALL of these):
-1. Your question MUST EXPLICITLY mention at least TWO events from: {prior_list}.
-   - Don't just say "after the incident" — use the SPECIFIC event names or descriptions.
-   - Example of GOOD: "After X announced cuts and Y protested, what did officials do?"
-   - Example of BAD: "What was the final outcome after the incident?" ← NEVER DO THIS.
+Context:
+{ctx}
 
-2. FORBIDDEN phrases (do NOT use ANY of these):
+Target answer:
+"{gold_trigger}"
+
+Event Path:
+{path_str}
+
+Relation Sequence:
+{rel_str}
+
+CRITICAL Requirements for Hard (you MUST follow ALL):
+1. EXPLICITLY mention at least TWO prior events from: {prior_list}.
+   - Use SPECIFIC event names, not vague references like "the incident".
+   - GOOD: "After X announced cuts and Y protested, what did officials do?"
+   - BAD: "What was the final outcome after the incident?"
+
+2. FORBIDDEN phrases (do NOT use ANY):
    - "final outcome" / "final result"
    - "what happened after the incident/event/crash"
    - "what action was taken"
    - "as a result" / "what was the result"
 
-3. The question must NOT be answerable by reading only ONE sentence.
-   - The solver must need to connect at least two pieces of information from different parts of the context.
+3. The question must NOT be answerable from a single sentence.
+   - The solver must connect at least two pieces of information.
 
-4. The answer is the final event: "{final}". Do NOT use this word or its direct synonyms in the question.
+4. Do NOT use the target answer in the question.
 
 5. Question must start with a question word and end with "?".
 
-6. Output ONLY: {{"question": "...", "reasoning_type": "cross_sentence"}}"""
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "cross_sentence"}}"""
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -217,15 +256,22 @@ def validate_hard_question(question, events, gold_trigger):
     # Check that question mentions at least 2 prior events
     prior_triggers = [e["trigger"].lower() for e in events[:-1]]
     q_lower = question.lower()
-    mentioned = [t for t in prior_triggers if t in q_lower]
-    # Also check lemmatized/stem matches (words with length >= 4 share first 4 chars)
+    q_words = set(q_lower.split())
+    q_stems = {_simple_stem(w) for w in q_words}
+    mentioned = []
     for t in prior_triggers:
-        if t in mentioned or len(t) < 4:
+        t_stem = _simple_stem(t)
+        if t in q_lower:
+            mentioned.append(t)
             continue
-        for qw in q_lower.split():
-            if len(qw) >= 4 and len(t) >= 4 and (qw[:4] == t[:4] or t in qw or qw in t):
-                mentioned.append(t)
-                break
+        if t_stem in q_stems:
+            mentioned.append(t)
+            continue
+        for qw in q_words:
+            if len(qw) >= 3 and len(t) >= 3:
+                if t in qw or qw in t or t_stem in qw or qw in t_stem:
+                    mentioned.append(t)
+                    break
     if len(set(mentioned)) < 2:
         return False, f"only {len(set(mentioned))} prior events mentioned, need >=2 from {prior_triggers}"
 
@@ -240,8 +286,9 @@ def validate_hard_question(question, events, gold_trigger):
 # GENERATOR (reusing compare.py infrastructure)
 # ═══════════════════════════════════════════════════════════════
 
-def generate_one(prompt, temperature=0.1):
-    """Single API call, return (json_dict_or_None, raw_text)."""
+def generate_one(prompt, temperature=0.1, max_retries=2):
+    """Single API call, return (json_dict_or_None, raw_text).
+    Retries on empty/timeout responses."""
     import urllib.request
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {SILICONFLOW_API_KEY}"}
     payload = {
@@ -251,32 +298,55 @@ def generate_one(prompt, temperature=0.1):
             {"role": "user", "content": prompt}
         ],
         "temperature": temperature,
-        "max_tokens": 250,
+        "max_tokens": 300,
         "stop": ["\n\n"],
     }
-    try:
-        req = urllib.request.Request(
-            SILICONFLOW_API_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=90) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            text = data["choices"][0]["message"]["content"]
-    except Exception as e:
-        return None, f"ERROR: {e}"
 
-    gen = None
-    try:
-        gen = json.loads(text)
-    except json.JSONDecodeError:
+    for attempt in range(max_retries + 1):
         try:
-            s = text.index("{")
-            e = text.rindex("}") + 1
-            gen = json.loads(text[s:e])
-        except (ValueError, json.JSONDecodeError):
-            pass
+            req = urllib.request.Request(
+                SILICONFLOW_API_URL,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                text = data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            if attempt < max_retries:
+                time.sleep(1.0)
+                continue
+            return None, f"ERROR: {e}"
+
+        # Check for empty response
+        if not text:
+            if attempt < max_retries:
+                time.sleep(0.5)
+                continue
+            return None, "EMPTY_RESPONSE"
+
+        # Try parsing JSON
+        gen = None
+        try:
+            gen = json.loads(text)
+        except json.JSONDecodeError:
+            try:
+                s = text.index("{")
+                e = text.rindex("}") + 1
+                gen = json.loads(text[s:e])
+            except (ValueError, json.JSONDecodeError):
+                pass
+
+        # If we got valid JSON with a question, return it
+        if gen and isinstance(gen, dict) and gen.get("question", "").strip():
+            return gen, text
+
+        # If JSON parsed but empty question, retry
+        if attempt < max_retries:
+            time.sleep(0.5)
+            continue
+
     return gen, text
 
 
@@ -284,8 +354,9 @@ def generate_one(prompt, temperature=0.1):
 # REPAIR PROMPTS (hard-aware)
 # ═══════════════════════════════════════════════════════════════
 
-def _build_repair_prompt_hardaware(item, failed_question, failure_reason, difficulty):
-    """Build repair prompt for hard-aware generation."""
+def _build_repair_prompt_hardaware(item, failed_question, failure_reason, difficulty, covered_indices=None):
+    """Build repair prompt for hard-aware generation.
+    If covered_indices is provided, list specific uncovered events."""
     events = item["events"]
     path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
     final = events[-1]["trigger"]
@@ -312,8 +383,19 @@ def _build_repair_prompt_hardaware(item, failed_question, failure_reason, diffic
     if "only" in failure_reason and "prior events mentioned" in failure_reason:
         fix_hints["insufficient events"] = f"Mention at least TWO specific events from: {prior_list}. Name them explicitly in the question."
     if "path_binding" in failure_reason:
-        min_req = {"Easy": 1, "Medium": 2, "Hard": 2}.get(difficulty, 1)
-        fix_hints["path_binding"] = f"Your question must explicitly mention at least {min_req} prior events from the path: {path_str}. Use the specific event trigger words in your question."
+        min_req = {"Easy": 1, "Medium": 1, "Hard": 2}.get(difficulty, 1)
+        # List specific uncovered events
+        check_events = events[:-1] if difficulty in ("Medium", "Hard") else events
+        uncovered = [e for i, e in enumerate(check_events) if not covered_indices or i not in covered_indices]
+        if uncovered:
+            event_list = "\n".join(f'  - "{e["trigger"]}" ({e.get("type", "event")})' for e in uncovered[:3])
+            fix_hints["path_binding"] = f"""Your question did not mention enough prior events (covered {len(covered_indices or [])}/{min_req} required).
+Please rewrite to explicitly reference these events:
+{event_list}
+Do NOT mention the target answer: "{final}"
+Use the specific event trigger words or clear descriptions."""
+        else:
+            fix_hints["path_binding"] = f"Your question must explicitly mention at least {min_req} events from the path. Use the specific event trigger words."
 
     fix = fix_hints.get(failure_reason, f"Fix this issue: {failure_reason}")
 
@@ -349,34 +431,67 @@ REPAIRABLE_REASONS = {
 }
 
 
+def _simple_stem(word):
+    """Simple English stemmer for matching event triggers to question words."""
+    w = word.lower().strip(".,;:!?\"'")
+    if len(w) <= 3:
+        return w
+    # Common suffixes
+    for suffix in ['ing', 'tion', 'sion', 'ment', 'ness', 'ity', 'ence', 'ance',
+                   'ized', 'ised', 'ated', 'ened', 'ified', 'ally', 'edly',
+                   'ies', 'ed', 'er', 'es', 'ly', 's']:
+        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+            return w[:-len(suffix)]
+    return w
+
+
 def _check_path_binding(question, events, difficulty):
     """Check if question text mentions enough path event triggers.
-    Uses lexical matching (trigger in question, stem matching).
-    Easy: 1, Medium: 2, Hard: 2 (prior events, not counting answer event).
+    Uses lexical matching with fuzzy stem matching.
+    Easy: 1 (any event), Medium: 1 (prior events only), Hard: 2 (prior events only).
     Returns (pass: bool, covered_indices: list, reason: str).
     """
-    # For Hard, we check prior events only (exclude answer event = last)
+    # For Medium and Hard, check prior events only (exclude answer event = last)
     check_events = events
-    if difficulty == "Hard":
+    if difficulty in ("Medium", "Hard"):
         check_events = events[:-1]  # prior events only
-    min_required = {"Easy": 1, "Medium": 2, "Hard": 2}.get(difficulty, 1)
+    min_required = {"Easy": 1, "Medium": 1, "Hard": 2}.get(difficulty, 1)
 
     q_lower = question.lower()
     q_words = set(q_lower.split())
+    q_stems = {_simple_stem(w) for w in q_words}
     covered = []
 
     for i, e in enumerate(check_events):
         trigger = e["trigger"].lower()
+        trigger_stem = _simple_stem(trigger)
         # Direct match
         if trigger in q_lower:
             covered.append(i)
             continue
-        # Stem match (first 4 chars for words >= 4)
+        # Stem match: trigger stem in question stems
+        if trigger_stem in q_stems:
+            covered.append(i)
+            continue
+        # Substring containment (trigger in any question word or vice versa)
+        matched = False
         for qw in q_words:
-            if len(qw) >= 4 and len(trigger) >= 4:
-                if qw[:4] == trigger[:4] or trigger in qw or qw in trigger:
+            if len(qw) >= 3 and len(trigger) >= 3:
+                if trigger in qw or qw in trigger:
                     covered.append(i)
+                    matched = True
                     break
+                # Stem-level containment
+                if trigger_stem in qw or qw in trigger_stem:
+                    covered.append(i)
+                    matched = True
+                    break
+        if matched:
+            continue
+        # Entity/type match (event type as fallback)
+        etype = e.get("type", "").lower()
+        if etype and len(etype) >= 4 and etype in q_lower:
+            covered.append(i)
 
     covered = list(set(covered))
     if len(covered) >= min_required:
@@ -414,7 +529,7 @@ def generate_with_retry_hardaware(item, max_attempts=5):
             prompt = prompt_fn(item)
             temp = 0.1
         else:
-            prompt = _build_repair_prompt_hardaware(item, question, g_reason, diff)
+            prompt = _build_repair_prompt_hardaware(item, question, g_reason, diff, covered_indices)
             temp = 0.1 + min(attempt * 0.1, 0.3)
 
         gen, raw = generate_one(prompt, temperature=temp)
@@ -460,6 +575,9 @@ def generate_with_retry_hardaware(item, max_attempts=5):
     if not g_ok and not question:
         generation_error = True
 
+    # Determine path_binding method
+    pb_method = "lexical_pass" if g_ok else "fail"
+
     return {
         "item_id": item.get("_item_id", 0),
         "doc_id": item.get("doc_id", ""),
@@ -473,6 +591,7 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         "retry_attempts": attempts,
         "generation_error": generation_error,
         "covered_event_indices": covered_indices,
+        "path_binding_method": pb_method,
         "events": events,
         "supporting_sentences": item.get("supporting_sentences", []),
         "relation_subtypes": item.get("relation_subtypes", []),
@@ -629,6 +748,7 @@ def main():
     parser.add_argument("--n_per_level", type=int, default=100)
     parser.add_argument("--skip_generation", action="store_true")
     parser.add_argument("--skip_evaluation", action="store_true")
+    parser.add_argument("--pilot", type=int, default=0, help="Run pilot on N items (0=disabled)")
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
@@ -656,6 +776,20 @@ def main():
     print(f"Sampled {len(sampled)} items")
     level_counts = Counter(r["difficulty"] for r in sampled)
     print(f"  By level: {dict(level_counts)}")
+
+    # Pilot mode: subsample N items (balanced across difficulties)
+    if args.pilot > 0:
+        n_pilot = args.pilot
+        n_per = max(1, n_pilot // 3)
+        pilot_sample = []
+        for level in ["Easy", "Medium", "Hard"]:
+            pool = [x for x in sampled if x["difficulty"] == level]
+            pilot_sample.extend(random.sample(pool, min(n_per, len(pool))))
+        random.shuffle(pilot_sample)
+        sampled = pilot_sample[:n_pilot]
+        print(f"\n*** PILOT MODE: Using {len(sampled)} items ***")
+        level_counts = Counter(r["difficulty"] for r in sampled)
+        print(f"  By level: {dict(level_counts)}")
 
     # Step 2: Generate PathQG-HardAware
     gen_path = output_dir / "compare_PathQG_generated_retry_hardaware.jsonl"

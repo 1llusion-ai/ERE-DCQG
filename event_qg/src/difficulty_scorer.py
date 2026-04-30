@@ -36,22 +36,20 @@ class DifficultyScorer:
         """
         RD: number of distinct relation subtypes on the path (full subtype string).
         e.g., TEMPORAL/BEFORE, CAUSE/PRECONDITION, SUBEVENT.
+        Forward-only lookup — paths must follow directed edges.
         """
         rel_subtypes = set()
         for i in range(len(path) - 1):
             src, tgt = path[i], path[i + 1]
-            # Try forward direction first, then reverse (bidirectional check)
             found = False
-            for direction in [(src, tgt), (tgt, src)]:
-                s, t = direction
-                for out_tgt, edge_type, edge_sub in self.g.get_out_neighbors(s):
-                    if out_tgt == t:
-                        key = f"{edge_type}/{edge_sub}" if edge_sub else edge_type
-                        rel_subtypes.add(key)
-                        found = True
-                        break
-                if found:
+            for out_tgt, edge_type, edge_sub in self.g.get_out_neighbors(src):
+                if out_tgt == tgt:
+                    key = f"{edge_type}/{edge_sub}" if edge_sub else edge_type
+                    rel_subtypes.add(key)
+                    found = True
                     break
+            if not found:
+                rel_subtypes.add("UNKNOWN")
 
         n = len(rel_subtypes)
         if n <= 1:
@@ -197,18 +195,16 @@ class DifficultyScorer:
         }
 
     def get_path_relation_subtypes(self, path):
-        """Return list of full relation subtype strings for each hop in path."""
+        """Return list of full relation subtype strings for each hop in path.
+        Forward-only lookup — paths must follow directed edges.
+        """
         subtypes = []
         for i in range(len(path) - 1):
             src, tgt = path[i], path[i + 1]
             key = None
-            for direction in [(src, tgt), (tgt, src)]:
-                s, t = direction
-                for out_tgt, edge_type, edge_sub in self.g.get_out_neighbors(s):
-                    if out_tgt == t:
-                        key = f"{edge_type}/{edge_sub}" if edge_sub else edge_type
-                        break
-                if key:
+            for out_tgt, edge_type, edge_sub in self.g.get_out_neighbors(src):
+                if out_tgt == tgt:
+                    key = f"{edge_type}/{edge_sub}" if edge_sub else edge_type
                     break
             subtypes.append(key or "UNKNOWN")
         return subtypes

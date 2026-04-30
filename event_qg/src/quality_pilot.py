@@ -36,6 +36,7 @@ from compare_hardaware import (
     is_valid_final_event,
 )
 from quality_filter import quality_filter_pipeline
+from trace_utils import build_trace_from_pipeline_result, write_full_trace as write_chain_trace, write_readable_trace as write_chain_readable
 
 # ═══════════════════════════════════════════════════════════════
 # CONFIG
@@ -827,11 +828,21 @@ def main():
         print(f"\n{'='*60}")
         print(f"Step 6: Writing debug traces to {trace_dir}")
         print("=" * 60)
-        trace_jsonl_path = write_full_trace(results, trace_dir)
-        trace_md_path = write_readable_trace(results, trace_dir)
+        # Legacy trace format (existing). Keep it in a separate folder so it
+        # cannot overwrite the full-chain trace with the same filenames.
+        legacy_trace_dir = trace_dir / "legacy_trace"
+        trace_jsonl_path = write_full_trace(results, legacy_trace_dir)
+        trace_md_path = write_readable_trace(results, legacy_trace_dir)
+        # Full-chain trace format (new)
+        chain_trace_dir = trace_dir / "full_chain_trace"
+        chain_traces = [build_trace_from_pipeline_result(r, item_id=i) for i, r in enumerate(results)]
+        chain_jsonl_path = write_chain_trace(chain_traces, chain_trace_dir)
+        chain_md_path = write_chain_readable(chain_traces, chain_trace_dir)
         print(f"\n  Trace files:")
         print(f"    {trace_jsonl_path}")
         print(f"    {trace_md_path}")
+        print(f"    {chain_jsonl_path} (full-chain)")
+        print(f"    {chain_md_path} (full-chain)")
 
 
 if __name__ == "__main__":

@@ -77,6 +77,26 @@ Trace files are written to `{output_dir}/debug_traces/` by default:
 }
 ```
 
+## Path Prefilter (Stage 1)
+
+Rule-based path cleaning BEFORE question generation. No LLM calls.
+
+```bash
+python event_qg/src/path_prefilter.py \
+  --input event_qg/outputs/sampled_paths_preview.jsonl \
+  --output event_qg/outputs/prefiltered_paths.jsonl \
+  --report_json event_qg/outputs/path_prefilter_report.json \
+  --report_md event_qg/outputs/path_prefilter_report.md
+```
+
+Rules:
+- **Hard weak trigger filter**: rejects paths with generic final triggers (said, made, took, occurred, etc.)
+- **Answer phrase validation**: ensures a meaningful answer phrase can be extracted
+- **Relation composition**: classifies paths as TEMPORAL/CAUSE/SUBEVENT/MIXED
+- **Support span**: flags single-sentence risk for Medium/Hard paths
+
+Outputs `prefilter_pass`, `prefilter_reason`, `gold_answer_phrase`, `weak_trigger_type`, `relation_group`, `support_span`, `rule_single_sentence_risk` on each path item.
+
 ## Baselines
 
 Run baselines and ablations:

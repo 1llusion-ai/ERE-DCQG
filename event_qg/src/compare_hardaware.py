@@ -55,14 +55,24 @@ def _simple_stem(word):
     return w
 
 
+CLAUSE_BOUNDARY_WORDS = {
+    ",", ";", "but", "and", "that", "which", "who", "where", "when",
+    "because", "although", "however", "while", "though", "yet", "so",
+    "nor", "or", "if", "unless", "since", "after", "before",
+}
+
+
 def extract_answer_phrase_local(sentence, trigger):
-    """Extract a natural answer phrase from the sentence containing the trigger.
-    Returns the trigger plus surrounding context (up to VP/NP chunk).
+    """Extract a natural answer phrase using clause-aware expansion.
+    Expands from trigger to clause boundaries instead of a fixed word window.
+    Returns (phrase, status) where status is 'complete', 'partial', or 'invalid'.
     """
     if not sentence or not trigger:
-        return trigger
+        return trigger, "invalid"
+
     words = sentence.split()
     trigger_words = trigger.lower().split()
+
     # Find trigger position in word list
     trigger_start = -1
     for i in range(len(words)):
@@ -77,13 +87,43 @@ def extract_answer_phrase_local(sentence, trigger):
                 trigger_start = i
                 break
     if trigger_start < 0:
-        return trigger
+        return trigger, "invalid"
 
-    # Expand window: back 2 words, forward 4 words
-    start = max(0, trigger_start - 2)
-    end = min(len(words), trigger_start + len(trigger_words) + 4)
-    phrase = " ".join(words[start:end]).strip(".,;:!?\"'")
-    return phrase if len(phrase.split()) >= 2 else trigger
+    trigger_end = trigger_start + len(trigger_words)
+
+    # Expand left to clause boundary
+    left = trigger_start
+    while left > 0:
+        w_clean = words[left - 1].lower().strip(".,;:!?\"'")
+        if w_clean in CLAUSE_BOUNDARY_WORDS:
+            break
+        if words[left - 1] in (".", "!", "?"):
+            break
+        left -= 1
+
+    # Expand right to clause boundary
+    right = trigger_end
+    while right < len(words):
+        w_clean = words[right].lower().strip(".,;:!?\"'")
+        if w_clean in CLAUSE_BOUNDARY_WORDS:
+            break
+        if words[right][-1:] in (".", "!", "?"):
+            right += 1  # include the punctuation
+            break
+        right += 1
+
+    phrase = " ".join(words[left:right]).strip(".,;:!?\"'")
+
+    # Determine status
+    if len(phrase.split()) < 2:
+        return trigger, "invalid"
+    elif left == 0 and right == len(words):
+        # Full sentence used — only flag as partial if sentence is long
+        status = "partial" if len(words) > 15 else "complete"
+    else:
+        status = "complete"
+
+    return phrase, status
 
 
 def enrich_path_item(item):
@@ -106,12 +146,13 @@ def enrich_path_item(item):
             answer_sentence = s[1] if isinstance(s, (list, tuple)) else s
             break
 
-    # Extract answer phrase
-    answer_phrase = extract_answer_phrase_local(answer_sentence, trigger)
+    # Extract answer phrase (now returns phrase + status)
+    answer_phrase, answer_phrase_status = extract_answer_phrase_local(answer_sentence, trigger)
 
     item["gold_answer_phrase"] = answer_phrase
     item["gold_answer_sentence"] = answer_sentence
     item["gold_event_type"] = event_type
+    item["answer_phrase_status"] = answer_phrase_status
 
     return item
 
@@ -736,6 +777,10 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         "method": "PathQG-HardAware",
         "generated_question": question,
         "gold_answer_trigger": gold,
+        "gold_answer_phrase": item.get("gold_answer_phrase", ""),
+        "gold_answer_sentence": item.get("gold_answer_sentence", ""),
+        "gold_event_type": item.get("gold_event_type", ""),
+        "answer_phrase_status": item.get("answer_phrase_status", "unknown"),
         "reasoning_type": rt,
         "grammar_pass": g_ok,
         "grammar_reason": g_reason,

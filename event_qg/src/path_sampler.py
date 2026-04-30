@@ -57,7 +57,8 @@ def build_path_info(g, path, score, scorer):
                 "id": eid,
                 "type": info["type"],
                 "trigger": info["trigger"],
-                "sent_id": info["sent_id"]
+                "sent_id": info["sent_id"],
+                "offset": info.get("offset", [])
             })
 
         return {
@@ -112,10 +113,12 @@ def sample_from_doc(g, target_counts, rng):
     # ---- Medium: enumerate 2-hop directed paths with Medium score ----
     medium_candidates = []
     seen_2hop = set()
-    for mid in event_ids:
-        for src, _, _ in g.get_out_neighbors(mid):
-            for tgt, _, _ in g.get_out_neighbors(mid):
-                if src == tgt or src not in event_ids or tgt not in event_ids:
+    for src in event_ids:
+        for mid, rel1, sub1 in g.get_out_neighbors(src):
+            if mid not in event_ids:
+                continue
+            for tgt, rel2, sub2 in g.get_out_neighbors(mid):
+                if tgt not in event_ids or tgt == src:
                     continue
                 key = (src, mid, tgt)
                 if key in seen_2hop:

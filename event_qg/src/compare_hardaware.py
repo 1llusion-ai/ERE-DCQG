@@ -39,6 +39,135 @@ from evaluator_v2 import grammar_filter, evaluate_item, _call_api, _normalize, _
 
 
 # ═══════════════════════════════════════════════════════════════
+# ANSWER PHRASE EXTRACTION (local, no LLM)
+# ═══════════════════════════════════════════════════════════════
+
+def _simple_stem(word):
+    """Simple English stemmer for matching event triggers to question words."""
+    w = word.lower().strip(".,;:!?\"'")
+    if len(w) <= 3:
+        return w
+    for suffix in ['ing', 'tion', 'sion', 'ment', 'ness', 'ity', 'ence', 'ance',
+                   'ized', 'ised', 'ated', 'ened', 'ified', 'ally', 'edly',
+                   'ies', 'ed', 'er', 'es', 'ly', 's']:
+        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
+            return w[:-len(suffix)]
+    return w
+
+
+def extract_answer_phrase_local(sentence, trigger):
+    """Extract a natural answer phrase from the sentence containing the trigger.
+    Returns the trigger plus surrounding context (up to VP/NP chunk).
+    """
+    if not sentence or not trigger:
+        return trigger
+    words = sentence.split()
+    trigger_words = trigger.lower().split()
+    # Find trigger position in word list
+    trigger_start = -1
+    for i in range(len(words)):
+        candidate = " ".join(w.lower().strip(".,;:!?\"'") for w in words[i:i+len(trigger_words)])
+        if candidate == trigger.lower():
+            trigger_start = i
+            break
+    if trigger_start < 0:
+        # Try substring match
+        for i, w in enumerate(words):
+            if trigger.lower() in w.lower() or w.lower() in trigger.lower():
+                trigger_start = i
+                break
+    if trigger_start < 0:
+        return trigger
+
+    # Expand window: back 2 words, forward 4 words
+    start = max(0, trigger_start - 2)
+    end = min(len(words), trigger_start + len(trigger_words) + 4)
+    phrase = " ".join(words[start:end]).strip(".,;:!?\"'")
+    return phrase if len(phrase.split()) >= 2 else trigger
+
+
+def enrich_path_item(item):
+    """Add answer phrase fields to a path item. Returns enriched copy."""
+    item = dict(item)  # shallow copy
+    events = item.get("events", [])
+    if not events:
+        return item
+
+    final_event = events[-1]
+    trigger = final_event.get("trigger", "")
+    event_type = final_event.get("type", "")
+    sent_id = final_event.get("sent_id", -1)
+
+    # Find answer sentence
+    answer_sentence = ""
+    for s in item.get("supporting_sentences", []):
+        sid = s[0] if isinstance(s, (list, tuple)) else -1
+        if sid == sent_id:
+            answer_sentence = s[1] if isinstance(s, (list, tuple)) else s
+            break
+
+    # Extract answer phrase
+    answer_phrase = extract_answer_phrase_local(answer_sentence, trigger)
+
+    item["gold_answer_phrase"] = answer_phrase
+    item["gold_answer_sentence"] = answer_sentence
+    item["gold_event_type"] = event_type
+
+    return item
+
+
+# ═══════════════════════════════════════════════════════════════
+# FINAL EVENT VALIDITY FILTER
+# ═══════════════════════════════════════════════════════════════
+
+GENERIC_TRIGGERS = {
+    "occurred", "happened", "took place", "made", "did", "was", "were",
+    "is", "are", "had", "has", "have", "said", "told", "asked",
+    "went", "came", "got", "gave", "took", "put", "set",
+}
+
+WEAK_TRIGGERS = {
+    "influence", "battle", "war", "opening", "played", "held",
+    "marked", "commented", "earned", "toured", "operate", "control",
+    "receiving", "sent", "start", "started", "formalize",
+}
+
+
+def is_valid_final_event(item):
+    """Check if the final event is a good answer target.
+    Returns (valid: bool, reason: str).
+    """
+    events = item.get("events", [])
+    if not events:
+        return False, "no events"
+
+    final = events[-1]
+    trigger = final.get("trigger", "").lower().strip()
+    event_type = final.get("type", "")
+    answer_phrase = item.get("gold_answer_phrase", trigger)
+
+    # Generic trigger check
+    if trigger in GENERIC_TRIGGERS:
+        return False, f"generic trigger: '{trigger}'"
+
+    # Weak trigger without good phrase
+    if trigger in WEAK_TRIGGERS:
+        if len(answer_phrase.split()) < 3:
+            return False, f"weak trigger without sufficient phrase: '{trigger}' -> '{answer_phrase}'"
+
+    # Check answer phrase has substance
+    if len(answer_phrase.split()) < 2 and len(trigger) <= 3:
+        return False, f"answer phrase too short: '{answer_phrase}'"
+
+    # Check answer sentence exists
+    answer_sentence = item.get("gold_answer_sentence", "")
+    if not answer_sentence:
+        return False, "no answer sentence found"
+
+    return True, "valid"
+
+
+# ═══════════════════════════════════════════════════════════════
 # ENHANCED FEW-SHOT EXAMPLES (difficulty-specific)
 # ═══════════════════════════════════════════════════════════════
 
@@ -122,7 +251,9 @@ def prompt_pathqg_easy(item):
     ctx = fmt_ctx(item.get("supporting_sentences", []))
     rel_types = item.get("relation_subtypes", [])
     rel_str = ", ".join(rel_types) if rel_types else "N/A"
-    gold_trigger = item.get("answer_trigger", "") or item.get("gold_answer_trigger", "")
+    answer_phrase = item.get("gold_answer_phrase", final)
+    answer_sentence = item.get("gold_answer_sentence", "")
+    event_type = item.get("gold_event_type", events[-1].get("type", ""))
 
     return f"""{DIFFICULTY_DEFINITIONS_HA["Easy"]}
 
@@ -131,8 +262,11 @@ def prompt_pathqg_easy(item):
 Context:
 {ctx}
 
-Target answer:
-"{gold_trigger}"
+Target final event:
+  Trigger: "{final}"
+  Answer meaning: "{answer_phrase}"
+  Event type: {event_type}
+  Sentence: "{answer_sentence}"
 
 Event Path:
 {path_str}
@@ -144,7 +278,8 @@ Requirements for Easy:
 - Ask about what happened after a single event.
 - A 1-hop question is acceptable.
 - Reference at least 1 path event.
-- The answer is the final event. Do NOT use it in the question.
+- The question's natural answer should identify the final event.
+- Do NOT copy the exact answer phrase into the question.
 - Question must start with a question word and end with "?".
 
 Output Format:
@@ -161,7 +296,9 @@ def prompt_pathqg_medium(item):
     ctx = fmt_ctx(item.get("supporting_sentences", []))
     rel_types = item.get("relation_subtypes", [])
     rel_str = ", ".join(rel_types) if rel_types else "N/A"
-    gold_trigger = item.get("answer_trigger", "") or item.get("gold_answer_trigger", "")
+    answer_phrase = item.get("gold_answer_phrase", final)
+    answer_sentence = item.get("gold_answer_sentence", "")
+    event_type = item.get("gold_event_type", events[-1].get("type", ""))
 
     return f"""{DIFFICULTY_DEFINITIONS_HA["Medium"]}
 
@@ -170,8 +307,11 @@ def prompt_pathqg_medium(item):
 Context:
 {ctx}
 
-Target answer:
-"{gold_trigger}"
+Target final event:
+  Trigger: "{final}"
+  Answer meaning: "{answer_phrase}"
+  Event type: {event_type}
+  Sentence: "{answer_sentence}"
 
 Event Path:
 {path_str}
@@ -184,7 +324,8 @@ Requirements for Medium:
 - Reference at least 1 PRIOR event from: {prior_list} (not the final event).
 - The question should connect information from at least 2 context sentences.
 - The solver should need to understand the relationship between events.
-- Do NOT use the target answer in the question.
+- The question's natural answer should identify the final event.
+- Do NOT copy the exact answer phrase into the question.
 - Question must start with a question word and end with "?".
 
 Output Format:
@@ -201,7 +342,9 @@ def prompt_pathqg_hard(item):
     ctx = fmt_ctx(item.get("supporting_sentences", []))
     rel_types = item.get("relation_subtypes", [])
     rel_str = ", ".join(rel_types) if rel_types else "N/A"
-    gold_trigger = item.get("answer_trigger", "") or item.get("gold_answer_trigger", "")
+    answer_phrase = item.get("gold_answer_phrase", final)
+    answer_sentence = item.get("gold_answer_sentence", "")
+    event_type = item.get("gold_event_type", events[-1].get("type", ""))
 
     return f"""{DIFFICULTY_DEFINITIONS_HA["Hard"]}
 
@@ -210,8 +353,11 @@ def prompt_pathqg_hard(item):
 Context:
 {ctx}
 
-Target answer:
-"{gold_trigger}"
+Target final event:
+  Trigger: "{final}"
+  Answer meaning: "{answer_phrase}"
+  Event type: {event_type}
+  Sentence: "{answer_sentence}"
 
 Event Path:
 {path_str}
@@ -234,7 +380,8 @@ CRITICAL Requirements for Hard (you MUST follow ALL):
 3. The question must NOT be answerable from a single sentence.
    - The solver must connect at least two pieces of information.
 
-4. Do NOT use the target answer in the question.
+4. The question's natural answer should identify the final event.
+   - Do NOT copy the exact answer phrase into the question.
 
 5. Question must start with a question word and end with "?".
 
@@ -521,6 +668,8 @@ def generate_with_retry_hardaware(item, max_attempts=5):
     attempts = 0
     generation_error = False
     events = item.get("events", [])
+    all_attempt_prompts = []
+    all_attempt_raws = []
 
     for attempt in range(max_attempts):
         attempts = attempt + 1
@@ -533,6 +682,8 @@ def generate_with_retry_hardaware(item, max_attempts=5):
             temp = 0.1 + min(attempt * 0.1, 0.3)
 
         gen, raw = generate_one(prompt, temperature=temp)
+        all_attempt_prompts.append(prompt)
+        all_attempt_raws.append(raw or "")
 
         if gen is None:
             question = ""
@@ -596,6 +747,8 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         "supporting_sentences": item.get("supporting_sentences", []),
         "relation_subtypes": item.get("relation_subtypes", []),
         "difficulty_score": item.get("difficulty_score", 0),
+        "generation_prompts": all_attempt_prompts,
+        "generation_raw_responses": all_attempt_raws,
     }, attempts
 
 

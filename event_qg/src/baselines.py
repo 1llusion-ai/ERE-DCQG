@@ -432,9 +432,10 @@ def _parse_json_response(text):
             return None
 
 
-def _make_result(item, question, reasoning_type, name, grammar_pass, grammar_reason):
+def _make_result(item, question, reasoning_type, name, grammar_pass, grammar_reason,
+                 generation_prompts=None, generation_raw_responses=None):
     """Build a result dict for a generated question."""
-    return {
+    result = {
         "doc_id": item.get("doc_id", ""),
         "difficulty": item["difficulty"],
         "method": name,
@@ -448,6 +449,11 @@ def _make_result(item, question, reasoning_type, name, grammar_pass, grammar_rea
         "relation_subtypes": item.get("relation_subtypes", []),
         "difficulty_score": item.get("difficulty_score", 0),
     }
+    if generation_prompts is not None:
+        result["generation_prompts"] = generation_prompts
+    if generation_raw_responses is not None:
+        result["generation_raw_responses"] = generation_raw_responses
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -478,7 +484,9 @@ def generate_baseline(items, prompt_builder, name, output_path, n_max=None):
                     passed = False
                     grammar_reason = "trigger leakage"
 
-            result = _make_result(item, question, reasoning_type, name, passed, grammar_reason)
+            result = _make_result(item, question, reasoning_type, name, passed, grammar_reason,
+                                  generation_prompts=[prompt],
+                                  generation_raw_responses=[gen_text or ""])
             results.append(result)
             out_f.write(json.dumps(result, ensure_ascii=False) + "\n")
             out_f.flush()
@@ -505,8 +513,12 @@ def generate_self_refine_v2(items, output_path, n_max=None):
         for i, item in enumerate(items):
             gen_prompt, ctx, diff, gold_trigger = build_self_refine_v2_prompt(item)
 
+            all_prompts = [gen_prompt]
+            all_raws = []
+
             # Step 1: Generate initial question
             text = _call_llm(gen_prompt)
+            all_raws.append(text or "")
             gen = _parse_json_response(text)
             question = gen.get("question", "") if isinstance(gen, dict) else ""
 
@@ -514,12 +526,16 @@ def generate_self_refine_v2(items, output_path, n_max=None):
             critique_text = ""
             if question.strip():
                 critique_prompt = self_refine_critique_v2_prompt(question, ctx, diff, gold_trigger)
+                all_prompts.append(critique_prompt)
                 critique_text = _call_llm(critique_prompt, max_tokens=150)
+                all_raws.append(critique_text or "")
 
             # Step 3: Revise (only if critique says needs_revision)
             if question.strip() and critique_text and "needs_revision" in critique_text.lower():
                 revise_prompt = self_refine_revise_v2_prompt(question, critique_text, ctx, diff, gold_trigger)
+                all_prompts.append(revise_prompt)
                 text = _call_llm(revise_prompt)
+                all_raws.append(text or "")
                 gen = _parse_json_response(text)
                 revised = gen.get("question", "") if isinstance(gen, dict) else ""
                 if revised.strip():
@@ -533,7 +549,9 @@ def generate_self_refine_v2(items, output_path, n_max=None):
                     passed = False
                     grammar_reason = "trigger leakage"
 
-            result = _make_result(item, question, "self_refine", "SelfRefine", passed, grammar_reason)
+            result = _make_result(item, question, "self_refine", "SelfRefine", passed, grammar_reason,
+                                  generation_prompts=all_prompts,
+                                  generation_raw_responses=all_raws)
             results.append(result)
             out_f.write(json.dumps(result, ensure_ascii=False) + "\n")
             out_f.flush()

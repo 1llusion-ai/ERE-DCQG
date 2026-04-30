@@ -239,8 +239,8 @@ Output ONLY: {{"phrase": "...", "answer_type": "..."}}"""
         # Fallback: try to extract phrase locally
         phrase = _extract_phrase_locally(answer_sentence, gold_trigger)
         if phrase:
-            return phrase, "event_phrase", True, "local_extraction"
-        return "", "invalid", False, "LLM call failed"
+            return phrase, "event_phrase", True, "local_extraction", ""
+        return "", "invalid", False, "LLM call failed", ""
 
     try:
         result = json.loads(resp)
@@ -252,8 +252,8 @@ Output ONLY: {{"phrase": "...", "answer_type": "..."}}"""
         except (ValueError, json.JSONDecodeError):
             phrase = _extract_phrase_locally(answer_sentence, gold_trigger)
             if phrase:
-                return phrase, "event_phrase", True, "local_extraction_after_parse_fail"
-            return "", "invalid", False, f"parse error: {resp[:80]}"
+                return phrase, "event_phrase", True, "local_extraction_after_parse_fail", resp
+            return "", "invalid", False, f"parse error: {resp[:80]}", resp
 
     phrase = result.get("phrase", "").strip()
     answer_type = result.get("answer_type", "invalid").strip().lower()
@@ -265,13 +265,13 @@ Output ONLY: {{"phrase": "...", "answer_type": "..."}}"""
         # Phrase too short
         phrase_local = _extract_phrase_locally(answer_sentence, gold_trigger)
         if phrase_local and len(phrase_local.split()) >= 2:
-            return phrase_local, "event_phrase", True, "fallback_local"
-        return phrase, answer_type, False, f"phrase too short: '{phrase}'"
+            return phrase_local, "event_phrase", True, "fallback_local", resp
+        return phrase, answer_type, False, f"phrase too short: '{phrase}'", resp
 
     if gold_trigger.lower() not in phrase.lower():
-        return phrase, answer_type, False, f"trigger '{gold_trigger}' not in phrase '{phrase}'"
+        return phrase, answer_type, False, f"trigger '{gold_trigger}' not in phrase '{phrase}'", resp
 
-    return phrase, answer_type, True, "valid phrase"
+    return phrase, answer_type, True, "valid phrase", resp
 
 
 def _extract_phrase_locally(sentence, trigger):
@@ -338,9 +338,11 @@ def answer_event_consistency_judge(
     gold_answer_sentence
 ):
     """
-    Judge whether the generated question's expected answer matches the gold answer event.
+    Semantic final-event judge. Checks:
+    1. asks_target_event: does the question ask about the final event?
+    2. answerable: can it be answered from context?
+    3. consistency: does expected answer match gold answer phrase?
     Uses strict JSON output, retries on degradation, returns "judge_error" on failure.
-    Returns: expected_answer_type, expected_answer_summary, answer_consistency, reason
     """
     ctx = "\n".join(
         f"[S{s[0]}] {s[1]}" if isinstance(s, (list, tuple)) else f"[S{i}] {s}"
@@ -348,31 +350,36 @@ def answer_event_consistency_judge(
     )
     path_str = " -> ".join(f'"{e["trigger"]}"' for e in path_events)
 
-    prompt = f"""Does the question's expected answer match the gold answer event?
+    prompt = f"""Evaluate this question against the target final event.
 
-Context (first 6 sentences):
+Context:
 {ctx}
 Path: {path_str}
-Gold trigger: "{gold_answer_trigger}"
-Gold phrase: "{gold_answer_phrase}"
+Target event trigger: "{gold_answer_trigger}"
+Target answer meaning: "{gold_answer_phrase}"
+Target sentence: "{gold_answer_sentence}"
 Question: "{generated_question}"
 
-Reply with ONLY this JSON:
-{{"consistency":"yes","reason":"brief reason"}}
-or {{"consistency":"partial","reason":"brief reason"}}
-or {{"consistency":"no","reason":"brief reason"}}"""
+Answer 3 things (yes/no each):
+1. asks_target: Does the question ask about the target final event?
+2. answerable: Can the question be answered from the context?
+3. consistent: Would a correct answer identify the same final event?
 
-    for attempt in range(3):  # 1 initial + 2 retries
+Reply ONLY as JSON:
+{{"asks_target":"yes","answerable":"yes","consistent":"yes","reason":"brief"}}
+or with "no"/"partial" as appropriate."""
+
+    all_raw_responses = []
+    for attempt in range(3):
         resp = _call_api(prompt, temperature=0.0, max_tokens=60, timeout=90)
 
         if not resp:
+            all_raw_responses.append("")
             continue
-
-        # Check for degradation before parsing
+        all_raw_responses.append(resp)
         if _detect_judge_degradation(resp):
             continue
 
-        # Try to parse JSON
         result = None
         try:
             result = json.loads(resp)
@@ -385,22 +392,38 @@ or {{"consistency":"no","reason":"brief reason"}}"""
                 pass
 
         if result and isinstance(result, dict):
-            consistency = str(result.get("consistency", "")).strip().lower()
+            asks = str(result.get("asks_target", "")).strip().lower()
+            ans = str(result.get("answerable", "")).strip().lower()
+            cons = str(result.get("consistent", "")).strip().lower()
             reason = str(result.get("reason", "")).strip()
-            if consistency in ("yes", "partial", "no") and reason:
+
+            if asks in ("yes", "no") and ans in ("yes", "no") and cons in ("yes", "no", "partial"):
+                # Map to consistency label
+                if asks == "yes" and cons in ("yes", "partial"):
+                    consistency = cons
+                elif asks == "yes" and cons == "no":
+                    consistency = "partial"
+                else:
+                    consistency = "no"
+
                 return {
                     "expected_answer_type": "unknown",
                     "expected_answer_summary": "",
                     "answer_consistency": consistency,
-                    "answer_consistency_reason": reason,
+                    "answer_consistency_reason": reason or f"asks={asks} ans={ans} cons={cons}",
+                    "asks_target_event": asks == "yes",
+                    "judge_answerable": ans == "yes",
+                    "judge_raw_responses": all_raw_responses,
                 }
 
-    # All retries failed — mark as judge_error, NOT "no"
     return {
         "expected_answer_type": "unknown",
         "expected_answer_summary": "",
         "answer_consistency": "judge_error",
         "answer_consistency_reason": f"judge_error after 3 attempts: {(resp or 'no response')[:80]}",
+        "asks_target_event": None,
+        "judge_answerable": None,
+        "judge_raw_responses": all_raw_responses,
     }
 
 
@@ -519,7 +542,7 @@ If none: "0"
         + (" [PASS]" if passed else " [FAIL]")
     )
 
-    return coverage_count, covered_events, passed, reason
+    return coverage_count, covered_events, passed, reason, resp or ""
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -607,6 +630,7 @@ HOPS=<1|2|3+>"""
         "evidence_hops_used": hops_num,
         "hard_degraded": degraded,
         "hard_degraded_reason": reason,
+        "hard_degraded_raw": resp or "",
     }
 
 
@@ -711,8 +735,9 @@ def quality_filter_pipeline(record, skip_llm=False):
         a_type = "invalid"
         a_pass = True
         a_reason = "skipped LLM"
+        a_raw = ""
     else:
-        phrase, a_type, a_pass, a_reason = extract_gold_answer_phrase(
+        phrase, a_type, a_pass, a_reason, a_raw = extract_gold_answer_phrase(
             answer_sentence, gold_trigger, answer_event_type
         )
 
@@ -721,6 +746,7 @@ def quality_filter_pipeline(record, skip_llm=False):
     record["gold_answer_sentence"] = answer_sentence
     record["answer_phrase_pass"] = a_pass
     record["answer_phrase_reason"] = a_reason
+    record["answer_phrase_raw"] = a_raw
 
     # ── 4. Weak trigger ──
     wt_result = check_weak_trigger(gold_trigger, phrase)
@@ -746,15 +772,19 @@ def quality_filter_pipeline(record, skip_llm=False):
     record["answer_consistency_label"] = cons_result["answer_consistency"]
     record["answer_consistency_reason"] = cons_result["answer_consistency_reason"]
     record["answer_consistency_pass"] = cons_result["answer_consistency"] in ("yes", "partial", "judge_error")
+    record["asks_target_event"] = cons_result.get("asks_target_event")
+    record["judge_answerable"] = cons_result.get("judge_answerable")
+    record["consistency_judge_raw"] = cons_result.get("judge_raw_responses", [])
 
     # ── 6. Path coverage ──
-    cov_count, cov_events, cov_pass, cov_reason = path_coverage_judge(
+    cov_count, cov_events, cov_pass, cov_reason, cov_raw = path_coverage_judge(
         q, supporting, events, difficulty
     )
     record["path_coverage_count"] = cov_count
     record["path_covered_events"] = cov_events
     record["path_coverage_pass"] = cov_pass
     record["path_coverage_reason"] = cov_reason
+    record["path_coverage_raw"] = cov_raw
 
     # ── 7. Hard degraded ──
     if difficulty == "Hard":
@@ -767,6 +797,7 @@ def quality_filter_pipeline(record, skip_llm=False):
         record["evidence_hops_used"] = 0
         record["hard_degraded"] = False
         record["hard_degraded_reason"] = "not Hard"
+        record["hard_degraded_raw"] = ""
 
     # ── 8. Final filter ──
     final_pass, final_reason = apply_final_filter(record)
@@ -784,6 +815,7 @@ def _fill_remaining_fields(record, skip_llm=True):
         "gold_answer_sentence": "",
         "answer_phrase_pass": False,
         "answer_phrase_reason": "skipped (early exit)",
+        "answer_phrase_raw": "",
         "weak_trigger_flag": False,
         "weak_trigger_type": "none",
         "weak_trigger_pass": True,
@@ -793,16 +825,21 @@ def _fill_remaining_fields(record, skip_llm=True):
         "answer_consistency_label": "no",
         "answer_consistency_reason": "skipped (early exit)",
         "answer_consistency_pass": False,
+        "asks_target_event": None,
+        "judge_answerable": None,
+        "consistency_judge_raw": [],
         "path_coverage_count": 0,
         "path_covered_events": [],
         "path_coverage_pass": False,
         "path_coverage_reason": "skipped (early exit)",
+        "path_coverage_raw": "",
         "can_answer_from_single_sentence": "N/A",
         "single_sentence_id": "N/A",
         "need_intermediate_events": "N/A",
         "evidence_hops_used": 0,
         "hard_degraded": False,
         "hard_degraded_reason": "not checked",
+        "hard_degraded_raw": "",
     }
     for k, v in defaults.items():
         if k not in record:

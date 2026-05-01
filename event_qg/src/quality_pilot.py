@@ -32,6 +32,8 @@ from compare_hardaware import (
     prompt_pathqg_medium,
     prompt_pathqg_hard,
     fmt_ctx,
+)
+from answer_extraction import (
     enrich_path_item,
     is_valid_final_event,
 )

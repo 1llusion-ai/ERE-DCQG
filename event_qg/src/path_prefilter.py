@@ -32,11 +32,12 @@ if env_path.exists():
             k, v = line.split("=", 1)
             os.environ.setdefault(k.strip(), v.strip())
 
-from compare_hardaware import (
+from answer_extraction import (
     extract_answer_phrase_local,
     enrich_path_item,
     GENERIC_TRIGGERS,
     WEAK_TRIGGERS,
+    _simple_stem,
 )
 from quality_filter import (
     HARD_BLACKLIST_TRIGGERS,
@@ -158,7 +159,6 @@ def validate_answer_phrase(phrase, trigger, answer_phrase_status=None):
     # Phrase doesn't contain trigger
     if trigger_lower not in phrase_lower:
         # Check stem match
-        from compare_hardaware import _simple_stem
         trigger_stem = _simple_stem(trigger_lower)
         phrase_stems = {_simple_stem(w) for w in phrase_lower.split()}
         if trigger_stem not in phrase_stems:

@@ -45,14 +45,13 @@ class TraceRecord:
         }
 
     def set_path_sampling(self, difficulty, hop_count, path_events, relation_subtypes,
-                          relation_distribution="", difficulty_score=None):
+                          relation_distribution=""):
         self.data["path_sampling"] = {
             "difficulty": difficulty,
             "hop_count": hop_count,
             "path_events": path_events,
             "relation_subtypes": relation_subtypes,
             "relation_distribution": relation_distribution,
-            "difficulty_score": difficulty_score or {},
         }
 
     def set_answer_extraction(self, trigger, answer_phrase, answer_sentence,
@@ -283,13 +282,6 @@ def build_trace_from_pipeline_result(r, item_id=0):
         path_events=path_events,
         relation_subtypes=r.get("relation_subtypes", []),
         relation_distribution=r.get("relation_distribution", ""),
-        difficulty_score={
-            "D": r.get("difficulty_score", 0),
-            "PL": r.get("PL", 0),
-            "RD": r.get("RD", 0),
-            "ES": r.get("ES", 0),
-            "EA": r.get("EA", 0),
-        },
     )
 
     if any(k in r for k in ["graph_nodes", "graph_edges", "graph_isolated_nodes", "graph_relation_distribution"]):

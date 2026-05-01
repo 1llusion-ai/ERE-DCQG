@@ -21,6 +21,7 @@ from collections import defaultdict
 sys.path.insert(0, str(Path(__file__).parent))
 
 from compare_hardaware import generate_with_retry_hardaware
+from answer_extraction import enrich_path_item
 from evaluator import Solver
 from evaluator_v2 import llm_judge_v2, quality_judge
 from graph_builder import EventGraph, load_jsonl
@@ -33,6 +34,7 @@ from path_llm_judge import (
     write_jsonl,
 )
 from quality_filter import quality_filter_pipeline
+from path_prefilter import validate_answer_phrase
 from trace_utils import build_trace_from_pipeline_result, write_full_trace, write_readable_trace
 
 
@@ -83,6 +85,24 @@ def attach_graph_metadata(item, graphs):
     return item
 
 
+def refresh_answer_extraction(item):
+    """Refresh answer phrase fields before path judging.
+
+    Prefiltered files may have been produced by an older extractor. The smoke
+    test should always trace the current extractor output end to end.
+    """
+    item = enrich_path_item(item)
+    events = item.get("events", [])
+    final_event = events[-1] if events else {}
+    trigger = final_event.get("trigger", item.get("answer_trigger", ""))
+    phrase = item.get("gold_answer_phrase", "")
+    status = item.get("answer_phrase_status", "unknown")
+    passed, reason = validate_answer_phrase(phrase, trigger, status)
+    item["answer_phrase_pass"] = passed
+    item["answer_phrase_reason"] = reason
+    return item
+
+
 def merge_context(result, source):
     """Preserve upstream path/prefilter/judge fields after generation/filtering."""
     preserve_keys = [
@@ -116,10 +136,6 @@ def merge_context(result, source):
         "graph_edges",
         "graph_isolated_nodes",
         "graph_relation_distribution",
-        "PL",
-        "RD",
-        "ES",
-        "EA",
     ]
     for key in preserve_keys:
         if key in source and key not in result:
@@ -152,7 +168,6 @@ def skipped_result(item, reason):
             "supporting_sentences": item.get("supporting_sentences", []),
             "relation_subtypes": item.get("relation_subtypes", []),
             "relation_distribution": item.get("relation_distribution", ""),
-            "difficulty_score": item.get("difficulty_score", 0),
             "generation_prompts": [],
             "generation_raw_responses": [],
             "generation_status": "not_run",
@@ -241,7 +256,7 @@ def main():
         item["_item_id"] = i
 
     graphs = load_graphs(args.raw_data)
-    sampled = [attach_graph_metadata(item, graphs) for item in sampled]
+    sampled = [refresh_answer_extraction(attach_graph_metadata(item, graphs)) for item in sampled]
     write_jsonl(output_dir / "sampled_input.jsonl", sampled)
 
     if args.skip_path_judge:

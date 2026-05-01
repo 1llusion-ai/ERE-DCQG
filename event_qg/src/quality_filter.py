@@ -730,16 +730,30 @@ def quality_filter_pipeline(record, skip_llm=False):
     record["answer_event_id"] = answer_event_id
 
     # ── 3. Gold answer phrase ──
+    upstream_phrase = record.get("gold_answer_phrase", "")
+    upstream_pass = record.get("answer_phrase_pass", None)
+    upstream_reason = record.get("answer_phrase_reason", "")
     if skip_llm:
-        phrase = gold_trigger
+        phrase = upstream_phrase or gold_trigger
         a_type = "invalid"
-        a_pass = True
-        a_reason = "skipped LLM"
+        a_pass = upstream_pass if upstream_pass is not None else True
+        a_reason = upstream_reason or "skipped LLM"
         a_raw = ""
     else:
-        phrase, a_type, a_pass, a_reason, a_raw = extract_gold_answer_phrase(
+        llm_phrase, a_type, llm_pass, llm_reason, a_raw = extract_gold_answer_phrase(
             answer_sentence, gold_trigger, answer_event_type
         )
+        record["llm_answer_phrase"] = llm_phrase
+        record["llm_answer_phrase_pass"] = llm_pass
+        record["llm_answer_phrase_reason"] = llm_reason
+        if upstream_phrase:
+            phrase = upstream_phrase
+            a_pass = upstream_pass if upstream_pass is not None else True
+            a_reason = upstream_reason or "upstream_answer_phrase"
+        else:
+            phrase = llm_phrase
+            a_pass = llm_pass
+            a_reason = llm_reason
 
     record["gold_answer_phrase"] = phrase
     record["answer_type"] = a_type

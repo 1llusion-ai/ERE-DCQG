@@ -1,7 +1,6 @@
 """
 PathQG Hard-Aware: difficulty-controlled question generation with monotonicity enforcement.
 
-Changes from compare.py:
 - Difficulty-specific few-shot examples and constraints
 - Hard: requires binding 2+ prior events, bans shortcut phrases
 - Medium: requires 1 prior event, connect 2+ sentences
@@ -36,219 +35,50 @@ MODEL = os.environ.get("MODEL", "Qwen/Qwen2.5-7B-Instruct")
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "Qwen/Qwen2.5-32B-Instruct")
 
 from evaluator_v2 import grammar_filter, evaluate_item, _call_api, _normalize, _fuzzy_match
+from answer_extraction import (
+    _simple_stem,
+    extract_answer_phrase_local,
+    enrich_path_item,
+    is_valid_final_event,
+    GENERIC_TRIGGERS,
+    WEAK_TRIGGERS,
+)
 
 
-# ═══════════════════════════════════════════════════════════════
-# ANSWER PHRASE EXTRACTION (local, no LLM)
-# ═══════════════════════════════════════════════════════════════
-
-def _simple_stem(word):
-    """Simple English stemmer for matching event triggers to question words."""
-    w = word.lower().strip(".,;:!?\"'")
-    if len(w) <= 3:
-        return w
-    for suffix in ['ing', 'tion', 'sion', 'ment', 'ness', 'ity', 'ence', 'ance',
-                   'ized', 'ised', 'ated', 'ened', 'ified', 'ally', 'edly',
-                   'ies', 'ed', 'er', 'es', 'ly', 's']:
-        if w.endswith(suffix) and len(w) - len(suffix) >= 3:
-            return w[:-len(suffix)]
-    return w
-
-
-CLAUSE_BOUNDARY_WORDS = {
-    ",", ";", "but", "and", "that", "which", "who", "where", "when",
-    "because", "although", "however", "while", "though", "yet", "so",
-    "nor", "or", "if", "unless", "since", "after", "before",
-}
-
-
-def extract_answer_phrase_local(sentence, trigger):
-    """Extract a natural answer phrase using clause-aware expansion.
-    Expands from trigger to clause boundaries instead of a fixed word window.
-    Returns (phrase, status) where status is 'complete', 'partial', or 'invalid'.
-    """
-    if not sentence or not trigger:
-        return trigger, "invalid"
-
-    words = sentence.split()
-    trigger_words = trigger.lower().split()
-
-    # Find trigger position in word list
-    trigger_start = -1
-    for i in range(len(words)):
-        candidate = " ".join(w.lower().strip(".,;:!?\"'") for w in words[i:i+len(trigger_words)])
-        if candidate == trigger.lower():
-            trigger_start = i
-            break
-    if trigger_start < 0:
-        # Try substring match
-        for i, w in enumerate(words):
-            if trigger.lower() in w.lower() or w.lower() in trigger.lower():
-                trigger_start = i
-                break
-    if trigger_start < 0:
-        return trigger, "invalid"
-
-    trigger_end = trigger_start + len(trigger_words)
-
-    # Expand left to clause boundary
-    left = trigger_start
-    while left > 0:
-        w_clean = words[left - 1].lower().strip(".,;:!?\"'")
-        if w_clean in CLAUSE_BOUNDARY_WORDS:
-            break
-        if words[left - 1] in (".", "!", "?"):
-            break
-        left -= 1
-
-    # Expand right to clause boundary
-    right = trigger_end
-    while right < len(words):
-        w_clean = words[right].lower().strip(".,;:!?\"'")
-        if w_clean in CLAUSE_BOUNDARY_WORDS:
-            break
-        if words[right][-1:] in (".", "!", "?"):
-            right += 1  # include the punctuation
-            break
-        right += 1
-
-    phrase = " ".join(words[left:right]).strip(".,;:!?\"'")
-
-    # Determine status
-    if len(phrase.split()) < 2:
-        return trigger, "invalid"
-    elif left == 0 and right == len(words):
-        # Full sentence used — only flag as partial if sentence is long
-        status = "partial" if len(words) > 15 else "complete"
-    else:
-        status = "complete"
-
-    return phrase, status
-
-
-def enrich_path_item(item):
-    """Add answer phrase fields to a path item. Returns enriched copy."""
-    item = dict(item)  # shallow copy
-    events = item.get("events", [])
-    if not events:
-        return item
-
-    final_event = events[-1]
-    trigger = final_event.get("trigger", "")
-    event_type = final_event.get("type", "")
-    sent_id = final_event.get("sent_id", -1)
-
-    # Find answer sentence
-    answer_sentence = ""
-    for s in item.get("supporting_sentences", []):
-        sid = s[0] if isinstance(s, (list, tuple)) else -1
-        if sid == sent_id:
-            answer_sentence = s[1] if isinstance(s, (list, tuple)) else s
-            break
-
-    # Extract answer phrase (now returns phrase + status)
-    answer_phrase, answer_phrase_status = extract_answer_phrase_local(answer_sentence, trigger)
-
-    item["gold_answer_phrase"] = answer_phrase
-    item["gold_answer_sentence"] = answer_sentence
-    item["gold_event_type"] = event_type
-    item["answer_phrase_status"] = answer_phrase_status
-
-    return item
-
-
-# ═══════════════════════════════════════════════════════════════
-# FINAL EVENT VALIDITY FILTER
-# ═══════════════════════════════════════════════════════════════
-
-GENERIC_TRIGGERS = {
-    "occurred", "happened", "took place", "made", "did", "was", "were",
-    "is", "are", "had", "has", "have", "said", "told", "asked",
-    "went", "came", "got", "gave", "took", "put", "set",
-}
-
-WEAK_TRIGGERS = {
-    "influence", "battle", "war", "opening", "played", "held",
-    "marked", "commented", "earned", "toured", "operate", "control",
-    "receiving", "sent", "start", "started", "formalize",
-}
-
-
-def is_valid_final_event(item):
-    """Check if the final event is a good answer target.
-    Returns (valid: bool, reason: str).
-    """
-    events = item.get("events", [])
-    if not events:
-        return False, "no events"
-
-    final = events[-1]
-    trigger = final.get("trigger", "").lower().strip()
-    event_type = final.get("type", "")
-    answer_phrase = item.get("gold_answer_phrase", trigger)
-
-    # Generic trigger check
-    if trigger in GENERIC_TRIGGERS:
-        return False, f"generic trigger: '{trigger}'"
-
-    # Weak trigger without good phrase
-    if trigger in WEAK_TRIGGERS:
-        if len(answer_phrase.split()) < 3:
-            return False, f"weak trigger without sufficient phrase: '{trigger}' -> '{answer_phrase}'"
-
-    # Check answer phrase has substance
-    if len(answer_phrase.split()) < 2 and len(trigger) <= 3:
-        return False, f"answer phrase too short: '{answer_phrase}'"
-
-    # Check answer sentence exists
-    answer_sentence = item.get("gold_answer_sentence", "")
-    if not answer_sentence:
-        return False, "no answer sentence found"
-
-    return True, "valid"
-
-
-# ═══════════════════════════════════════════════════════════════
 # ENHANCED FEW-SHOT EXAMPLES (difficulty-specific)
-# ═══════════════════════════════════════════════════════════════
-
-FEW_SHOT_EASY = """Example 1 (Easy — 1-hop question):
-Events: "attack" → "destroy"
+FEW_SHOT_EASY = """Example 1 (Easy 鈥?1-hop question):
+Events: "attack" 鈫?"destroy"
 Context: [S0] The army launched an attack on the city. [S1] The city was destroyed.
 Question: "What happened to the city after the army attacked it?"
 - This is Easy: asks about one event directly following another.
 - Uses a simple "after X, what happened to Y?" pattern."""
 
-FEW_SHOT_MEDIUM = """Example 2 (Medium — must reference start event + one intermediate event):
-Events: "resign" → "appoint" → "implement"
+FEW_SHOT_MEDIUM = """Example 2 (Medium 鈥?must reference start event + one intermediate event):
+Events: "resign" 鈫?"appoint" 鈫?"implement"
 Context: [S0] The CEO resigned. [S1] The board appointed a new leader. [S2] The new CEO implemented reforms.
 Question: "What did the new CEO implement after the board appointed a replacement following the CEO's resignation?"
 - This is Medium: the question mentions both "resignation" and "appointed", requiring the solver to connect two steps.
 - The answer event ("implement") is the final event, not mentioned in the question."""
 
-FEW_SHOT_HARD = """Example 3 (Hard — must bind 2+ prior events in the question):
-Events: "announce" → "protest" → "cancel"
+FEW_SHOT_HARD = """Example 3 (Hard 鈥?must bind 2+ prior events in the question):
+Events: "announce" 鈫?"protest" 鈫?"cancel"
 Context: [S0] The government announced budget cuts. [S1] Citizens protested the decision. [S2] Officials canceled the policy.
 Question: "After the government announced budget cuts and citizens protested, what did officials do regarding the policy?"
 - This is Hard: the question EXPLICITLY names two prior events ("announced budget cuts" AND "citizens protested").
-- The solver must understand the causal chain: announcement → protest → cancellation.
-- The answer cannot be found by reading only the last sentence — you need to understand the full chain.
+- The solver must understand the causal chain: announcement 鈫?protest 鈫?cancellation.
+- The answer cannot be found by reading only the last sentence 鈥?you need to understand the full chain.
 - Note: the gold answer "cancel" is NEVER mentioned in the question."""
 
-# ═══════════════════════════════════════════════════════════════
-# DIFFICULTY DEFINITIONS (CrossQG-style)
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# DIFFICULTY DEFINITIONS (CrossQG-style)
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 DIFFICULTY_DEFINITIONS_HA = {
     "Easy": "Easy questions are straightforward, answerable from a single sentence in the context.",
     "Medium": "Medium questions require connecting information from 2-3 sentences.",
     "Hard": "Hard questions require synthesizing information across multiple sentences and reasoning chains.",
 }
 
-# ═══════════════════════════════════════════════════════════════
-# BANNED SHORTCUT PHRASES (Hard only)
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# BANNED SHORTCUT PHRASES (Hard only)
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 BANNED_PATTERNS_HARD = [
     r"(?i)what\s+was\s+the\s+final\s+outcome",
     r"(?i)what\s+action\s+was\s+taken",
@@ -276,10 +106,8 @@ def check_banned_phrases(question):
     return False, ""
 
 
-# ═══════════════════════════════════════════════════════════════
-# DIFFICULTY-AWARE PROMPTS
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# DIFFICULTY-AWARE PROMPTS
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def fmt_ctx(supporting):
     return "\n".join(s if isinstance(s, str) else f"[S{s[0]}] {s[1]}" for s in supporting)
 
@@ -430,10 +258,8 @@ Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "cross_sentence"}}"""
 
 
-# ═══════════════════════════════════════════════════════════════
-# HARD VALIDATION (post-generation check)
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# HARD VALIDATION (post-generation check)
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def validate_hard_question(question, events, gold_trigger):
     """Post-generation checks specific to Hard questions. Returns (passed, reason)."""
     # Check banned phrases
@@ -470,10 +296,8 @@ def validate_hard_question(question, events, gold_trigger):
     return True, "pass"
 
 
-# ═══════════════════════════════════════════════════════════════
-# GENERATOR (reusing compare.py infrastructure)
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# GENERATOR
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def generate_one(prompt, temperature=0.1, max_retries=2):
     """Single API call, return (json_dict_or_None, raw_text).
     Retries on empty/timeout responses."""
@@ -538,10 +362,8 @@ def generate_one(prompt, temperature=0.1, max_retries=2):
     return gen, text
 
 
-# ═══════════════════════════════════════════════════════════════
-# REPAIR PROMPTS (hard-aware)
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# REPAIR PROMPTS (hard-aware)
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def _build_repair_prompt_hardaware(item, failed_question, failure_reason, difficulty, covered_indices=None):
     """Build repair prompt for hard-aware generation.
     If covered_indices is provided, list specific uncovered events."""
@@ -791,16 +613,13 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         "events": events,
         "supporting_sentences": item.get("supporting_sentences", []),
         "relation_subtypes": item.get("relation_subtypes", []),
-        "difficulty_score": item.get("difficulty_score", 0),
         "generation_prompts": all_attempt_prompts,
         "generation_raw_responses": all_attempt_raws,
     }, attempts
 
 
-# ═══════════════════════════════════════════════════════════════
-# PATH-FAITHFULNESS JUDGE (Task 3)
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# PATH-FAITHFULNESS JUDGE (Task 3)
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def path_faithfulness_judge(question, path_events, supporting_sentences, difficulty):
     """
     Judge whether a question genuinely requires multi-hop reasoning across path events.
@@ -873,10 +692,8 @@ Reply: NEED= EVIDENCE= SINGLE= (e.g., "NEED=yes EVIDENCE=3+ SINGLE=no")"""
     }
 
 
-# ═══════════════════════════════════════════════════════════════
-# FULL EVALUATION WITH PATH-FAITHFULNESS
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# FULL EVALUATION WITH PATH-FAITHFULNESS
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def evaluate_item_with_faithfulness(r, skip_quality=False):
     """Evaluate one item with v2 metrics + path faithfulness."""
     # Standard v2 evaluation
@@ -934,10 +751,8 @@ def evaluate_file_with_faithfulness(input_path, output_path, max_items=None):
     return scored
 
 
-# ═══════════════════════════════════════════════════════════════
-# MAIN
-# ═══════════════════════════════════════════════════════════════
-
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?# MAIN
+# 鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺愨晲鈺?
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -952,7 +767,7 @@ def main():
     output_dir = Path(args.output_dir)
     random.seed(42)
 
-    # Step 1: Sample items (same seed as compare.py for fair comparison)
+    # Step 1: Sample items
     print("=" * 70)
     print("Step 1: Sampling items (seed=42, 100/level)")
     print("=" * 70)

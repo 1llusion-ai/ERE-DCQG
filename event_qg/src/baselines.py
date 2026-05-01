@@ -447,7 +447,6 @@ def _make_result(item, question, reasoning_type, name, grammar_pass, grammar_rea
         "events": item.get("events", []),
         "supporting_sentences": item.get("supporting_sentences", []),
         "relation_subtypes": item.get("relation_subtypes", []),
-        "difficulty_score": item.get("difficulty_score", 0),
     }
     if generation_prompts is not None:
         result["generation_prompts"] = generation_prompts

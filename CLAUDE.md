@@ -15,7 +15,7 @@ Before making research claims, code changes, or experiment decisions, read:
 
 The project is **target-event-grounded question generation with event-path constraints**.
 
-Do not frame the method as a validated four-dimensional difficulty scoring method. The current evidence shows that difficulty labels are mostly driven by path length. Relation diversity, evidence span, and event ambiguity are auxiliary descriptors unless later experiments prove otherwise.
+Difficulty is determined by hop count (Easy=1hop, Medium=2hop, Hard=3hop). The old four-dimensional scoring (PL/RD/ES/EA) has been removed.
 
 The main research question is:
 
@@ -35,7 +35,6 @@ For any unexpected result, inspect trace items in this order:
 MAVEN raw sentence/event/offset
  -> graph node and directed edge
  -> sampled path and relation direction
- -> difficulty score
  -> answer phrase extraction
  -> prefilter result
  -> LLM path judge prompt/raw/parsed
@@ -46,40 +45,40 @@ MAVEN raw sentence/event/offset
 
 If a conclusion cannot be traced to concrete examples, do not write it as a project conclusion or paper claim.
 
-Known upstream failure modes:
+Known upstream failure modes (all fixed as of 2026-05-01):
 
-- `compare_hardaware.extract_answer_phrase_local()` used a fixed trigger window and can produce truncated answers such as `has been described as one of the`.
-- `path_sampler.py` Medium sampling has a direction-construction risk and must be checked as strict `src -> mid -> tgt`.
-- `difficulty_scorer.py` reverse-edge lookup can hide invalid path directions.
+- `answer_extraction.extract_answer_phrase_local()` is the single shared answer phrase extractor; use trace logs to verify truncation or partial extraction.
+- `path_sampler.py` Medium sampling 鈥?fixed to strict `src -> mid -> tgt`.
+- `difficulty_scorer.py` 鈥?deleted, replaced by hop-based scoring.
 - Path length is not the same as actual inference-step difficulty.
 
 ---
 
 ## Current Priority
 
-Do not tune prompts or rerun full experiments before fixing the upstream data chain.
+Upstream data chain is fixed. Next steps:
 
-Current priority order:
-
-1. Preserve MAVEN event `offset` in sampled paths.
-2. Fix Medium path sampling to strict directed paths.
-3. Stop silently using reverse edges in relation subtype lookup.
-4. Replace fixed-window answer phrase extraction with offset/clause-based extraction or an LLM canonicalizer.
-5. Add full-chain trace logs.
-6. Rerun small pilots before any full 300 or full 3890 run.
+1. Run larger pilots to validate hop-based scoring works at scale.
+2. Address hard degradation and path coverage issues.
+3. Full experiment rerun when pilots look good.
 
 ---
 
 ## Key Files
 
 - `event_qg/src/graph_builder.py`: builds document-level event graphs.
-- `event_qg/src/path_sampler.py`: samples Easy / Medium / Hard paths.
-- `event_qg/src/difficulty_scorer.py`: computes PL/RD/ES/EA/D labels.
+- `event_qg/src/path_sampler.py`: samples Easy / Medium / Hard paths (hop-based).
 - `event_qg/src/path_prefilter.py`: deterministic path diagnostics / light prefilter.
 - `event_qg/src/path_llm_judge.py`: LLM path quality judge.
-- `event_qg/src/compare_hardaware.py`: PathQG-HardAware generation and answer phrase enrichment.
+- `event_qg/src/answer_extraction.py`: answer phrase extraction and final-event validity helpers.
+- `event_qg/src/compare_hardaware.py`: PathQG-HardAware generation.
 - `event_qg/src/quality_filter.py`: post-generation quality filters.
-- `event_qg/src/baselines.py`: main baselines and unified evaluation.
+- `event_qg/src/baselines.py`: baseline models and unified evaluation.
+- `event_qg/src/evaluator.py`: solver and basic evaluation.
+- `event_qg/src/evaluator_v2.py`: LLM judge and quality evaluation.
+- `event_qg/src/trace_utils.py`: full-chain debug trace.
+- `event_qg/src/full_pipeline_smoke.py`: end-to-end smoke test.
+- `event_qg/src/quality_pilot.py`: generation/filter pilot.
 - `review-stage/PROJECT_STATUS.md`: project status and required update protocol.
 
 ---

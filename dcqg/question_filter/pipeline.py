@@ -9,6 +9,7 @@ from dcqg.question_filter.grammar import enhanced_grammar_filter, check_weak_tri
 from dcqg.question_filter.consistency import extract_gold_answer_phrase, answer_event_consistency_judge
 from dcqg.question_filter.path_coverage import path_coverage_judge
 from dcqg.question_filter.shortcut import hard_degraded_check
+from dcqg.question_filter.hard_implicitness import hard_implicitness_check
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -45,9 +46,14 @@ def apply_final_filter(record):
     if not record.get("path_coverage_pass", False):
         reasons.append(f"path_coverage={record.get('path_coverage_reason', '?')}")
 
-    # Hard degraded (only for Hard difficulty)
+    # Hard shortcut (only for Hard difficulty)
+    # fail only if shortcut_without_path=yes AND needs_prior=no
     if record.get("difficulty") == "Hard" and record.get("hard_degraded", False):
-        reasons.append(f"hard_degraded={record.get('hard_degraded_reason', '?')}")
+        reasons.append(f"hard_shortcut={record.get('hard_degraded_reason', '?')}")
+
+    # Hard implicitness: fail if too many prior triggers explicitly in question
+    if record.get("difficulty") == "Hard" and not record.get("hard_implicit_chain_pass", True):
+        reasons.append(f"hard_implicit={record.get('hard_implicit_chain_reason', '?')}")
 
     if not reasons:
         return True, "all checks passed"
@@ -168,20 +174,27 @@ def quality_filter_pipeline(record, skip_llm=False):
     record["consistency_judge_raw"] = cons_result.get("judge_raw_responses", [])
 
     # ── 6. Path coverage ──
-    cov_count, cov_events, cov_pass, cov_reason, cov_raw = path_coverage_judge(
-        q, supporting, events, difficulty
-    )
-    record["path_coverage_count"] = cov_count
-    record["path_covered_events"] = cov_events
-    record["path_coverage_pass"] = cov_pass
-    record["path_coverage_reason"] = cov_reason
-    record["path_coverage_raw"] = cov_raw
+    cov_result = path_coverage_judge(q, supporting, events, difficulty)
+    record["path_coverage_count"] = cov_result["path_coverage_count"]
+    record["path_coverage_prior_count"] = cov_result["path_coverage_prior_count"]
+    record["path_coverage_all_count"] = cov_result["path_coverage_all_count"]
+    record["path_covered_events"] = cov_result["path_covered_events"]
+    record["path_covered_prior_events"] = cov_result["path_covered_prior_events"]
+    record["path_coverage_pass"] = cov_result["path_coverage_pass"]
+    record["path_coverage_reason"] = cov_result["path_coverage_reason"]
+    record["path_coverage_method"] = cov_result["path_coverage_method"]
+    record["path_coverage_details"] = cov_result["path_coverage_details"]
+    record["path_coverage_raw"] = cov_result["path_coverage_raw"]
 
-    # ── 7. Hard degraded ──
+    # ── 7. Hard shortcut / degraded ──
     if difficulty == "Hard":
         hd_result = hard_degraded_check(q, supporting, phrase, events)
         record.update(hd_result)
     else:
+        record["shortcut_without_path"] = "N/A"
+        record["needs_prior_events_to_identify_answer"] = "N/A"
+        record["shortcut_sentence_id"] = "N/A"
+        record["shortcut_reason"] = ""
         record["can_answer_from_single_sentence"] = "N/A"
         record["single_sentence_id"] = "N/A"
         record["need_intermediate_events"] = "N/A"
@@ -189,6 +202,10 @@ def quality_filter_pipeline(record, skip_llm=False):
         record["hard_degraded"] = False
         record["hard_degraded_reason"] = "not Hard"
         record["hard_degraded_raw"] = ""
+
+    # ── 7b. Hard implicitness check ──
+    implicit_result = hard_implicitness_check(q, events, difficulty)
+    record.update(implicit_result)
 
     # ── 8. Final filter ──
     final_pass, final_reason = apply_final_filter(record)
@@ -220,10 +237,21 @@ def _fill_remaining_fields(record, skip_llm=True):
         "judge_answerable": None,
         "consistency_judge_raw": [],
         "path_coverage_count": 0,
+        "path_coverage_prior_count": 0,
+        "path_coverage_all_count": 0,
         "path_covered_events": [],
+        "path_covered_prior_events": [],
         "path_coverage_pass": False,
         "path_coverage_reason": "skipped (early exit)",
+        "path_coverage_method": "not_checked",
+        "path_coverage_details": [],
         "path_coverage_raw": "",
+        # New shortcut fields
+        "shortcut_without_path": "N/A",
+        "needs_prior_events_to_identify_answer": "N/A",
+        "shortcut_sentence_id": "N/A",
+        "shortcut_reason": "",
+        # Old fields (backward compat)
         "can_answer_from_single_sentence": "N/A",
         "single_sentence_id": "N/A",
         "need_intermediate_events": "N/A",
@@ -231,6 +259,9 @@ def _fill_remaining_fields(record, skip_llm=True):
         "hard_degraded": False,
         "hard_degraded_reason": "not checked",
         "hard_degraded_raw": "",
+        "hard_explicit_prior_count": 0,
+        "hard_implicit_chain_pass": True,
+        "hard_implicit_chain_reason": "not checked",
     }
     for k, v in defaults.items():
         if k not in record:

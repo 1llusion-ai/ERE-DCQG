@@ -5,9 +5,10 @@ prompts, grammar filtering, path binding check, and repair retries.
 """
 from dcqg.question_filter.grammar import grammar_filter
 from dcqg.path.direction import check_path_binding, validate_hard_question
-from dcqg.generation.prompts import prompt_pathqg_easy, prompt_pathqg_medium, prompt_pathqg_hard
+from dcqg.generation.prompts import prompt_pathqg_easy, prompt_pathqg_medium, prompt_pathqg_hard, prompt_pathqg_hard_implicit
 from dcqg.generation.parser import generate_one
 from dcqg.generation.repair import build_repair_prompt, REPAIRABLE_REASONS
+from dcqg.question_filter.hard_implicitness import count_explicit_prior_triggers
 
 
 def generate_with_retry_hardaware(item, max_attempts=5):
@@ -24,7 +25,7 @@ def generate_with_retry_hardaware(item, max_attempts=5):
     elif diff == "Medium":
         prompt_fn = prompt_pathqg_medium
     else:
-        prompt_fn = prompt_pathqg_hard
+        prompt_fn = prompt_pathqg_hard_implicit
 
     question = ""
     rt = "error"
@@ -58,6 +59,16 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         question = gen.get("question", "") if isinstance(gen, dict) else ""
         rt = gen.get("reasoning_type", "unknown") if isinstance(gen, dict) else "error"
 
+        # Validate hidden_path_events for implicit chain
+        if diff == "Hard" and isinstance(gen, dict) and "hidden_path_events" in gen:
+            valid_ids = {e.get("id", "") for e in events}
+            raw_ids = gen.get("hidden_path_events", [])
+            if isinstance(raw_ids, list):
+                valid_hidden = [eid for eid in raw_ids if eid in valid_ids]
+            else:
+                valid_hidden = []
+            gen["hidden_path_events"] = valid_hidden
+
         if not question:
             g_ok, g_reason = False, "empty"
             continue
@@ -67,11 +78,24 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         if g_ok and gold and gold.lower() in question.lower():
             g_ok, g_reason = False, "trigger leakage"
 
+        # Hard implicitness check at generation time: only catch extremely over-explicit (3+)
+        # The filter pipeline enforces the real constraint (max 1)
+        if g_ok and diff == "Hard":
+            explicit_count = count_explicit_prior_triggers(question, events)
+            if explicit_count >= 3:
+                g_ok, g_reason = False, f"too_explicit: {explicit_count} prior triggers in question"
+
         if g_ok and diff == "Hard":
             g_ok, g_reason = validate_hard_question(question, events, gold)
 
         if g_ok:
-            pb_ok, covered_indices, pb_reason = check_path_binding(question, events, diff)
+            # For Hard (implicit chain), relax path_binding to 1 trigger
+            # since the design intentionally avoids naming triggers.
+            # The LLM path_coverage_judge in the filter pipeline enforces real coverage.
+            effective_diff = diff
+            if diff == "Hard":
+                effective_diff = "Medium"  # Medium requires 1 prior event
+            pb_ok, covered_indices, pb_reason = check_path_binding(question, events, effective_diff)
             if not pb_ok:
                 g_ok, g_reason = False, f"path_binding: {pb_reason}"
 
@@ -110,4 +134,6 @@ def generate_with_retry_hardaware(item, max_attempts=5):
         "relation_subtypes": item.get("relation_subtypes", []),
         "generation_prompts": all_attempt_prompts,
         "generation_raw_responses": all_attempt_raws,
+        "hidden_path_events": gen.get("hidden_path_events", []) if isinstance(gen, dict) else [],
+        "expected_steps": gen.get("expected_steps", "") if isinstance(gen, dict) else "",
     }, attempts

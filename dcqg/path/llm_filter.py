@@ -135,6 +135,10 @@ Judge these criteria:
 4. recommended_difficulty:
    - "easy", "medium", or "hard" based on the actual path/question potential.
    - choose "hard" only when the answer cannot be found from a single sentence and the path genuinely needs 3+ event steps.
+5. can_write_path_dependent_question:
+   - "yes": even if the answer is in one sentence, you can write a question that REQUIRES knowing about earlier path events to understand or answer correctly.
+   - "partial": the question could mention path events but they are not strictly necessary.
+   - "no": no meaningful question can be written that depends on the path; the answer can be found without any path context.
 
 Return ONLY one JSON object with this exact schema:
 {{
@@ -142,6 +146,7 @@ Return ONLY one JSON object with this exact schema:
   "expected_required_steps": "1|2|3+",
   "single_sentence_risk": "low|medium|high",
   "recommended_difficulty": "easy|medium|hard",
+  "can_write_path_dependent_question": "yes|partial|no",
   "reason": "one short sentence"
 }}"""
 
@@ -199,32 +204,155 @@ def normalize_judge(parsed):
         "recommended_difficulty": normalize_label(
             parsed.get("recommended_difficulty"), {"easy", "medium", "hard"}, "easy"
         ),
+        "can_write_path_dependent_question": normalize_label(
+            parsed.get("can_write_path_dependent_question"), {"yes", "partial", "no"}, "no"
+        ),
         "reason": str(parsed.get("reason", "")).strip()[:500],
     }
 
 
 def choose_keep_policy(item, judge):
+    """Return a dict with strict and relaxed keep decisions.
+
+    Keys:  strict_keep, relaxed_keep, strict_reason, relaxed_reason, risk_note
+    """
     original = item.get("difficulty", "")
     pq = judge.get("path_questionable")
     risk = judge.get("single_sentence_risk")
     recommended = judge.get("recommended_difficulty")
+    path_dep = judge.get("can_write_path_dependent_question")
+    ap_pass = item.get("answer_phrase_pass", True)
 
-    reasons = []
-    keep = True
+    strict_reasons = []
+    relaxed_reasons = []
+    risk_notes = []
+    strict_keep = True
+    relaxed_keep = True
 
+    # --- shared: answer_phrase_pass must be True ---
+    if not ap_pass:
+        strict_keep = False
+        relaxed_keep = False
+        strict_reasons.append("answer_phrase_fail")
+        relaxed_reasons.append("answer_phrase_fail")
+
+    # --- shared: path_questionable=no always rejects ---
     if pq == "no":
-        keep = False
-        reasons.append("path_questionable=no")
-    if original == "Hard" and risk == "high":
-        keep = False
-        reasons.append("hard_single_sentence_risk=high")
-    if not recommended:
-        keep = False
-        reasons.append("missing_recommended_difficulty")
+        strict_keep = False
+        relaxed_keep = False
+        strict_reasons.append("path_questionable=no")
+        relaxed_reasons.append("path_questionable=no")
 
-    if not reasons:
-        reasons.append("keep")
-    return keep, "; ".join(reasons)
+    # --- shared: missing recommended difficulty ---
+    if not recommended:
+        strict_keep = False
+        relaxed_keep = False
+        strict_reasons.append("missing_recommended_difficulty")
+        relaxed_reasons.append("missing_recommended_difficulty")
+
+    # --- Hard: strict requires path_dep=yes, relaxed accepts yes+partial ---
+    if original == "Hard":
+        if path_dep == "yes":
+            # Hard path_dep=yes: passes both strict and relaxed
+            if not strict_reasons and not relaxed_reasons:
+                strict_reasons.append("keep_path_dep_yes")
+                relaxed_reasons.append("keep_path_dep_yes")
+        elif path_dep == "partial":
+            # Hard path_dep=partial: fails strict, passes relaxed
+            strict_keep = False
+            strict_reasons.append("hard_path_dep=partial")
+            if not relaxed_reasons:
+                relaxed_reasons.append("keep_path_dep_partial")
+        else:
+            # path_dep=no or unknown: fails both (unless already failed above)
+            strict_keep = False
+            relaxed_keep = False
+            if not any("path_questionable" in r for r in strict_reasons):
+                strict_reasons.append(f"hard_path_dep={path_dep}")
+            if not any("path_questionable" in r for r in relaxed_reasons):
+                relaxed_reasons.append(f"hard_path_dep={path_dep}")
+
+    # --- risk_note: single_sentence_risk=high is informational, not a filter ---
+    if risk == "high":
+        risk_notes.append("single_sentence_risk=high")
+
+    if not strict_reasons:
+        strict_reasons.append("keep")
+    if not relaxed_reasons:
+        relaxed_reasons.append("keep")
+
+    return {
+        "strict_keep": strict_keep,
+        "relaxed_keep": relaxed_keep,
+        "strict_reason": "; ".join(strict_reasons),
+        "relaxed_reason": "; ".join(relaxed_reasons),
+        "risk_note": "; ".join(risk_notes) if risk_notes else "",
+    }
+
+
+def apply_policy(judged_items):
+    """Apply strict/relaxed policy and add policy fields to each item.
+
+    Returns the items with policy fields added (in-place on copies).
+    """
+    out = []
+    for item in judged_items:
+        judge = item.get("llm_path_judge", {})
+        policy = choose_keep_policy(item, judge)
+        row = dict(item)
+        row["policy_strict_keep"] = policy["strict_keep"]
+        row["policy_relaxed_keep"] = policy["relaxed_keep"]
+        row["policy_strict_reason"] = policy["strict_reason"]
+        row["policy_relaxed_reason"] = policy["relaxed_reason"]
+        row["risk_note"] = policy["risk_note"]
+        out.append(row)
+    return out
+
+
+def deduplicate(items):
+    """Deduplicate by doc_id + answer_event_id, then by doc_id + normalized phrase.
+
+    Returns (deduped_items, removed_items) with dedup fields added.
+    """
+    seen_keys = set()
+    kept = []
+    removed = []
+
+    for item in items:
+        doc_id = item.get("doc_id", "")
+        event_id = item.get("answer_event_id", "")
+        phrase = item.get("gold_answer_phrase", "").lower().strip()
+
+        # Primary key: doc_id + answer_event_id
+        key = f"{doc_id}::{event_id}"
+        if key in seen_keys:
+            row = dict(item)
+            row["dedup_key"] = key
+            row["dedup_removed"] = True
+            row["dedup_reason"] = "duplicate doc_id+answer_event_id"
+            removed.append(row)
+            continue
+
+        # Fallback: doc_id + normalized phrase
+        norm_phrase = " ".join(phrase.split())
+        fallback_key = f"{doc_id}::phrase::{norm_phrase}"
+        if fallback_key in seen_keys:
+            row = dict(item)
+            row["dedup_key"] = fallback_key
+            row["dedup_removed"] = True
+            row["dedup_reason"] = "duplicate doc_id+answer_phrase"
+            removed.append(row)
+            continue
+
+        seen_keys.add(key)
+        seen_keys.add(fallback_key)
+        row = dict(item)
+        row["dedup_key"] = key
+        row["dedup_removed"] = False
+        row["dedup_reason"] = ""
+        kept.append(row)
+
+    return kept, removed
 
 
 def sample_items(items, sample_per_level, seed, include_failed_prefilter=False, limit=0):
@@ -264,7 +392,7 @@ def judge_paths(items, args):
         judge_status = "ok"
 
         if args.dry_run:
-            raw = '{"path_questionable":"partial","expected_required_steps":"2","single_sentence_risk":"medium","recommended_difficulty":"medium","reason":"dry run"}'
+            raw = '{"path_questionable":"partial","expected_required_steps":"2","single_sentence_risk":"medium","recommended_difficulty":"medium","can_write_path_dependent_question":"partial","reason":"dry run"}'
         else:
             for attempt in range(1, args.retries + 1):
                 try:
@@ -299,6 +427,7 @@ def judge_paths(items, args):
                 "expected_required_steps": "unknown",
                 "single_sentence_risk": "unknown",
                 "recommended_difficulty": "unknown",
+                "can_write_path_dependent_question": "unknown",
                 "reason": f"judge_error: {error or 'parse_failed'}",
             }
             parse_ok = False
@@ -307,7 +436,10 @@ def judge_paths(items, args):
             parse_ok = True
             judge_status = "ok"
 
-        keep, keep_reason = choose_keep_policy(item, normalized)
+        policy = choose_keep_policy(item, normalized)
+        # For backward compat in judge_paths, use relaxed_keep as the main keep
+        keep = policy["relaxed_keep"]
+        keep_reason = policy["relaxed_reason"]
 
         # Don't drop paths on API/parse errors -- keep them for review
         if judge_status != "ok":
@@ -344,6 +476,8 @@ def judge_paths(items, args):
             "parse_ok": parse_ok,
             "keep": keep,
             "keep_reason": keep_reason,
+            "policy_strict_keep": policy["strict_keep"],
+            "policy_strict_reason": policy["strict_reason"],
             "error": error,
         }
 
@@ -386,6 +520,7 @@ def build_report(judged, input_count, args):
         "expected_required_steps_distribution": dict(Counter(x["llm_path_judge"]["expected_required_steps"] for x in judged)),
         "single_sentence_risk_distribution": dict(Counter(x["llm_path_judge"]["single_sentence_risk"] for x in judged)),
         "recommended_difficulty_distribution": dict(Counter(x["llm_path_judge"]["recommended_difficulty"] for x in judged)),
+        "can_write_path_dependent_question_distribution": dict(Counter(x["llm_path_judge"].get("can_write_path_dependent_question", "unknown") for x in judged)),
         "per_level": {},
         "examples": {
             "not_kept": [],
@@ -454,6 +589,7 @@ def write_report_md(report, path):
         "expected_required_steps_distribution",
         "single_sentence_risk_distribution",
         "recommended_difficulty_distribution",
+        "can_write_path_dependent_question_distribution",
     ]:
         lines.append(f"### {key}\n")
         lines.append("| Label | Count |")
@@ -492,4 +628,176 @@ def write_report_md(report, path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+
+def generate_filter_report(all_items, strict_items, relaxed_items, rejected_items,
+                            dedup_removed_strict, dedup_removed_relaxed,
+                            raw_count, prefiltered_count, report_path):
+    """Generate PATH_FILTER_REPORT.md with comprehensive statistics."""
+
+    def by_level(items):
+        d = defaultdict(list)
+        for x in items:
+            d[x.get("difficulty", "?")].append(x)
+        return d
+
+    all_by = by_level(all_items)
+    strict_by = by_level(strict_items)
+    relaxed_by = by_level(relaxed_items)
+    rej_by = by_level(rejected_items)
+    dedup_strict_by = by_level(dedup_removed_strict)
+    dedup_relaxed_by = by_level(dedup_removed_relaxed)
+
+    # Hard analysis
+    hard_all = all_by.get("Hard", [])
+    hard_strict_final = strict_by.get("Hard", [])
+    hard_relaxed_only = [x for x in relaxed_by.get("Hard", [])
+                         if x.get("dedup_key") not in {y.get("dedup_key") for y in strict_items if y.get("difficulty") == "Hard"}]
+    hard_rejected = rej_by.get("Hard", [])
+
+    # Strict candidates before dedup = final strict + dedup-removed strict
+    hard_strict_candidates = len(hard_strict_final) + len(dedup_strict_by.get("Hard", []))
+
+    # path_dep distribution for Hard (from all judged)
+    pd_dist = Counter()
+    for h in hard_all:
+        judge = h.get("llm_path_judge", {})
+        pd_dist[judge.get("can_write_path_dependent_question", "?")] += 1
+
+    # relation group for Hard strict vs partial
+    hard_strict_rel = Counter(x.get("relation_group", "?") for x in hard_strict_final)
+    hard_partial = [x for x in hard_all
+                    if x.get("llm_path_judge", {}).get("can_write_path_dependent_question") == "partial"]
+    hard_partial_rel = Counter(x.get("relation_group", "?") for x in hard_partial)
+
+    # Top reject reasons
+    rej_reasons = Counter()
+    for x in rejected_items:
+        reason = x.get("policy_relaxed_reason", x.get("policy_strict_reason", ""))
+        for part in reason.split("; "):
+            rej_reasons[part.strip()] += 1
+
+    # Top weak triggers
+    weak_triggers = Counter()
+    for x in all_items:
+        wt = x.get("weak_trigger_type", "none")
+        if wt != "none":
+            weak_triggers[wt] += 1
+
+    def fmt_example(x, n=120):
+        events = x.get("events", [])
+        path_str = " -> ".join(e.get("trigger", "") for e in events)
+        phrase = x.get("gold_answer_phrase", "")[:n]
+        sentence = x.get("gold_answer_sentence", "")[:n]
+        judge = x.get("llm_path_judge", {})
+        pd = judge.get("can_write_path_dependent_question", "?")
+        pq = judge.get("path_questionable", "?")
+        risk = judge.get("single_sentence_risk", "?")
+        strict_r = x.get("policy_strict_reason", "")
+        relaxed_r = x.get("policy_relaxed_reason", "")
+        risk_note = x.get("risk_note", "")
+        lines = []
+        lines.append(f"- **{x.get('title', '')[:50]}** [{x.get('difficulty', '?')}]")
+        lines.append(f"  - doc_id: `{x.get('doc_id', '')}`")
+        lines.append(f"  - path: {path_str}")
+        lines.append(f"  - relations: {', '.join(x.get('relation_subtypes', []))}")
+        lines.append(f"  - answer_phrase: `{phrase}`")
+        lines.append(f"  - answer_sentence: {sentence}")
+        lines.append(f"  - judge: pq={pq} risk={risk} path_dep={pd}")
+        lines.append(f"  - strict_reason: {strict_r}")
+        lines.append(f"  - relaxed_reason: {relaxed_r}")
+        if risk_note:
+            lines.append(f"  - risk_note: {risk_note}")
+        return "\n".join(lines)
+
+    lines = []
+    lines.append("# Path Filter Report\n")
+
+    lines.append("## Pipeline Summary\n")
+    lines.append("| Stage | Easy | Medium | Hard | Total |")
+    lines.append("|-------|-----:|-------:|-----:|------:|")
+    lines.append(f"| Raw paths | - | - | - | {raw_count} |")
+    lines.append(f"| Prefiltered | - | - | - | {prefiltered_count} |")
+    lines.append(f"| LLM judged | {len(all_by.get('Easy',[]))} | {len(all_by.get('Medium',[]))} | {len(all_by.get('Hard',[]))} | {len(all_items)} |")
+    # Strict pipeline: candidates → dedup → final
+    strict_cand_by = defaultdict(int)
+    for k, v in strict_by.items():
+        strict_cand_by[k] += v.__len__() if hasattr(v, '__len__') else 0
+    for k, v in dedup_strict_by.items():
+        strict_cand_by[k] += v.__len__() if hasattr(v, '__len__') else 0
+    lines.append(f"| Strict candidates | {strict_cand_by.get('Easy',0)} | {strict_cand_by.get('Medium',0)} | {strict_cand_by.get('Hard',0)} | {sum(strict_cand_by.values())} |")
+    lines.append(f"| Strict dedup removed | {len(dedup_strict_by.get('Easy',[]))} | {len(dedup_strict_by.get('Medium',[]))} | {len(dedup_strict_by.get('Hard',[]))} | {len(dedup_removed_strict)} |")
+    lines.append(f"| **Strict final** | {len(strict_by.get('Easy',[]))} | {len(strict_by.get('Medium',[]))} | {len(strict_by.get('Hard',[]))} | {len(strict_items)} |")
+    lines.append(f"| Relaxed final | {len(relaxed_by.get('Easy',[]))} | {len(relaxed_by.get('Medium',[]))} | {len(relaxed_by.get('Hard',[]))} | {len(relaxed_items)} |")
+    lines.append(f"| Rejected | {len(rej_by.get('Easy',[]))} | {len(rej_by.get('Medium',[]))} | {len(rej_by.get('Hard',[]))} | {len(rejected_items)} |")
+
+    lines.append("\n## Policy\n")
+    lines.append("- **Easy/Medium:** keep if `path_questionable in {yes, partial}` and `answer_phrase_pass=True`")
+    lines.append("- **Hard strict:** `path_questionable in {yes, partial}` AND `can_write_path_dependent_question=yes` AND `answer_phrase_pass=True`")
+    lines.append("- **Hard relaxed:** same but accepts `can_write_path_dependent_question in {yes, partial}`")
+    lines.append("- Dedup: `doc_id + answer_event_id`, fallback `doc_id + normalized(answer_phrase)`\n")
+
+    lines.append("## Hard Path Analysis\n")
+    lines.append("### can_write_path_dependent_question Distribution\n")
+    lines.append("| Label | Count | % of Hard judged |")
+    lines.append("|-------|------:|-----------------:|")
+    for label in ["yes", "partial", "no"]:
+        c = pd_dist.get(label, 0)
+        pct = c / len(hard_all) * 100 if hard_all else 0
+        lines.append(f"| {label} | {c} | {pct:.1f}% |")
+
+    lines.append("\n### Hard Strict Pipeline\n")
+    lines.append(f"- LLM judged Hard path_dep=yes: **{pd_dist.get('yes', 0)}/{len(hard_all)}** ({pd_dist.get('yes',0)/len(hard_all)*100:.0f}% of judged)" if hard_all else "")
+    lines.append(f"- Hard strict candidates before dedup: **{hard_strict_candidates}**")
+    lines.append(f"- Hard strict removed by dedup: **{len(dedup_strict_by.get('Hard',[]))}**")
+    lines.append(f"- Hard strict final (deduped): **{len(hard_strict_final)}**")
+    lines.append("")
+    lines.append("LLM judged a significant portion of Hard paths as path-dependent, but many")
+    lines.append("share the same final answer event. Deduplication by `doc_id + answer_event_id`")
+    lines.append("reduces strict Hard paths to unique final-answer items for QG.\n")
+
+    lines.append("### Hard Strict vs Partial — Relation Group\n")
+    lines.append("| Relation | Strict (path_dep=yes) | Partial (path_dep=partial) |")
+    lines.append("|----------|----------------------:|---------------------------:|")
+    all_rels = set(list(hard_strict_rel.keys()) + list(hard_partial_rel.keys()))
+    for rel in sorted(all_rels):
+        lines.append(f"| {rel} | {hard_strict_rel.get(rel, 0)} | {hard_partial_rel.get(rel, 0)} |")
+
+    lines.append("\n## Top Reject Reasons\n")
+    lines.append("| Reason | Count |")
+    lines.append("|--------|------:|")
+    for reason, count in rej_reasons.most_common(10):
+        lines.append(f"| {reason} | {count} |")
+
+    if weak_triggers:
+        lines.append("\n## Top Weak Trigger Types\n")
+        lines.append("| Type | Count |")
+        lines.append("|------|------:|")
+        for wt, count in weak_triggers.most_common(10):
+            lines.append(f"| {wt} | {count} |")
+
+    lines.append("\n## Examples: Hard Strict Kept (5)\n")
+    for x in hard_strict_final[:5]:
+        lines.append(fmt_example(x))
+
+    lines.append("\n## Examples: Hard Relaxed-Only Partial (5)\n")
+    for x in hard_relaxed_only[:5]:
+        lines.append(fmt_example(x))
+
+    lines.append("\n## Examples: Hard Rejected (5)\n")
+    for x in hard_rejected[:5]:
+        lines.append(fmt_example(x))
+
+    lines.append("\n## Conclusion\n")
+    lines.append(f"- Strict paths ready for QG: **{len(strict_items)}** (Easy {len(strict_by.get('Easy',[]))}, Medium {len(strict_by.get('Medium',[]))}, Hard {len(hard_strict_final)})")
+    lines.append(f"- Relaxed-only Hard partial candidates: **{len(hard_relaxed_only)}** (for future analysis)")
+    if len(hard_strict_final) >= 20:
+        lines.append(f"- Hard strict count ({len(hard_strict_final)}) is sufficient for QG pilot.")
+    else:
+        lines.append(f"- Hard strict count ({len(hard_strict_final)}) is limited. Consider running on more documents for Hard QG pilot.")
+
+    report_path = Path(report_path)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))

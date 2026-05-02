@@ -12,7 +12,7 @@ REPAIRABLE_REASONS = {
     "not a dict", "no common English words",
     "banned phrase", "only 0 prior events mentioned, need >=2",
     "only 1 prior events mentioned, need >=2",
-    "path_binding",
+    "path_binding", "path_coverage", "too_explicit",
 }
 
 
@@ -43,6 +43,18 @@ def build_repair_prompt(item, failed_question, failure_reason, difficulty, cover
         fix_hints["banned phrase"] = "Avoid template phrases like 'final outcome' or 'what happened after the incident'. Instead, use SPECIFIC event names from the path."
     if "only" in failure_reason and "prior events mentioned" in failure_reason:
         fix_hints["insufficient events"] = f"Mention at least TWO specific events from: {prior_list}. Name them explicitly in the question."
+    if "too_explicit" in failure_reason:
+        fix_hints["too_explicit"] = f"""Your question lists too many prior event triggers explicitly.
+Do NOT name 2+ events from: {prior_list}.
+Instead, use an IMPLICIT chain approach:
+- Name at most 1 prior event trigger (preferably the start event).
+- DESCRIBE other events using different words (not their trigger words).
+  Example: "public outcry" instead of "protested", "the inquiry" instead of "investigated".
+- The question must still reference 2+ prior events by meaning — just not by trigger words.
+- The solver must discover intermediate events by reading the context.
+Example: "What decisive action concluded the escalation that began with the initial announcement?"
+(describes "protested" as "escalation", "canceled" as "decisive action", uses only "announcement" as trigger)
+"""
     if "path_binding" in failure_reason:
         min_req = {"Easy": 1, "Medium": 1, "Hard": 2}.get(difficulty, 1)
         check_events = events[:-1] if difficulty in ("Medium", "Hard") else events
@@ -57,15 +69,28 @@ Use the specific event trigger words or clear descriptions."""
         else:
             fix_hints["path_binding"] = f"Your question must explicitly mention at least {min_req} events from the path. Use the specific event trigger words."
 
+    # Path coverage failure (from quality filter, not generation-time check)
+    if "path_coverage" in failure_reason:
+        # Extract missing events from the failure reason if available
+        missing_events = [e["trigger"] for e in events[:-1]]
+        missing_list = ", ".join(f'"{t}"' for t in missing_events)
+        fix_hints["path_coverage"] = f"""Your question only covers too few prior events.
+It must explicitly reference prior events from: {missing_list}
+Rewrite the question so these events are clearly mentioned BEFORE asking about the final event.
+Do NOT mention the target answer: "{final}"
+Example: "After {missing_events[0] if missing_events else 'X'} and {missing_events[1] if len(missing_events) > 1 else 'Y'}, what happened?" """
+
     fix = fix_hints.get(failure_reason, f"Fix this issue: {failure_reason}")
 
     hard_extra = ""
     if difficulty == "Hard":
         hard_extra = f"""
-HARD-SPECIFIC:
-- Mention at least 2 prior events explicitly: {prior_list}
-- Do NOT use: "final outcome", "what happened after the incident", "what action was taken"
-- Question must require connecting info from multiple sentences"""
+HARD-SPECIFIC (implicit chain):
+- At most 1 prior event trigger from: {prior_list} may appear in the question.
+- BUT you must DESCRIBE at least 2 prior events using different words (not trigger words).
+  Example: "public outcry" for "protested", "the inquiry" for "investigated".
+- The question must include at least one anchor (participant, entity, or consequence type).
+- Question must require connecting 3+ sentences to answer."""
 
     return f"""Your previous output was rejected.
 Rejected: "{failed_question}"

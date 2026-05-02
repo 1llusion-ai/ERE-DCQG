@@ -26,9 +26,24 @@ _simple_stem = simple_stem
 
 
 CLAUSE_BOUNDARY_WORDS = {
-    ",", ";", "but", "and", "that", "which", "who", "where", "when",
+    ",", ";", "and", "or", "but", "that", "which", "who", "where", "when",
     "because", "although", "however", "while", "though", "yet", "so",
-    "nor", "or", "if", "unless", "since", "after", "before",
+    "nor", "if", "unless", "since", "after", "before",
+}
+
+# Words that look like they belong to a coordinated noun-phrase list.
+# Used to decide whether "and"/"or" is a list coordinator (skip) or a
+# clause joiner (stop).
+_LIST_LIKE_POS = {
+    # determiners / quantifiers
+    "a", "an", "the", "this", "that", "these", "those",
+    "some", "any", "no", "every", "each", "all", "both",
+    "many", "several", "few", "other", "another",
+    # common adjectives
+    "new", "old", "large", "small", "good", "bad", "great",
+    "major", "minor", "more", "most", "less", "least",
+    # numbers / ordinals
+    "one", "two", "three", "four", "five", "first", "second",
 }
 
 
@@ -37,6 +52,102 @@ GENERIC_TRIGGERS = {
     "is", "are", "had", "has", "have", "said", "told", "asked",
     "went", "came", "got", "gave", "took", "put", "set",
 }
+
+
+# Words that indicate a phrase is incomplete when they appear at the end.
+# These are prepositions, title-introducing words, or conjunctions that
+# require a complement after them.
+DANGLING_END_WORDS = {
+    # prepositions
+    "by", "for", "with", "in", "on", "at", "to", "from", "of",
+    "into", "onto", "upon", "over", "under", "through", "during",
+    "before", "after", "between", "among", "against", "toward",
+    "towards", "within", "without", "along", "across", "around",
+    "beyond", "behind", "beside", "beneath", "despite", "except",
+    "inside", "outside", "throughout", "until", "via",
+    # title-introducing / naming words
+    "titled", "called", "named", "known", "entitled",
+    # other open-ended words
+    "including", "such", "according",
+}
+
+# Multi-word dangling phrases (last N words of the phrase)
+DANGLING_END_PHRASES = {
+    "known as", "referred to as", "described as", "released as",
+    "released in", "according to", "such as",
+}
+
+
+def _check_phrase_completeness(phrase):
+    """Check whether an extracted phrase ends with a dangling word/phrase.
+
+    Returns (is_complete: bool, reason: str).
+    """
+    if not phrase:
+        return True, ""
+
+    words = phrase.split()
+    if not words:
+        return True, ""
+
+    # Check unclosed brackets
+    for open_c, close_c in [("(", ")"), ("[", "]"), ("{", "}")]:
+        if phrase.count(open_c) > phrase.count(close_c):
+            return False, "partial extraction: unclosed bracket or quote"
+
+    # Check unclosed quotes (odd number of double or single quotes)
+    if phrase.count('"') % 2 != 0:
+        return False, "partial extraction: unclosed bracket or quote"
+    # Only check single quotes if there are 3+ (possessives have 1)
+    if phrase.count("'") >= 3 and phrase.count("'") % 2 != 0:
+        return False, "partial extraction: unclosed bracket or quote"
+
+    last_word = words[-1].lower().strip(".,;:!?\"'")
+
+    # Check single dangling word
+    if last_word in DANGLING_END_WORDS:
+        return False, f"partial extraction: phrase ends with dangling word '{last_word}'"
+
+    # Check multi-word dangling phrases
+    phrase_lower = phrase.lower()
+    for dangling_phrase in DANGLING_END_PHRASES:
+        if phrase_lower.rstrip(".,;:!?\"' ").endswith(dangling_phrase):
+            return False, f"partial extraction: phrase ends with '{dangling_phrase}'"
+
+    # Reject bare-fragment starters: participles, modals, or auxiliaries
+    # at the beginning without a subject or real object.
+    # e.g. "making landfalls on Long Island", "could operate in environments"
+    first_word = words[0].lower()
+    _fragment_starters = {
+        # bare participles
+        "making", "starting", "operating", "following", "including",
+        "according", "leading", "resulting", "beginning", "moving",
+        "being", "having", "going", "coming", "taking", "getting",
+        "doing", "giving", "putting", "setting",
+        # modals
+        "could", "would", "should", "might", "may", "can", "must", "shall",
+    }
+    if first_word in _fragment_starters:
+        return False, f"partial extraction: bare fragment starting with '{first_word}'"
+
+    # Check passive-only structure: starts with auxiliary + past participle
+    # but lacks a real object/complement after the verb.
+    # e.g. "was released in VHS titled" — has aux + verb + prepositional
+    # fragment but no actual noun-phrase object.
+    if first_word in ("was", "were", "been", "is", "are", "be"):
+        # If the phrase is only aux + verb + preposition(s), it's incomplete.
+        # Count non-auxiliary content words after the participle.
+        non_aux = [w for w in words if w.lower() not in (
+            "was", "were", "been", "is", "are", "be",
+            "has", "have", "had", "did", "do", "does",
+        )]
+        # If all remaining words are prepositions or the trigger itself,
+        # the phrase has no real object.
+        non_preposition = [w for w in non_aux if w.lower().strip(".,;:!?\"'") not in DANGLING_END_WORDS]
+        if len(non_preposition) <= 1:
+            return False, "partial extraction: passive structure without object"
+
+    return True, ""
 
 
 WEAK_TRIGGERS = {
@@ -81,20 +192,50 @@ def extract_answer_phrase_local(sentence, trigger):
 
     left = trigger_start
     while left > 0:
-        w_clean = words[left - 1].lower().strip(".,;:!?\"'")
-        if w_clean in CLAUSE_BOUNDARY_WORDS:
+        raw = words[left - 1]
+        if raw[-1:] in (".", "!", "?"):
             break
-        if words[left - 1] in (".", "!", "?"):
+        last_char = raw[-1:] if len(raw) > 1 else raw
+        if last_char in (",", ";") or raw in ("—", "--"):
+            break
+        w_clean = raw.lower().strip(".,;:!?\"'")
+        if w_clean in CLAUSE_BOUNDARY_WORDS:
             break
         left -= 1
 
     right = trigger_end
     while right < len(words):
-        w_clean = words[right].lower().strip(".,;:!?\"'")
-        if w_clean in CLAUSE_BOUNDARY_WORDS:
-            break
-        if words[right][-1:] in (".", "!", "?"):
+        raw = words[right]
+        # Check sentence-ending punctuation on the raw word BEFORE stripping.
+        if raw[-1:] in (".", "!", "?"):
             right += 1
+            break
+        # Check clause-boundary punctuation: the word IS a comma/semicolon,
+        # or ENDS with one (e.g. "services,").
+        last_char = raw[-1:] if len(raw) > 1 else raw
+        if last_char in (",", ";") or raw in ("—", "--"):
+            break
+        w_clean = raw.lower().strip(".,;:!?\"'")
+        if w_clean in CLAUSE_BOUNDARY_WORDS:
+            # "and"/"or": peek at neighbors to decide if this is inside a
+            # noun-phrase list (skip) or joining clauses (stop).
+            if w_clean in ("and", "or") and right > 0 and right + 1 < len(words):
+                prev_w = words[right - 1].lower().strip(".,;:!?\"'")
+                next_w = words[right + 1].lower().strip(".,;:!?\"'")
+                _clause_starters_after = {
+                    "he", "she", "it", "they", "we", "i", "you",
+                    "that", "which", "who", "where", "when", "while",
+                    "although", "because", "if", "but", "so", "yet",
+                }
+                # Skip "and/or" if the previous word is noun-like AND the
+                # next word is not a clause-starter pronoun/conjunction.
+                prev_is_noun_like = (
+                    prev_w in _LIST_LIKE_POS
+                    or not prev_w.endswith(("ed", "ing", "ize", "ise"))
+                )
+                if prev_is_noun_like and next_w not in _clause_starters_after:
+                    right += 1
+                    continue
             break
         right += 1
 
@@ -124,6 +265,12 @@ def extract_answer_phrase_local(sentence, trigger):
         status = "partial" if len(words) > 15 else "complete"
     else:
         status = "complete"
+
+    # Completeness check: catch dangling prepositions, unclosed brackets, etc.
+    if status == "complete":
+        is_complete, reason = _check_phrase_completeness(phrase)
+        if not is_complete:
+            status = "partial"
 
     return phrase, status
 

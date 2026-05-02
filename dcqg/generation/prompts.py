@@ -34,6 +34,23 @@ Question: "After the government announced budget cuts and citizens protested, wh
 - The answer cannot be found by reading only the last sentence - you need to understand the full chain.
 - Note: the gold answer "cancel" is NEVER mentioned in the question."""
 
+FEW_SHOT_HARD_IMPLICIT = """Example (Hard - implicit chain):
+
+Path: "announced" -> "protested" -> "canceled" -> "resigned"
+Context:
+[S0] The government announced sweeping budget cuts to the education sector.
+[S1] Thousands of citizens protested the decision in front of parliament.
+[S2] Officials canceled the planned cuts after facing mounting pressure.
+[S3] The finance minister resigned amid the political fallout.
+
+GOOD question: "What long-term political consequence resulted from the public backlash against the government's austerity measures?"
+Why Hard: The solver must trace: austerity measures (announced) -> public backlash (protested) -> cancellation -> resignation.
+The question does NOT name the answer. The solver must follow the chain.
+
+BAD question: "What happened to the finance minister after the budget cuts were announced?"
+Why Easy: The solver just reads [S3] to find "resigned". No chain reasoning needed.
+"""
+
 
 # ── DIFFICULTY DEFINITIONS (CrossQG-style) ───────────────────
 
@@ -211,3 +228,54 @@ CRITICAL Requirements for Hard (you MUST follow ALL):
 
 Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "cross_sentence"}}"""
+
+
+def prompt_pathqg_hard_implicit(item):
+    """Hard: implicit chain, 3+ event reasoning without listing the chain explicitly."""
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    prior_events = [e["trigger"] for e in events[:-1]]
+    prior_list = ", ".join(f'"{t}"' for t in prior_events)
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    answer_phrase = item.get("gold_answer_phrase", final)
+    answer_sentence = item.get("gold_answer_sentence", "")
+    event_type = item.get("gold_event_type", events[-1].get("type", ""))
+    event_ids = [e.get("id", "") for e in events]
+
+    return f"""Hard questions require 3+ event reasoning. The solver must discover intermediate events from context.
+
+{FEW_SHOT_HARD_IMPLICIT}
+
+Context:
+{ctx}
+
+Target final event:
+  Trigger: "{final}"
+  Answer meaning: "{answer_phrase}"
+  Event type: {event_type}
+  Sentence: "{answer_sentence}"
+
+Event Path (for reference only — do NOT list all triggers in the question):
+{path_str}
+
+Event IDs (for hidden_path_events output): {", ".join(event_ids)}
+
+Relation Sequence:
+{rel_str}
+
+Requirements for Hard:
+1. The question must require tracing 3+ events to answer (not answerable from 1 sentence).
+2. Use one of these patterns (adapt to your events):
+   a) "What [consequence/outcome/restriction] resulted from [description of chain start]?"
+   b) "What [result type] concluded the sequence triggered by [start event description]?"
+   c) "What [impact/change] did [entity] face after [description of situation]?"
+3. Do NOT use "What happened when X?" — that is answerable from 1 sentence (too easy).
+4. At most 2 prior trigger words. Use descriptions: {prior_list}
+5. Include a specific anchor (participant, entity, location) from the context.
+6. Do NOT copy the answer phrase. Start with question word, end with "?".
+
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "implicit_chain", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""

@@ -203,16 +203,7 @@ or with "no"/"partial" as appropriate."""
         if _detect_judge_degradation(resp):
             continue
 
-        result = None
-        try:
-            result = json.loads(resp)
-        except json.JSONDecodeError:
-            try:
-                s_idx = resp.index("{")
-                e_idx = resp.rindex("}") + 1
-                result = json.loads(resp[s_idx:e_idx])
-            except (ValueError, json.JSONDecodeError):
-                pass
+        result = _parse_judge_json(resp)
 
         if result and isinstance(result, dict):
             asks = str(result.get("asks_target", "")).strip().lower()
@@ -239,6 +230,27 @@ or with "no"/"partial" as appropriate."""
                     "judge_raw_responses": all_raw_responses,
                 }
 
+    # Last resort: try simplified key=value extraction from all responses
+    for resp in all_raw_responses:
+        if not resp:
+            continue
+        result = _extract_key_value_pairs(resp)
+        if result:
+            asks = result.get("asks_target", "")
+            ans = result.get("answerable", "")
+            cons = result.get("consistent", "")
+            if asks in ("yes", "no") and ans in ("yes", "no") and cons in ("yes", "no", "partial"):
+                consistency = cons if asks == "yes" else "no"
+                return {
+                    "expected_answer_type": "unknown",
+                    "expected_answer_summary": "",
+                    "answer_consistency": consistency,
+                    "answer_consistency_reason": f"extracted from text: asks={asks} ans={ans} cons={cons}",
+                    "asks_target_event": asks == "yes",
+                    "judge_answerable": ans == "yes",
+                    "judge_raw_responses": all_raw_responses,
+                }
+
     return {
         "expected_answer_type": "unknown",
         "expected_answer_summary": "",
@@ -248,3 +260,58 @@ or with "no"/"partial" as appropriate."""
         "judge_answerable": None,
         "judge_raw_responses": all_raw_responses,
     }
+
+
+def _parse_judge_json(resp):
+    """Parse JSON from judge response with robust error handling."""
+    # 1. Direct JSON parse
+    try:
+        return json.loads(resp)
+    except json.JSONDecodeError:
+        pass
+
+    # 2. Extract first {...}
+    try:
+        s_idx = resp.index("{")
+        e_idx = resp.rindex("}") + 1
+        return json.loads(resp[s_idx:e_idx])
+    except (ValueError, json.JSONDecodeError):
+        pass
+
+    # 3. Fix common JSON format errors
+    cleaned = resp.strip()
+    # Remove markdown code fences
+    cleaned = re.sub(r'^```(?:json)?', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'```$', '', cleaned).strip()
+    # Fix missing quotes around keys: {asks_target:yes} -> {"asks_target":"yes"}
+    cleaned = re.sub(r'(?<=[{,])\s*(\w+)\s*:', r' "\1":', cleaned)
+    # Fix single quotes to double quotes
+    cleaned = cleaned.replace("'", '"')
+    # Fix trailing commas
+    cleaned = re.sub(r',\s*}', '}', cleaned)
+    # Fix duplicated quotes
+    cleaned = re.sub(r'""+', '"', cleaned)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    return None
+
+
+def _extract_key_value_pairs(resp):
+    """Extract key-value pairs from malformed judge text."""
+    result = {}
+    patterns = [
+        (r'"asks_target"\s*:\s*"(yes|no|partial)"', "asks_target"),
+        (r'asks_target["\s:]+(yes|no|partial)', "asks_target"),
+        (r'"answerable"\s*:\s*"(yes|no|partial)"', "answerable"),
+        (r'answerable["\s:]+(yes|no|partial)', "answerable"),
+        (r'"consistent"\s*:\s*"(yes|no|partial)"', "consistent"),
+        (r'consistent["\s:]+(yes|no|partial)', "consistent"),
+    ]
+    for pattern, key in patterns:
+        m = re.search(pattern, resp, re.IGNORECASE)
+        if m:
+            result[key] = m.group(1).lower()
+    return result if len(result) >= 2 else None

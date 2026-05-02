@@ -21,9 +21,12 @@ def validate_answer_phrase(phrase, trigger, answer_phrase_status=None):
     if not phrase:
         return False, "empty phrase"
 
-    # Reject partial extractions (used full sentence without clause boundaries)
+    # Reject partial extractions (used full sentence without clause boundaries,
+    # or phrase ends with dangling preposition / unclosed bracket / passive-only)
     if answer_phrase_status == "partial":
-        return False, "partial extraction (no clause boundary found)"
+        # Provide specific sub-reason based on phrase analysis
+        reason = _diagnose_partial_reason(phrase)
+        return False, reason
 
     phrase_lower = phrase.lower().strip()
     trigger_lower = trigger.lower().strip()
@@ -45,6 +48,50 @@ def validate_answer_phrase(phrase, trigger, answer_phrase_status=None):
             return False, f"trigger '{trigger}' not in phrase '{phrase}'"
 
     return True, "valid phrase"
+
+
+def _diagnose_partial_reason(phrase):
+    """Diagnose why a phrase is partial. Returns a specific reason string."""
+    if not phrase:
+        return "partial extraction: empty phrase"
+
+    words = phrase.split()
+    last_word = words[-1].lower().strip(".,;:!?\"'") if words else ""
+
+    # Unclosed brackets/quotes
+    for open_c, close_c in [("(", ")"), ("[", "]"), ("{", "}")]:
+        if phrase.count(open_c) > phrase.count(close_c):
+            return "partial extraction: unclosed bracket or quote"
+    if phrase.count('"') % 2 != 0:
+        return "partial extraction: unclosed bracket or quote"
+
+    # Dangling end words
+    from dcqg.path.answer_extraction import DANGLING_END_WORDS, DANGLING_END_PHRASES
+    if last_word in DANGLING_END_WORDS:
+        return f"partial extraction: phrase ends with dangling word '{last_word}'"
+
+    phrase_lower = phrase.lower()
+    for dp in DANGLING_END_PHRASES:
+        if phrase_lower.rstrip(".,;:!?\"' ").endswith(dp):
+            return f"partial extraction: phrase ends with '{dp}'"
+
+    # Bare fragment starters
+    first_word = words[0].lower() if words else ""
+    _fragment_starters = {
+        "making", "starting", "operating", "following", "including",
+        "according", "leading", "resulting", "beginning", "moving",
+        "being", "having", "going", "coming", "taking", "getting",
+        "doing", "giving", "putting", "setting",
+        "could", "would", "should", "might", "may", "can", "must", "shall",
+    }
+    if first_word in _fragment_starters:
+        return f"partial extraction: bare fragment starting with '{first_word}'"
+
+    # Passive without object
+    if first_word in ("was", "were", "been", "is", "are", "be"):
+        return "partial extraction: passive structure without object"
+
+    return "partial extraction (no clause boundary found)"
 
 
 # ================================================================

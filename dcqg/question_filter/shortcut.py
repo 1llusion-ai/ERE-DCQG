@@ -48,10 +48,19 @@ def hard_degraded_check(
     generated_question, supporting_sentences, gold_answer_phrase, path_events
 ):
     """
-    For Hard questions: check if single sentence can answer it.
+    For Hard questions: check if the question is a shortcut that doesn't
+    actually require path knowledge.
+
+    NEW LOGIC: Instead of rejecting because "answer is in one sentence",
+    we check whether the QUESTION depends on prior path events to locate
+    the answer. A question can have its answer in one sentence AND still
+    require multi-hop reasoning to identify that sentence.
+
     Returns dict with all output fields.
     """
     path_str = " -> ".join(f'"{e["trigger"]}"' for e in path_events)
+    prior_triggers = [e["trigger"] for e in path_events[:-1]]
+    prior_list = ", ".join(f'"{t}"' for t in prior_triggers)
     ctx = "\n".join(
         f"[S{s[0]}] {s[1]}" if isinstance(s, (list, tuple)) else f"[S{i}] {s}"
         for i, s in enumerate(supporting_sentences[:8])
@@ -62,68 +71,127 @@ def hard_degraded_check(
 
 Question: "{generated_question}"
 Path events: {path_str}
+Prior events (before the final answer): {prior_list}
 Gold answer phrase: "{gold_answer_phrase}"
 
 For this Hard-level question, answer:
 
-1. Can this question be correctly answered by reading only ONE sentence from the context? (yes/partial/no)
-2. If yes/partial, which sentence? (give the sentence number, e.g., S0, S1, etc.)
-3. Does answering require understanding intermediate events in the path? (yes/partial/no)
-4. How many evidence hops are needed? (1/2/3+)
+1. shortcut_without_path: Could someone find the correct answer WITHOUT knowing about the prior events? Would the question make sense and be answerable if the prior events were removed from context? (yes/partial/no)
 
-Reply:
-SINGLE=<yes|partial|no>
-SENT_ID=<S# or N/A>
-NEED=<yes|partial|no>
-HOPS=<1|2|3+>"""
+2. needs_prior_events_to_identify_answer: Does the question require understanding the prior events to LOCATE or IDENTIFY which sentence contains the answer? (yes/partial/no)
 
-    resp = call_api(prompt, temperature=0.0, max_tokens=40, timeout=90)
+3. If shortcut_without_path=yes, which single sentence contains the answer? (S# or N/A)
 
-    can_single = "no"
-    sent_id = None
-    need_intermediate = "yes"
-    hops = "2"
+Reply ONLY as JSON:
+{{"shortcut_without_path":"no","needs_prior_events_to_identify_answer":"yes","shortcut_sentence_id":"N/A","reason":"brief explanation"}}"""
+
+    # Initialize defaults
+    shortcut_without_path = "no"
+    needs_prior = "yes"
+    sent_id = "N/A"
+    reason_text = ""
+
+    resp = call_api(prompt, temperature=0.0, max_tokens=80, timeout=90)
 
     if resp:
-        resp_upper = resp.upper().replace(",", " ")
-        for part in resp_upper.split():
-            if part.startswith("SINGLE="):
-                val = part.split("=", 1)[1].strip().lower()
-                if val in ("yes", "partial", "no"):
-                    can_single = val
-            elif part.startswith("SENT_ID="):
-                val = part.split("=", 1)[1].strip()
-                if val.startswith("S") and val[1:].isdigit():
-                    sent_id = val
-            elif part.startswith("NEED="):
-                val = part.split("=", 1)[1].strip().lower()
-                if val in ("yes", "partial", "no"):
-                    need_intermediate = val
-            elif part.startswith("HOPS="):
-                val = part.split("=", 1)[1].strip()
-                if val in ("1", "2", "3+"):
-                    hops = val
+        parsed = _parse_shortcut_response(resp)
+        if parsed:
+            shortcut_without_path = parsed.get("shortcut_without_path", "no")
+            needs_prior = parsed.get("needs_prior_events_to_identify_answer", "yes")
+            sent_id = parsed.get("shortcut_sentence_id", "N/A")
+            reason_text = parsed.get("reason", "")
 
-    # Determine degraded
-    degraded = False
-    reason = "not degraded"
+    # Also keep old fields for backward compat (informational only)
+    can_single = shortcut_without_path  # approximate mapping
 
-    if can_single == "yes":
-        degraded = True
-        reason = f"can_answer_from_single_sentence=yes (sent={sent_id})"
-    elif need_intermediate == "no":
-        degraded = True
-        reason = "need_intermediate_events=no"
+    # NEW degradation logic: fail only if shortcut=yes AND needs_prior=no
+    degraded = (shortcut_without_path == "yes" and needs_prior == "no")
 
-    # Map hops to numeric
-    hops_num = {"1": 1, "2": 2, "3+": 3}.get(hops, 2)
+    if degraded:
+        deg_reason = f"shortcut_without_path=yes, needs_prior=no (sent={sent_id}): {reason_text}"
+    else:
+        deg_reason = f"not degraded: shortcut={shortcut_without_path}, needs_prior={needs_prior}"
+
+    # Map hops (keep for backward compat)
+    hops_num = 1 if shortcut_without_path == "yes" else (2 if shortcut_without_path == "partial" else 3)
 
     return {
+        # New fields (used for filtering)
+        "shortcut_without_path": shortcut_without_path,
+        "needs_prior_events_to_identify_answer": needs_prior,
+        "shortcut_sentence_id": sent_id,
+        "shortcut_reason": reason_text,
+        # Old fields (backward compat, informational only)
         "can_answer_from_single_sentence": can_single,
-        "single_sentence_id": sent_id or "N/A",
-        "need_intermediate_events": need_intermediate,
+        "single_sentence_id": sent_id,
+        "need_intermediate_events": "no" if shortcut_without_path == "yes" else "yes",
         "evidence_hops_used": hops_num,
+        # Degradation decision
         "hard_degraded": degraded,
-        "hard_degraded_reason": reason,
+        "hard_degraded_reason": deg_reason,
         "hard_degraded_raw": resp or "",
     }
+
+
+def _parse_shortcut_response(resp):
+    """Parse shortcut judge response with robust JSON extraction.
+    Always returns a dict or None — never a bare string/number."""
+    import json
+    # Try direct JSON parse (must be a dict, not a bare string/number)
+    try:
+        parsed = json.loads(resp)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting first {...}
+    try:
+        s_idx = resp.index("{")
+        e_idx = resp.rindex("}") + 1
+        parsed = json.loads(resp[s_idx:e_idx])
+        if isinstance(parsed, dict):
+            return parsed
+    except (ValueError, json.JSONDecodeError):
+        pass
+
+    # Try fixing common JSON errors
+    cleaned = resp.strip()
+    # Remove markdown code fences
+    import re
+    cleaned = re.sub(r'^```(?:json)?', '', cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r'```$', '', cleaned).strip()
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+
+    # Try extracting key-value pairs from text
+    result = {}
+    for key in ["shortcut_without_path", "needs_prior_events_to_identify_answer",
+                 "shortcut_sentence_id", "reason"]:
+        m = re.search(rf'"{key}"\s*:\s*"([^"]*)"', resp)
+        if m:
+            result[key] = m.group(1)
+    if result:
+        return result
+
+    # Try KEY=value format
+    resp_upper = resp.upper().replace(",", " ")
+    for part in resp_upper.split():
+        if part.startswith("SHORTCUT="):
+            val = part.split("=", 1)[1].strip().lower()
+            if val in ("yes", "partial", "no"):
+                result["shortcut_without_path"] = val
+        elif part.startswith("NEED="):
+            val = part.split("=", 1)[1].strip().lower()
+            if val in ("yes", "partial", "no"):
+                result["needs_prior_events_to_identify_answer"] = val
+        elif part.startswith("SENT_ID="):
+            val = part.split("=", 1)[1].strip()
+            if val.startswith("S") and val[1:].isdigit():
+                result["shortcut_sentence_id"] = val
+
+    return result if result else None

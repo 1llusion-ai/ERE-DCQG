@@ -17,6 +17,7 @@ ENV/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # IDE
 .idea/
@@ -37,12 +38,15 @@ Thumbs.db
 refine-logs/
 docs/
 idea-stage/
+CLAUDE.md
 
 # Experiment outputs (large generated data)
 event_qg/outputs/
+outputs/
 
 # Data
 event_qg/data/raw/
+data/raw/
 
 # WandB / ML tracking
 wandb/

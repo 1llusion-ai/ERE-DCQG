@@ -1,0 +1,81 @@
+"""Repair prompts for hard-aware question generation.
+
+- build_repair_prompt: construct a repair prompt for a failed question
+- REPAIRABLE_REASONS: set of failure reasons that can be fixed via repair
+"""
+from dcqg.generation.prompts import fmt_ctx
+
+
+REPAIRABLE_REASONS = {
+    "no question mark", "bad start", "word repetition", "trigger leakage",
+    "empty", "parse error", "too short", "excessive repetition", "looping trigram",
+    "not a dict", "no common English words",
+    "banned phrase", "only 0 prior events mentioned, need >=2",
+    "only 1 prior events mentioned, need >=2",
+    "path_binding",
+}
+
+
+def build_repair_prompt(item, failed_question, failure_reason, difficulty, covered_indices=None):
+    """Build repair prompt for hard-aware generation.
+    If covered_indices is provided, list specific uncovered events.
+    """
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    prior_events = [e["trigger"] for e in events[:-1]]
+    prior_list = ", ".join(f'"{t}"' for t in prior_events)
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+
+    fix_hints = {
+        "no question mark": "End the question with a question mark (?)",
+        "bad start": "Start with What/Who/When/Where/Why/How/Did/Was/Were/Is/Are",
+        "word repetition": "Remove repeated words, write grammatically correct English",
+        "trigger leakage": f'Do NOT use the word "{final}" or its synonyms anywhere in the question',
+        "empty": "Write a complete question",
+        "parse error": "Output ONLY valid JSON with 'question' and 'reasoning_type' keys",
+        "too short": "Write a longer, more complete question that includes event details",
+        "excessive repetition": "Remove repeated words, write naturally",
+        "looping trigram": "Write naturally, avoid repeating the same phrase patterns",
+    }
+
+    if "banned phrase" in failure_reason:
+        fix_hints["banned phrase"] = "Avoid template phrases like 'final outcome' or 'what happened after the incident'. Instead, use SPECIFIC event names from the path."
+    if "only" in failure_reason and "prior events mentioned" in failure_reason:
+        fix_hints["insufficient events"] = f"Mention at least TWO specific events from: {prior_list}. Name them explicitly in the question."
+    if "path_binding" in failure_reason:
+        min_req = {"Easy": 1, "Medium": 1, "Hard": 2}.get(difficulty, 1)
+        check_events = events[:-1] if difficulty in ("Medium", "Hard") else events
+        uncovered = [e for i, e in enumerate(check_events) if not covered_indices or i not in covered_indices]
+        if uncovered:
+            event_list = "\n".join(f'  - "{e["trigger"]}" ({e.get("type", "event")})' for e in uncovered[:3])
+            fix_hints["path_binding"] = f"""Your question did not mention enough prior events (covered {len(covered_indices or [])}/{min_req} required).
+Please rewrite to explicitly reference these events:
+{event_list}
+Do NOT mention the target answer: "{final}"
+Use the specific event trigger words or clear descriptions."""
+        else:
+            fix_hints["path_binding"] = f"Your question must explicitly mention at least {min_req} events from the path. Use the specific event trigger words."
+
+    fix = fix_hints.get(failure_reason, f"Fix this issue: {failure_reason}")
+
+    hard_extra = ""
+    if difficulty == "Hard":
+        hard_extra = f"""
+HARD-SPECIFIC:
+- Mention at least 2 prior events explicitly: {prior_list}
+- Do NOT use: "final outcome", "what happened after the incident", "what action was taken"
+- Question must require connecting info from multiple sentences"""
+
+    return f"""Your previous output was rejected.
+Rejected: "{failed_question}"
+Issue: {failure_reason}
+-> {fix}
+
+Generate a corrected {difficulty} question:
+Events: {path_str}
+Context: {ctx}
+- Answer is "{final}", do NOT mention it
+{hard_extra}
+- Question must start with a question word and end with ?
+- Output ONLY: {{"question": "...", "reasoning_type": "..."}}"""

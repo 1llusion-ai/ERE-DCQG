@@ -635,3 +635,84 @@ Trace finding:
 - A no-skip run exposed answer phrase drift: path judge/QG used one phrase, while `quality_filter.py` overwrote `gold_answer_phrase` with an LLM-extracted phrase.
 - Fix: `full_pipeline_smoke.py` refreshes `answer_extraction` before path judge; `quality_filter.py` now keeps upstream `gold_answer_phrase` as the canonical target and stores LLM extraction only in `llm_answer_phrase*` diagnostic fields.
 - Remaining observed issue in the example: solver reached `status=ok` but `judge_solver_correct=0.0`; use the trace fields `solver_answer`, `gold_answer_phrase`, and judge scores to inspect whether this is a solver failure, judge strictness issue, or answer phrase granularity issue.
+
+---
+
+## 17. New `dcqg/` Framework Verification (2026-05-02)
+
+The primary code path is now the root-level `dcqg/` package plus `scripts/` entry points. `event_qg/` is legacy and should be removable after historical outputs are archived.
+
+Verified command:
+
+```powershell
+python -m scripts.run_pipeline `
+  --raw_data data/raw/maven_ere/valid.jsonl `
+  --output_dir outputs/runs/verify_pipeline_noskip_9 `
+  --limit 9 `
+  --max_per_doc 1
+```
+
+Verification result:
+
+- Stage 1 graph/path sampling ran from `data/raw/maven_ere/valid.jsonl`.
+- Stage 2 LLM path judge ran: `path_judge_status=ok` for 6 generated records.
+- Stage 3 question generation ran: 6/6 generated.
+- Stage 4 question filtering ran: 3/6 passed.
+- Stage 5 solver + judge ran: 3/3 filter-passed questions evaluated with `solver_eval_status=ok`.
+- Trace written to `outputs/runs/verify_pipeline_noskip_9/traces/full_trace.jsonl`.
+- No generated result record contained `event_qg` path references.
+
+Current engineering status:
+
+- Full new-framework pipeline is runnable end to end.
+- Use `python -m scripts.<entry>` from repository root; direct `python scripts/foo.py` is not the supported invocation.
+- Root `.env` is canonical. `.env.example` is safe to commit. `event_qg/.env` is no longer required by new code.
+
+Current quality issues exposed by trace:
+
+- Medium items often fail `path_coverage` because generated questions mention only one path event.
+- Some local answer phrases are still too broad or awkward, although they are no longer cross-stage inconsistent.
+- These are method/data-quality issues, not framework wiring failures.
+
+---
+
+## 17. Package Migration (2026-05-01)
+
+The codebase has been migrated from flat `event_qg/src/` (13 .py files with bare imports and sys.path hacks) to a proper `dcqg/` package with clean subpackages and `scripts/` entry points.
+
+### 17.1 New Package Structure
+
+```
+dcqg/
+  __init__.py
+  utils/         config, api_client, text, jsonl
+  graph/         event_graph (EventGraph, build_graphs_from_file)
+  path/          sampler, answer_extraction, diagnostics, selector, llm_filter, direction
+  generation/    prompts, parser, repair, generator, baselines, faithfulness
+  question_filter/ grammar, consistency, path_coverage, shortcut, pipeline
+  evaluation/    solver, judge, metrics, report
+  tracing/       record, writer, render
+scripts/
+  01_build_graph.py      02_sample_paths.py      03_filter_paths.py
+  04_generate_questions.py  05_evaluate.py
+  run_smoke_test.py      run_quality_pilot.py    run_pipeline.py
+```
+
+### 17.2 Duplicate Code Consolidated
+
+| Symbol | Old locations | New location |
+|---|---|---|
+| `_simple_stem` | answer_extraction, compare_hardaware, quality_filter | `dcqg/utils/text.py` |
+| `_call_api` | evaluator, evaluator_v2, baselines | `dcqg/utils/api_client.py` |
+| `_normalize` | evaluator, evaluator_v2 | `dcqg/utils/text.py` |
+| `_fuzzy_match` | evaluator, evaluator_v2 | `dcqg/utils/text.py` |
+| `read_jsonl` | graph_builder, path_llm_judge | `dcqg/utils/jsonl.py` |
+| `.env` loading | 6 files | `dcqg/utils/config.py` |
+
+### 17.3 Verification
+
+- All 37 .py files in dcqg/ pass `py_compile`
+- All 8 scripts/ pass `py_compile`
+- All 7 subpackages import successfully: `import dcqg.utils, dcqg.graph, dcqg.tracing, dcqg.question_filter, dcqg.evaluation, dcqg.path, dcqg.generation`
+- No old imports (sys.path.insert, event_qg.src, compare_hardaware, etc.) in dcqg/ or scripts/
+- Old `event_qg/src/` files are preserved for reference but are no longer the primary code path

@@ -22,6 +22,8 @@ ENV/
 # IDE
 .idea/
 .vscode/
+.claude/
+.agents/
 *.swp
 *.swo
 *~
@@ -38,6 +40,7 @@ Thumbs.db
 refine-logs/
 docs/
 idea-stage/
+review-stage/
 CLAUDE.md
 
 # Experiment outputs (large generated data)

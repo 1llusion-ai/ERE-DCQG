@@ -21,13 +21,27 @@ from dcqg.utils.config import get_api_config
 from dcqg.generation.generator import generate_multi_strategy, STRATEGY_PROMPT_MAP, check_hard_path_suitability
 from dcqg.question_filter.pipeline import quality_filter_pipeline
 from dcqg.evaluation.judge import independent_difficulty_judge, independent_path_dependency_judge, blind_difficulty_judge, hard_answer_alignment_judge
-from dcqg.question_filter.pipeline import apply_strict_hard_filter, apply_relaxed_hard_filter
+from dcqg.question_filter.pipeline import apply_quality_filter_with_judges
 from dcqg.tracing.record import TraceRecord
 from dcqg.tracing.writer import write_full_trace
 from dcqg.tracing.render import write_readable_trace, build_trace_from_pipeline_result
 
 
 STRATEGIES = ["hidden_endpoint", "relation_composition"]
+
+
+def _get_template_family_name(hard_answer_type):
+    """Map hard_answer_type to template family name for reporting."""
+    _MAP = {
+        "restriction_policy": "restriction",
+        "agreement_resolution": "agreement",
+        "investigation_outcome": "investigation",
+        "casualty_damage": "casualty",
+        "movement_action_outcome": "action",
+        "unsuitable": "unsuitable",
+    }
+    return _MAP.get(hard_answer_type, "generic")
+
 
 # ── Counters ──
 api_call_count = 0
@@ -85,6 +99,8 @@ def generate_candidates(paths, k_candidates, strategies, seed=42, model_config=N
     all_results = []
     total_drift_fails = 0
     total_drift_repaired = 0
+    total_unsupported_type = 0
+    total_too_direct_cue = 0
 
     total_tasks = len(paths) * len(strategies) * k_candidates
     done = 0
@@ -96,6 +112,8 @@ def generate_candidates(paths, k_candidates, strategies, seed=42, model_config=N
         suitable, suit_reason = check_hard_path_suitability(path_item)
         if not suitable:
             print(f"  [SKIP] doc={doc_id} path unsuitable: {suit_reason}")
+            if "unsupported_answer_type" in suit_reason:
+                total_unsupported_type += 1
             # Mark all candidates for this path as unsuitable
             for strategy in strategies:
                 for k in range(k_candidates):
@@ -107,6 +125,8 @@ def generate_candidates(paths, k_candidates, strategies, seed=42, model_config=N
                         "generated_question": "",
                         "events": path_item.get("events", []),
                         "supporting_sentences": path_item.get("supporting_sentences", []),
+                        "hard_answer_type": "unsuitable",
+                        "template_family": "unsuitable",
                     }
                     result["_path_idx"] = path_idx
                     result["_candidate_idx"] = k
@@ -130,6 +150,7 @@ def generate_candidates(paths, k_candidates, strategies, seed=42, model_config=N
                 drift_reps = result.get("drift_repaired", 0)
                 total_drift_fails += drift_fails
                 total_drift_repaired += drift_reps
+                total_too_direct_cue += result.get("too_direct_cue", 0)
 
                 # Attach path metadata
                 result["_path_idx"] = path_idx
@@ -146,7 +167,9 @@ def generate_candidates(paths, k_candidates, strategies, seed=42, model_config=N
                 time.sleep(0.1)
 
     print(f"  Drift check: {total_drift_fails} failures, {total_drift_repaired} repaired")
-    return all_results, total_drift_fails, total_drift_repaired
+    print(f"  Too direct cue: {total_too_direct_cue} rejected")
+    print(f"  Unsupported answer types: {total_unsupported_type} paths rejected")
+    return all_results, total_drift_fails, total_drift_repaired, total_unsupported_type, total_too_direct_cue
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -233,19 +256,14 @@ def run_judges(results, model_config):
     return results
 
 
-def apply_new_hard_filter(results):
-    """Apply both strict and relaxed Hard filters."""
+def apply_quality_filter(results):
+    """Apply quality-only filter to all candidates."""
     for r in results:
         if r.get("generation_error") or not r.get("generated_question"):
-            r["strict_new_hard_filter_pass"] = False
-            r["strict_new_hard_filter_reason"] = "generation_error_or_empty"
-            r["relaxed_new_hard_filter_pass"] = False
-            r["relaxed_new_hard_filter_reason"] = "generation_error_or_empty"
-            r["new_hard_filter_pass"] = False
-            r["new_hard_filter_reason"] = "generation_error_or_empty"
+            r["quality_filter_pass"] = False
+            r["quality_filter_reason"] = "generation_error_or_empty"
             continue
-        apply_strict_hard_filter(r)
-        apply_relaxed_hard_filter(r)
+        apply_quality_filter_with_judges(r)
     return results
 
 
@@ -274,362 +292,359 @@ def build_traces(results, output_dir):
 # Step 6: Generate Report
 # ═══════════════════════════════════════════════════════════════
 
-def generate_report(results, selected_paths, output_dir, k_candidates, drift_fails=0, drift_repaired=0):
-    """Generate HARD_RESCUE_REPORT.md with 3-level reporting: all / new-filter-passing / top-1 per path."""
+def generate_report(results, selected_paths, output_dir, k_candidates, drift_fails=0, drift_repaired=0, unsupported_type=0, too_direct_cue=0):
+    """Generate HARD_RESCUE_QUALITY_REPORT.md with quality-only filtering."""
     lines = []
-    lines.append("# Hard Rescue Pilot Report (Blind Judge Edition)\n")
+    lines.append("# Hard Rescue Pilot Report (Quality Filter Edition)\n")
     lines.append(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    lines.append(f"**Paths:** {len(selected_paths)} (strict + relaxed Hard)")
+    lines.append(f"**Paths:** {len(selected_paths)}")
     lines.append(f"**Strategies:** {', '.join(STRATEGIES)}")
     lines.append(f"**K candidates per path per strategy:** {k_candidates}")
     lines.append(f"**Total candidates generated:** {len(results)}")
     lines.append(f"**API calls:** generation={generation_count}, filter={filter_count}, judge={judge_count}")
     lines.append("")
 
-    # ── Pool Statistics ──
+    # ══════════════════════════════════════════════════════════════
+    # Section 1: Pool Stats
+    # ══════════════════════════════════════════════════════════════
     lines.append("## 1. Pool Statistics\n")
+    gen_errors = sum(1 for r in results if r.get("generation_error"))
+    grammar_ok = sum(1 for r in results if r.get("grammar_pass"))
+    quality_pass = sum(1 for r in results if r.get("quality_filter_pass"))
+
     lines.append("| Stage | Count |")
     lines.append("|-------|------:|")
     lines.append(f"| Selected Hard paths | {len(selected_paths)} |")
-    gen_errors = sum(1 for r in results if r.get("generation_error"))
-    grammar_ok = sum(1 for r in results if r.get("grammar_pass"))
-    strict_pass = sum(1 for r in results if r.get("strict_new_hard_filter_pass"))
-    relaxed_pass = sum(1 for r in results if r.get("relaxed_new_hard_filter_pass"))
     lines.append(f"| Total candidates | {len(results)} |")
-    lines.append(f"| Grammar pass | {grammar_ok} |")
     lines.append(f"| Generation errors | {gen_errors} |")
+    lines.append(f"| Grammar pass | {grammar_ok} |")
     lines.append(f"| Drift check failures | {drift_fails} |")
     lines.append(f"| Drift repaired | {drift_repaired} |")
-    lines.append(f"| Strict Hard filter pass | {strict_pass} |")
-    lines.append(f"| Relaxed Hard filter pass | {relaxed_pass} |")
+    if too_direct_cue > 0:
+        lines.append(f"| Too direct answer-type cue | {too_direct_cue} |")
+    if unsupported_type > 0:
+        lines.append(f"| Unsupported answer type (skipped) | {unsupported_type} |")
+    lines.append(f"| **Quality filter pass** | **{quality_pass}** |")
     lines.append("")
 
-    # ── Blind Judge: All Candidates ──
-    lines.append("## 2. Blind Difficulty Judge — All Candidates\n")
-    blind_judged = [r for r in results if r.get("blind_difficulty_judge_status") == "ok"]
-
-    def _blind_rate(items):
-        if not items:
-            return 0, 0, 0, 0
-        total = len(items)
-        hard = sum(1 for r in items if r["blind_difficulty_judge"]["predicted_difficulty"] == "Hard")
-        med = sum(1 for r in items if r["blind_difficulty_judge"]["predicted_difficulty"] == "Medium")
-        easy = sum(1 for r in items if r["blind_difficulty_judge"]["predicted_difficulty"] == "Easy")
-        return total, hard, med, easy
-
-    lines.append("| Metric | Value |")
-    lines.append("|--------|------:|")
-    total, hard, med, easy = _blind_rate(blind_judged)
-    lines.append(f"| Judged candidates | {total} |")
-    lines.append(f"| Blind Pred Hard | {hard} ({hard/total*100:.1f}%) |" if total else "| Blind Pred Hard | 0 |")
-    lines.append(f"| Blind Pred Medium | {med} ({med/total*100:.1f}%) |" if total else "| Blind Pred Medium | 0 |")
-    lines.append(f"| Blind Pred Easy | {easy} ({easy/total*100:.1f}%) |" if total else "| Blind Pred Easy | 0 |")
-    lines.append("")
-
-    # ── Blind Judge: New Filter-Passing ──
-    lines.append("## 3. Blind Difficulty Judge — New Filter-Passing Candidates\n")
-    new_pass = [r for r in blind_judged if r.get("new_hard_filter_pass")]
-    lines.append("| Metric | Value |")
-    lines.append("|--------|------:|")
-    total_p, hard_p, med_p, easy_p = _blind_rate(new_pass)
-    lines.append(f"| Filter-passing candidates | {total_p} |")
-    lines.append(f"| Blind Pred Hard | {hard_p} ({hard_p/total_p*100:.1f}%) |" if total_p else "| Blind Pred Hard | 0 |")
-    lines.append(f"| Blind Pred Medium | {med_p} ({med_p/total_p*100:.1f}%) |" if total_p else "| Blind Pred Medium | 0 |")
-    lines.append(f"| Blind Pred Easy | {easy_p} ({easy_p/total_p*100:.1f}%) |" if total_p else "| Blind Pred Easy | 0 |")
-    lines.append("")
-
-    # ── Path-level yield (using blind judge) ──
-    lines.append("## 4. Path-Level Blind Pred Hard Yield\n")
-    path_groups = defaultdict(list)
-    for r in blind_judged:
-        key = r.get("dedup_key", r.get("doc_id", ""))
-        path_groups[key].append(r)
-
-    paths_with_hard = 0
-    paths_with_hard_answerable = 0
-    paths_with_hard_full = 0  # answerable + fec + pathdep strong
-    paths_with_strict_filter = 0
-    paths_with_relaxed_filter = 0
-
-    for key, candidates in path_groups.items():
-        hard_cands = [c for c in candidates if c["blind_difficulty_judge"]["predicted_difficulty"] == "Hard"]
-        if hard_cands:
-            paths_with_hard += 1
-            ans_ok = [c for c in hard_cands if c["blind_difficulty_judge"].get("answerable") in ("yes", "partial")]
-            if ans_ok:
-                paths_with_hard_answerable += 1
-                fec_ok = [c for c in ans_ok if c["blind_difficulty_judge"].get("final_event_consistent") in ("yes", "partial")]
-                dep_ok = [c for c in fec_ok if c.get("path_dependency_judge", {}).get("path_dependency") == "strong"]
-                if dep_ok:
-                    paths_with_hard_full += 1
-        if any(c.get("strict_new_hard_filter_pass") for c in candidates):
-            paths_with_strict_filter += 1
-        if any(c.get("relaxed_new_hard_filter_pass") for c in candidates):
-            paths_with_relaxed_filter += 1
-
-    n_paths = len(path_groups)
-    lines.append("| Metric | Count | Rate |")
-    lines.append("|--------|------:|-----:|")
-    lines.append(f"| Total unique paths | {n_paths} | — |")
-    lines.append(f"| Paths with >= 1 Blind Pred Hard | {paths_with_hard} | {paths_with_hard/n_paths*100:.1f}% |" if n_paths else "| Paths with >= 1 Blind Pred Hard | 0 | — |")
-    lines.append(f"| Paths with Blind Hard + answerable | {paths_with_hard_answerable} | {paths_with_hard_answerable/n_paths*100:.1f}% |" if n_paths else "| Paths with Blind Hard + answerable | 0 | — |")
-    lines.append(f"| Paths with Blind Hard + ans + fec + pathdep strong | {paths_with_hard_full} | {paths_with_hard_full/n_paths*100:.1f}% |" if n_paths else "| Paths with Blind Hard + full | 0 | — |")
-    lines.append(f"| Paths with >= 1 strict filter pass | {paths_with_strict_filter} | {paths_with_strict_filter/n_paths*100:.1f}% |" if n_paths else "| Paths with >= 1 strict filter pass | 0 | — |")
-    lines.append(f"| Paths with >= 1 relaxed filter pass | {paths_with_relaxed_filter} | {paths_with_relaxed_filter/n_paths*100:.1f}% |" if n_paths else "| Paths with >= 1 relaxed filter pass | 0 | — |")
-    lines.append("")
-
-    # ── Per-Strategy Comparison ──
-    lines.append("## 5. Per-Strategy Comparison (Blind Judge)\n")
-    lines.append("| Strategy | N judged | Blind Hard | Blind Med | Blind Easy | Ans% | FEC% | PathDep Strong% | Strict Pass% | Relaxed Pass% |")
-    lines.append("|----------|--------:|----------:|---------:|----------:|-----:|-----:|----------------:|-------------:|--------------:|")
-
-    for strategy in STRATEGIES:
-        strat_items = [r for r in blind_judged if r.get("hard_strategy") == strategy]
-        strat_all = [r for r in results if r.get("hard_strategy") == strategy]
-        if not strat_items:
-            lines.append(f"| {strategy} | 0 | — | — | — | — | — | — | — | — |")
-            continue
-        n = len(strat_items)
-        hard_c = sum(1 for r in strat_items if r["blind_difficulty_judge"]["predicted_difficulty"] == "Hard")
-        med_c = sum(1 for r in strat_items if r["blind_difficulty_judge"]["predicted_difficulty"] == "Medium")
-        easy_c = sum(1 for r in strat_items if r["blind_difficulty_judge"]["predicted_difficulty"] == "Easy")
-        ans_c = sum(1 for r in strat_items if r["blind_difficulty_judge"].get("answerable") in ("yes", "partial"))
-        fec_c = sum(1 for r in strat_items if r["blind_difficulty_judge"].get("final_event_consistent") in ("yes", "partial"))
-        dep_c = sum(1 for r in strat_items if r.get("path_dependency_judge", {}).get("path_dependency") == "strong")
-        sp_c = sum(1 for r in strat_all if r.get("strict_new_hard_filter_pass"))
-        rp_c = sum(1 for r in strat_all if r.get("relaxed_new_hard_filter_pass"))
-        lines.append(
-            f"| {strategy} | {n} | {hard_c} ({hard_c/n*100:.0f}%) | "
-            f"{med_c} ({med_c/n*100:.0f}%) | {easy_c} ({easy_c/n*100:.0f}%) | "
-            f"{ans_c/n*100:.0f}% | {fec_c/n*100:.0f}% | {dep_c/n*100:.0f}% | "
-            f"{sp_c/len(strat_all)*100:.0f}% | {rp_c/len(strat_all)*100:.0f}% |" if strat_all else ""
-        )
-    lines.append("")
-
-    # ── Strict Hard Filter Fail Reason Distribution ──
-    lines.append("## 6. Strict Hard Filter Fail Reason Distribution\n")
-    strict_fail_reasons = defaultdict(int)
+    # Quality filter fail reason distribution
+    qfail_reasons = defaultdict(int)
     for r in results:
-        if not r.get("strict_new_hard_filter_pass") and not r.get("generation_error"):
-            reason = r.get("strict_new_hard_filter_reason", "unknown")
+        if not r.get("quality_filter_pass") and not r.get("generation_error"):
+            reason = r.get("quality_filter_reason", "unknown")
             for part in reason.split(";"):
-                strict_fail_reasons[part.strip()] += 1
-    if strict_fail_reasons:
+                qfail_reasons[part.strip()] += 1
+    if qfail_reasons:
+        lines.append("### Quality Filter Fail Reasons\n")
         lines.append("| Reason | Count |")
         lines.append("|--------|------:|")
-        for reason, count in sorted(strict_fail_reasons.items(), key=lambda x: -x[1]):
+        for reason, count in sorted(qfail_reasons.items(), key=lambda x: -x[1]):
             lines.append(f"| {reason} | {count} |")
-    else:
-        lines.append("No filter failures.")
-    lines.append("")
+        lines.append("")
 
-    # ── Quality Metrics (Blind Judge) ──
-    strict_pass_items = [r for r in blind_judged if r.get("strict_new_hard_filter_pass")]
-    relaxed_pass_items = [r for r in blind_judged if r.get("relaxed_new_hard_filter_pass")]
+    # ══════════════════════════════════════════════════════════════
+    # Section 2: Quality-Pass Difficulty Distribution
+    # ══════════════════════════════════════════════════════════════
+    qp_blind = [r for r in results
+                if r.get("quality_filter_pass")
+                and r.get("blind_difficulty_judge_status") == "ok"]
+    lines.append("## 2. Quality-Pass Difficulty Distribution\n")
+    lines.append("*(Computed over quality_filter_pass candidates only)*\n")
 
-    lines.append("## 7. Quality Metrics Summary (Blind Judge)\n")
-    lines.append("| Metric | All Judged | Strict Pass | Relaxed Pass |")
-    lines.append("|--------|----------:|------------:|-------------:|")
-
-    def _metric(items, getter):
-        ok = [r for r in items if getter(r)]
-        return f"{len(ok)}/{len(items)} ({len(ok)/len(items)*100:.0f}%)" if items else "—"
-
-    lines.append(f"| Blind Answerable (yes/partial) | {_metric(blind_judged, lambda r: r.get('blind_difficulty_judge', {}).get('answerable') in ('yes', 'partial'))} | {_metric(strict_pass_items, lambda r: r.get('blind_difficulty_judge', {}).get('answerable') in ('yes', 'partial'))} | {_metric(relaxed_pass_items, lambda r: r.get('blind_difficulty_judge', {}).get('answerable') in ('yes', 'partial'))} |")
-    lines.append(f"| Blind Final-Event Consistent | {_metric(blind_judged, lambda r: r.get('blind_difficulty_judge', {}).get('final_event_consistent') in ('yes', 'partial'))} | {_metric(strict_pass_items, lambda r: r.get('blind_difficulty_judge', {}).get('final_event_consistent') in ('yes', 'partial'))} | {_metric(relaxed_pass_items, lambda r: r.get('blind_difficulty_judge', {}).get('final_event_consistent') in ('yes', 'partial'))} |")
-    lines.append(f"| PathDep Strong | {_metric(blind_judged, lambda r: r.get('path_dependency_judge', {}).get('path_dependency') == 'strong')} | {_metric(strict_pass_items, lambda r: r.get('path_dependency_judge', {}).get('path_dependency') == 'strong')} | {_metric(relaxed_pass_items, lambda r: r.get('path_dependency_judge', {}).get('path_dependency') == 'strong')} |")
-    lines.append(f"| Single-Sent Answerable=no | {_metric(blind_judged, lambda r: r.get('blind_difficulty_judge', {}).get('single_sentence_answerable') == 'no')} | {_metric(strict_pass_items, lambda r: r.get('blind_difficulty_judge', {}).get('single_sentence_answerable') == 'no')} | {_metric(relaxed_pass_items, lambda r: r.get('blind_difficulty_judge', {}).get('single_sentence_answerable') == 'no')} |")
-    lines.append(f"| Alignment asks=yes/partial | {_metric(blind_judged, lambda r: r.get('hard_alignment', {}).get('asks_expected_answer') in ('yes', 'partial'))} | {_metric(strict_pass_items, lambda r: r.get('hard_alignment', {}).get('asks_expected_answer') in ('yes', 'partial'))} | {_metric(relaxed_pass_items, lambda r: r.get('hard_alignment', {}).get('asks_expected_answer') in ('yes', 'partial'))} |")
-    lines.append("")
-
-    # ── Selected Top-1 Per Path ──
-    lines.append("## 8. Selected Top-1 Per Path\n")
-    top1_per_path = _select_top1_per_path(path_groups)
-    lines.append(f"**{len(top1_per_path)} paths with selected top-1 candidates.**\n")
-
-    # Top-1 aggregate stats
-    if top1_per_path:
-        t1_total = len(top1_per_path)
-        t1_hard = sum(1 for r in top1_per_path if r["blind_difficulty_judge"]["predicted_difficulty"] == "Hard")
-        t1_ans_fec = sum(1 for r in top1_per_path
-                         if r["blind_difficulty_judge"].get("answerable") in ("yes", "partial")
-                         and r["blind_difficulty_judge"].get("final_event_consistent") in ("yes", "partial"))
-        t1_pathdep = sum(1 for r in top1_per_path if r.get("path_dependency_judge", {}).get("path_dependency") == "strong")
-        t1_strict = sum(1 for r in top1_per_path if r.get("strict_new_hard_filter_pass"))
-        t1_relaxed = sum(1 for r in top1_per_path if r.get("relaxed_new_hard_filter_pass"))
+    if qp_blind:
+        qp_total = len(qp_blind)
+        qp_hard = sum(1 for r in qp_blind if r["blind_difficulty_judge"]["predicted_difficulty"] == "Hard")
+        qp_med = sum(1 for r in qp_blind if r["blind_difficulty_judge"]["predicted_difficulty"] == "Medium")
+        qp_easy = sum(1 for r in qp_blind if r["blind_difficulty_judge"]["predicted_difficulty"] == "Easy")
 
         lines.append("| Metric | Count | Rate |")
         lines.append("|--------|------:|-----:|")
-        lines.append(f"| Total paths | {t1_total} | — |")
-        lines.append(f"| Top-1 Blind Pred Hard | {t1_hard} | {t1_hard/t1_total*100:.1f}% |")
-        lines.append(f"| Top-1 Answerable + FEC | {t1_ans_fec} | {t1_ans_fec/t1_total*100:.1f}% |")
-        lines.append(f"| Top-1 PathDep Strong | {t1_pathdep} | {t1_pathdep/t1_total*100:.1f}% |")
-        lines.append(f"| Top-1 Strict Filter Pass | {t1_strict} | {t1_strict/t1_total*100:.1f}% |")
-        lines.append(f"| Top-1 Relaxed Filter Pass | {t1_relaxed} | {t1_relaxed/t1_total*100:.1f}% |")
+        lines.append(f"| Quality-pass (judged) | {qp_total} | — |")
+        lines.append(f"| Blind Pred Easy | {qp_easy} | {qp_easy/qp_total*100:.1f}% |")
+        lines.append(f"| Blind Pred Medium | {qp_med} | {qp_med/qp_total*100:.1f}% |")
+        lines.append(f"| Blind Pred Hard | {qp_hard} | {qp_hard/qp_total*100:.1f}% |")
         lines.append("")
 
-        lines.append("### Top-1 Per Path Detail\n")
-        lines.append("| # | Strategy | Blind Pred | Ans | FEC | PathDep | SSA | Strict | Relaxed | Question (truncated) |")
-        lines.append("|--:|----------|-----------:|-----|-----|---------|-----|--------|---------|---------------------|")
-        for i, r in enumerate(top1_per_path):
+        # Required steps distribution
+        lines.append("### Required Steps (Blind Judge)\n")
+        steps_counts = defaultdict(int)
+        for r in qp_blind:
+            rs = r.get("blind_difficulty_judge", {}).get("required_steps", "?")
+            steps_counts[rs] += 1
+        lines.append("| Steps | Count | Rate |")
+        lines.append("|------:|------:|-----:|")
+        for steps in sorted(steps_counts.keys()):
+            c = steps_counts[steps]
+            lines.append(f"| {steps} | {c} | {c/qp_total*100:.1f}% |")
+        lines.append("")
+
+        # Single sentence answerable
+        lines.append("### Single Sentence Answerable (Blind Judge)\n")
+        ssa_counts = defaultdict(int)
+        for r in qp_blind:
+            ssa = r.get("blind_difficulty_judge", {}).get("single_sentence_answerable", "?")
+            ssa_counts[ssa] += 1
+        lines.append("| SSA | Count | Rate |")
+        lines.append("|-----|------:|-----:|")
+        for ssa in ["no", "partial", "yes"]:
+            if ssa in ssa_counts:
+                c = ssa_counts[ssa]
+                lines.append(f"| {ssa} | {c} | {c/qp_total*100:.1f}% |")
+        lines.append("")
+    else:
+        lines.append("*No quality-pass candidates with blind judge results.*\n")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 3: Quality-Pass Structural Metrics
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 3. Quality-Pass Structural Metrics\n")
+    if qp_blind:
+        # Path dependency
+        pd_counts = defaultdict(int)
+        for r in qp_blind:
+            pd = r.get("path_dependency_judge", {}).get("path_dependency", "?")
+            pd_counts[pd] += 1
+        lines.append("### Path Dependency\n")
+        lines.append("| Level | Count | Rate |")
+        lines.append("|-------|------:|-----:|")
+        for level in ["strong", "partial", "none"]:
+            if level in pd_counts:
+                c = pd_counts[level]
+                lines.append(f"| {level} | {c} | {c/qp_total*100:.1f}% |")
+        lines.append("")
+
+        # Shortcut without path
+        swp_counts = defaultdict(int)
+        for r in qp_blind:
+            swp = r.get("shortcut_without_path", "?")
+            swp_counts[swp] += 1
+        lines.append("### Shortcut Without Path\n")
+        lines.append("| Value | Count | Rate |")
+        lines.append("|-------|------:|-----:|")
+        for val in ["no", "partial", "yes"]:
+            if val in swp_counts:
+                c = swp_counts[val]
+                lines.append(f"| {val} | {c} | {c/qp_total*100:.1f}% |")
+        lines.append("")
+    else:
+        lines.append("*No quality-pass candidates with structural metrics.*\n")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 4: Quality Metrics
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 4. Quality Metrics (Among Quality-Pass)\n")
+    if qp_blind:
+        def _qp_metric(getter, label):
+            ok = sum(1 for r in qp_blind if getter(r))
+            return f"| {label} | {ok}/{qp_total} ({ok/qp_total*100:.1f}%) |"
+
+        lines.append("| Metric | Value |")
+        lines.append("|--------|------:|")
+        lines.append(_qp_metric(lambda r: r.get("blind_difficulty_judge", {}).get("answerable") in ("yes", "partial"), "Answerable (yes/partial)"))
+        lines.append(_qp_metric(lambda r: r.get("blind_difficulty_judge", {}).get("final_event_consistent") in ("yes", "partial"), "Final-Event Consistent (yes/partial)"))
+        lines.append(_qp_metric(lambda r: r.get("hard_alignment", {}).get("asks_expected_answer") in ("yes", "partial"), "Alignment asks (yes/partial)"))
+        lines.append(_qp_metric(lambda r: r.get("hard_alignment", {}).get("target_drift") != "yes", "Target drift != yes"))
+        lines.append(_qp_metric(lambda r: r.get("answer_consistency_label", "no") != "no", "Answer consistency != no"))
+        lines.append("")
+    else:
+        lines.append("*No quality-pass candidates.*\n")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 5: Per Answer Type
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 5. Per Answer Type (Quality-Pass Only)\n")
+    qp_valid = [r for r in results if r.get("quality_filter_pass") and not r.get("generation_error")]
+    if qp_valid:
+        lines.append("| Hard Answer Type | N QP | Blind Easy | Blind Med | Blind Hard | FEC yes/partial | SSA=no | PathDep strong |")
+        lines.append("|-----------------|-----:|----------:|---------:|----------:|----------------|-------:|---------------:|")
+        type_stats = defaultdict(lambda: {"n": 0, "easy": 0, "med": 0, "hard": 0, "fec": 0, "ssa_no": 0, "pd_strong": 0})
+        for r in qp_valid:
+            hat = r.get("hard_answer_type", "unknown")
+            type_stats[hat]["n"] += 1
+            blind = r.get("blind_difficulty_judge", {})
+            pred = blind.get("predicted_difficulty", "?") if isinstance(blind, dict) else "?"
+            if pred == "Easy":
+                type_stats[hat]["easy"] += 1
+            elif pred == "Medium":
+                type_stats[hat]["med"] += 1
+            elif pred == "Hard":
+                type_stats[hat]["hard"] += 1
+            fec = blind.get("final_event_consistent", "") if isinstance(blind, dict) else ""
+            if fec in ("yes", "partial"):
+                type_stats[hat]["fec"] += 1
+            ssa = blind.get("single_sentence_answerable", "") if isinstance(blind, dict) else ""
+            if ssa == "no":
+                type_stats[hat]["ssa_no"] += 1
+            pd = r.get("path_dependency_judge", {}).get("path_dependency", "")
+            if pd == "strong":
+                type_stats[hat]["pd_strong"] += 1
+        for hat in sorted(type_stats.keys()):
+            s = type_stats[hat]
+            fec_pct = f"{s['fec']/s['n']*100:.0f}%" if s["n"] > 0 else "—"
+            lines.append(f"| {hat} | {s['n']} | {s['easy']} | {s['med']} | {s['hard']} | {s['fec']} ({fec_pct}) | {s['ssa_no']} | {s['pd_strong']} |")
+        lines.append("")
+    else:
+        lines.append("*No quality-pass candidates.*\n")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 6: Per Strategy
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 6. Per Strategy\n")
+    lines.append("| Strategy | N judged | QP Rate | Blind Hard | Blind Med | Blind Easy | FEC% | SSA=no% | PathDep strong% |")
+    lines.append("|----------|--------:|--------:|----------:|---------:|----------:|-----:|--------:|----------------:|")
+    for strategy in STRATEGIES:
+        strat_all = [r for r in results if r.get("hard_strategy") == strategy]
+        strat_qp = [r for r in qp_blind if r.get("hard_strategy") == strategy]
+        strat_judged = [r for r in results if r.get("hard_strategy") == strategy and r.get("blind_difficulty_judge_status") == "ok"]
+        if not strat_all:
+            lines.append(f"| {strategy} | 0 | — | — | — | — | — | — | — |")
+            continue
+        n_all = len(strat_all)
+        n_judged = len(strat_judged)
+        n_qp = len(strat_qp)
+        qp_rate = f"{n_qp/n_all*100:.0f}%" if n_all > 0 else "—"
+        if n_judged > 0:
+            hard_c = sum(1 for r in strat_judged if r["blind_difficulty_judge"]["predicted_difficulty"] == "Hard")
+            med_c = sum(1 for r in strat_judged if r["blind_difficulty_judge"]["predicted_difficulty"] == "Medium")
+            easy_c = sum(1 for r in strat_judged if r["blind_difficulty_judge"]["predicted_difficulty"] == "Easy")
+            fec_c = sum(1 for r in strat_judged if r["blind_difficulty_judge"].get("final_event_consistent") in ("yes", "partial"))
+            ssa_c = sum(1 for r in strat_judged if r["blind_difficulty_judge"].get("single_sentence_answerable") == "no")
+            pd_c = sum(1 for r in strat_judged if r.get("path_dependency_judge", {}).get("path_dependency") == "strong")
+            lines.append(
+                f"| {strategy} | {n_judged} | {qp_rate} | "
+                f"{hard_c} ({hard_c/n_judged*100:.0f}%) | "
+                f"{med_c} ({med_c/n_judged*100:.0f}%) | "
+                f"{easy_c} ({easy_c/n_judged*100:.0f}%) | "
+                f"{fec_c/n_judged*100:.0f}% | {ssa_c/n_judged*100:.0f}% | {pd_c/n_judged*100:.0f}% |"
+            )
+        else:
+            lines.append(f"| {strategy} | {n_all} | {qp_rate} | — | — | — | — | — | — |")
+    lines.append("")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 7: Samples
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 7. Quality-Pass Samples by Predicted Difficulty\n")
+    for tier in ["Easy", "Medium", "Hard"]:
+        tier_samples = [r for r in qp_blind
+                        if r["blind_difficulty_judge"]["predicted_difficulty"] == tier]
+        tier_samples.sort(key=lambda r: len(r.get("generated_question", "")))
+        lines.append(f"### {tier} Samples (top 3)\n")
+        if tier_samples:
+            for i, r in enumerate(tier_samples[:3]):
+                _append_sample(lines, i, r, tier)
+        else:
+            lines.append(f"*No quality-pass {tier.lower()} samples.*\n")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 8: Oracle Top-1 Diagnostic (NOT used for main metrics)
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 8. Oracle Top-1 Diagnostic\n")
+    lines.append("> **NOT USED FOR MAIN METRICS. Diagnostic only.**\n")
+
+    path_groups = defaultdict(list)
+    blind_judged_all = [r for r in results if r.get("blind_difficulty_judge_status") == "ok"]
+    for r in blind_judged_all:
+        key = r.get("dedup_key", r.get("doc_id", ""))
+        path_groups[key].append(r)
+
+    oracle_top = []
+    for key, candidates in path_groups.items():
+        valid = [c for c in candidates if not c.get("generation_error") and c.get("generated_question")]
+        if not valid:
+            continue
+        def _oracle_sort(r):
             blind = r.get("blind_difficulty_judge", {})
             pd = r.get("path_dependency_judge", {})
-            q = r.get("generated_question", "")[:60]
+            return (
+                0 if blind.get("predicted_difficulty") == "Hard" else (1 if blind.get("predicted_difficulty") == "Medium" else 2),
+                0 if blind.get("single_sentence_answerable") == "no" else 1,
+                0 if pd.get("path_dependency") == "strong" else 1,
+                0 if r.get("quality_filter_pass") else 1,
+                len(r.get("generated_question", "")),
+            )
+        valid.sort(key=_oracle_sort)
+        oracle_top.append(valid[0])
+
+    if oracle_top:
+        o_total = len(oracle_top)
+        o_hard = sum(1 for r in oracle_top if r["blind_difficulty_judge"]["predicted_difficulty"] == "Hard")
+        o_ssa_no = sum(1 for r in oracle_top if r["blind_difficulty_judge"].get("single_sentence_answerable") == "no")
+        o_pd_strong = sum(1 for r in oracle_top if r.get("path_dependency_judge", {}).get("path_dependency") == "strong")
+        o_qp = sum(1 for r in oracle_top if r.get("quality_filter_pass"))
+
+        lines.append("| Metric | Count | Rate |")
+        lines.append("|--------|------:|-----:|")
+        lines.append(f"| Total paths | {o_total} | — |")
+        lines.append(f"| Oracle Blind Hard | {o_hard} | {o_hard/o_total*100:.1f}% |")
+        lines.append(f"| Oracle SSA=no | {o_ssa_no} | {o_ssa_no/o_total*100:.1f}% |")
+        lines.append(f"| Oracle PathDep strong | {o_pd_strong} | {o_pd_strong/o_total*100:.1f}% |")
+        lines.append(f"| Oracle quality-filter-pass | {o_qp} | {o_qp/o_total*100:.1f}% |")
+        lines.append("")
+
+        lines.append("| # | Strategy | Blind Pred | SSA | PathDep | QP | Question (truncated) |")
+        lines.append("|--:|----------|-----------:|-----|---------|----|---------------------|")
+        for i, r in enumerate(oracle_top[:5]):
+            blind = r.get("blind_difficulty_judge", {})
+            pd = r.get("path_dependency_judge", {})
+            q = r.get("generated_question", "")[:50]
             lines.append(
                 f"| {i+1} | {r.get('hard_strategy', '?')} | "
                 f"{blind.get('predicted_difficulty', '?')} | "
-                f"{blind.get('answerable', '?')} | "
-                f"{blind.get('final_event_consistent', '?')} | "
-                f"{pd.get('path_dependency', '?')} | "
                 f"{blind.get('single_sentence_answerable', '?')} | "
-                f"{'Y' if r.get('strict_new_hard_filter_pass') else 'N'} | "
-                f"{'Y' if r.get('relaxed_new_hard_filter_pass') else 'N'} | "
+                f"{pd.get('path_dependency', '?')} | "
+                f"{'Y' if r.get('quality_filter_pass') else 'N'} | "
                 f"{q} |"
             )
         lines.append("")
 
-    # ── Blind Context Audit ──
-    lines.append("## 9. Blind Context Audit\n")
-    blind_with_answer = sum(1 for r in blind_judged if r.get("blind_context_contains_answer_sentence"))
-    lines.append(f"- **blind_context_contains_answer_sentence=true:** {blind_with_answer}/{len(blind_judged)}")
-    lines.append(f"- **blind_context_contains_answer_sentence=false:** {len(blind_judged) - blind_with_answer}/{len(blind_judged)}")
+    # ══════════════════════════════════════════════════════════════
+    # Success / Readiness Criteria
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## Success / Readiness Criteria\n")
+
+    non_error = [r for r in results if not r.get("generation_error")]
+    qp_count = sum(1 for r in results if r.get("quality_filter_pass"))
+    qp_rate = qp_count / len(non_error) * 100 if non_error else 0
+
+    if qp_blind:
+        qp_fec = sum(1 for r in qp_blind if r["blind_difficulty_judge"].get("final_event_consistent") in ("yes", "partial"))
+        qp_ans = sum(1 for r in qp_blind if r.get("hard_alignment", {}).get("asks_expected_answer") in ("yes", "partial"))
+        fec_rate = qp_fec / qp_total * 100
+        ans_rate = qp_ans / qp_total * 100
+    else:
+        fec_rate = 0
+        ans_rate = 0
+
+    lines.append(f"- Quality filter pass rate: {qp_count}/{len(non_error)} ({qp_rate:.1f}%)")
+    if fec_rate >= 80:
+        lines.append(f"- [PASS] FEC among quality-pass >= 80% ({fec_rate:.1f}%)")
+    else:
+        lines.append(f"- [FAIL] FEC among quality-pass = {fec_rate:.1f}% (need >= 80%)")
+    if ans_rate >= 80:
+        lines.append(f"- [PASS] Alignment (asks_expected_answer) among quality-pass >= 80% ({ans_rate:.1f}%)")
+    else:
+        lines.append(f"- [FAIL] Alignment among quality-pass = {ans_rate:.1f}% (need >= 80%)")
+
+    if qp_blind:
+        lines.append(f"- [INFO] Difficulty distribution (quality-pass): Easy={qp_easy}, Medium={qp_med}, Hard={qp_hard}")
+    lines.append("- [NOTE] No difficulty metric used to select main evaluation set")
     lines.append("")
 
-    # ── Blind Prompt Samples (for audit) ──
-    lines.append("## 10. Blind Difficulty Judge Prompt Samples (for audit)\n")
-    prompt_samples = [r for r in blind_judged if r.get("blind_difficulty_judge_prompt")]
-    for i, r in enumerate(prompt_samples[:3]):
-        lines.append(f"### Sample {i+1}\n")
-        lines.append(f"**Question:** {r.get('generated_question', '')[:150]}")
-        lines.append(f"**Blind Pred:** {r.get('blind_difficulty_judge', {}).get('predicted_difficulty', '?')}")
-        lines.append(f"\n```\n{r['blind_difficulty_judge_prompt'][:1500]}\n```\n")
-
-    # ── Best Samples ──
-    lines.append("## 11. Best Samples (Blind Hard + Answerable + PathDep)\n")
-    best = [r for r in blind_judged
-            if r.get("blind_difficulty_judge", {}).get("predicted_difficulty") == "Hard"
-            and r.get("blind_difficulty_judge", {}).get("answerable") in ("yes", "partial")
-            and r.get("path_dependency_judge", {}).get("path_dependency") in ("strong",)]
-    best.sort(key=lambda r: (
-        0 if r.get("relaxed_new_hard_filter_pass") else 1,
-        0 if r.get("strict_new_hard_filter_pass") else 1,
-        0 if r.get("path_dependency_judge", {}).get("path_dependency") == "strong" else 1,
-        len(r.get("generated_question", "")),
-    ))
-    for i, r in enumerate(best[:5]):
-        _append_sample(lines, i, r, "Best")
-
-    if not best:
-        lines.append("*No Blind Hard + answerable + path-dependent candidates found.*\n")
-
-    # ── Worst Samples ──
-    lines.append("## 12. Worst Samples\n")
-    worst = [r for r in results if not r.get("generation_error")]
-    worst.sort(key=lambda r: (
-        0 if not r.get("relaxed_new_hard_filter_pass") else 1,
-        0 if r.get("blind_difficulty_judge", {}).get("predicted_difficulty") == "Easy" else 1,
-    ))
-    for i, r in enumerate(worst[:5]):
-        _append_sample(lines, i, r, "Worst")
-
-    # ── Success Criteria ──
-    lines.append("## 13. Success Criteria Evaluation\n")
-
-    # Top-1 metrics
-    if top1_per_path:
-        t1_pred_hard_rate = t1_hard / t1_total * 100
-        t1_ans_fec_rate = t1_ans_fec / t1_total * 100
-        t1_pathdep_rate = t1_pathdep / t1_total * 100
-        t1_strict_rate = t1_strict / t1_total * 100
-        t1_relaxed_rate = t1_relaxed / t1_total * 100
-    else:
-        t1_pred_hard_rate = 0
-        t1_ans_fec_rate = 0
-        t1_pathdep_rate = 0
-        t1_strict_rate = 0
-        t1_relaxed_rate = 0
-
-    all_blind_hard_rate = hard / total * 100 if total else 0
-
-    lines.append(f"- **Top-1 per path: Blind Pred Hard rate:** {t1_pred_hard_rate:.1f}%")
-    lines.append(f"- **Top-1 per path: Answerable + FEC rate:** {t1_ans_fec_rate:.1f}%")
-    lines.append(f"- **Top-1 per path: PathDep Strong rate:** {t1_pathdep_rate:.1f}%")
-    lines.append(f"- **Top-1 per path: Strict Hard Filter Pass rate:** {t1_strict_rate:.1f}%")
-    lines.append(f"- **Top-1 per path: Relaxed Hard Filter Pass rate:** {t1_relaxed_rate:.1f}%")
-    lines.append(f"- **All candidates: Blind Pred Hard rate:** {all_blind_hard_rate:.1f}%")
-    lines.append("")
-
-    criteria_met = 0
-    criteria_total = 6
-
-    if t1_pred_hard_rate >= 20:
-        lines.append("- [PASS] Top-1 Blind Pred Hard >= 20%")
-        criteria_met += 1
-    else:
-        lines.append(f"- [FAIL] Top-1 Blind Pred Hard = {t1_pred_hard_rate:.1f}% (need >= 20%)")
-
-    if t1_ans_fec_rate >= 80:
-        lines.append("- [PASS] Top-1 Answerable + FEC >= 80%")
-        criteria_met += 1
-    else:
-        lines.append(f"- [FAIL] Top-1 Answerable + FEC = {t1_ans_fec_rate:.1f}% (need >= 80%)")
-
-    if t1_pathdep_rate >= 50:
-        lines.append("- [PASS] Top-1 PathDep Strong >= 50%")
-        criteria_met += 1
-    else:
-        lines.append(f"- [FAIL] Top-1 PathDep Strong = {t1_pathdep_rate:.1f}% (need >= 50%)")
-
-    if t1_strict_rate >= 20:
-        lines.append("- [PASS] Top-1 Strict Hard Filter Pass >= 20%")
-        criteria_met += 1
-    else:
-        lines.append(f"- [FAIL] Top-1 Strict Hard Filter Pass = {t1_strict_rate:.1f}% (need >= 20%)")
-
-    if t1_relaxed_rate >= 20:
-        lines.append("- [PASS] Top-1 Relaxed Hard Filter Pass >= 20%")
-        criteria_met += 1
-    else:
-        lines.append(f"- [FAIL] Top-1 Relaxed Hard Filter Pass = {t1_relaxed_rate:.1f}% (need >= 20%)")
-
-    if all_blind_hard_rate > 0:
-        lines.append("- [PASS] All candidates: Blind Pred Hard > 0")
-        criteria_met += 1
-    else:
-        lines.append("- [FAIL] All candidates: Blind Pred Hard = 0")
-
-    lines.append(f"\n**Criteria met: {criteria_met}/{criteria_total}**\n")
-
-    if criteria_met == criteria_total:
-        lines.append("**RESULT: All 6 criteria met. Strong Hard candidate evidence across strict and relaxed filters.**")
-    elif t1_strict_rate >= 20 and t1_relaxed_rate >= 20:
-        lines.append("**RESULT: Both strict and relaxed Hard filters show viable candidates.**")
-    elif t1_relaxed_rate >= 20 and t1_strict_rate < 20:
-        lines.append("**RESULT: Relaxed Hard filter viable; strict Hard filter below threshold.**")
-    elif t1_relaxed_rate == 0 and all_blind_hard_rate > 0:
-        lines.append("**RESULT: Blind Pred Hard candidates exist, but none pass relaxed Hard filter.**")
-    elif t1_pred_hard_rate == 0:
-        lines.append("**RESULT: Pred Hard = 0. No Hard-difficulty evidence.**")
-    else:
-        lines.append(f"**RESULT: Partial. {criteria_met}/{criteria_total} criteria met.**")
-
-    report_path = Path(output_dir) / "HARD_RESCUE_REPORT.md"
+    report_path = Path(output_dir) / "HARD_RESCUE_QUALITY_REPORT.md"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
     print(f"Report: {report_path}")
 
 
 def _select_top1_per_path(path_groups):
-    """Select top-1 candidate per path by publishable quality ranking.
+    """Select top-1 candidate per path by quality-first ranking.
 
     Sort order:
-    1. relaxed_new_hard_filter_pass=True first
-    2. strict_new_hard_filter_pass=True first
-    3. blind Pred Hard first
-    4. pathdep strong first
-    5. single_sentence_answerable=no first
-    6. answerable + FEC (yes/partial) first
-    7. shorter question first
+    1. quality_filter_pass=True first
+    2. answerable + FEC yes/partial first
+    3. blind Pred Hard first (informational tiebreaker, NOT a gate)
+    4. shorter question first
     """
     top1 = []
     for key, candidates in path_groups.items():
@@ -639,14 +654,12 @@ def _select_top1_per_path(path_groups):
 
         def _sort_key(r):
             blind = r.get("blind_difficulty_judge", {})
-            pd = r.get("path_dependency_judge", {})
             return (
-                0 if r.get("relaxed_new_hard_filter_pass") else 1,
-                0 if r.get("strict_new_hard_filter_pass") else 1,
-                0 if blind.get("predicted_difficulty") == "Hard" else (1 if blind.get("predicted_difficulty") == "Medium" else 2),
-                0 if pd.get("path_dependency") == "strong" else 1,
-                0 if blind.get("single_sentence_answerable") == "no" else 1,
-                0 if blind.get("answerable") in ("yes", "partial") and blind.get("final_event_consistent") in ("yes", "partial") else 1,
+                0 if r.get("quality_filter_pass") else 1,
+                0 if blind.get("answerable") in ("yes", "partial")
+                    and blind.get("final_event_consistent") in ("yes", "partial") else 1,
+                0 if blind.get("predicted_difficulty") == "Hard"
+                    else (1 if blind.get("predicted_difficulty") == "Medium" else 2),
                 len(r.get("generated_question", "")),
             )
 
@@ -657,7 +670,7 @@ def _select_top1_per_path(path_groups):
 
 
 def _append_sample(lines, idx, r, label):
-    """Append a sample entry to the report using blind judge fields."""
+    """Append a sample entry to the report."""
     question = r.get("generated_question", "")[:200]
     answer = (r.get("gold_answer_phrase", "") or r.get("gold_answer_trigger", ""))[:200]
     events = r.get("events", [])
@@ -670,22 +683,21 @@ def _append_sample(lines, idx, r, label):
     ans = blind.get("answerable", "?")
     fec = blind.get("final_event_consistent", "?")
     ssa = blind.get("single_sentence_answerable", "?")
-    strict_pass = r.get("strict_new_hard_filter_pass", False)
-    relaxed_pass = r.get("relaxed_new_hard_filter_pass", False)
-    reason = blind.get("reason", "")
-    filter_reason = r.get("strict_new_hard_filter_reason", "") or r.get("relaxed_new_hard_filter_reason", "")
+    shortcut = r.get("shortcut_without_path", "?")
+    quality_pass = r.get("quality_filter_pass", False)
+    quality_reason = r.get("quality_filter_reason", "")
+    blind_reason = blind.get("reason", "")
 
     lines.append(f"### {label} #{idx+1} [{strategy}]\n")
     lines.append(f"- **Question:** {question}")
     lines.append(f"- **Answer:** {answer}")
     lines.append(f"- **Event path:** {event_path}")
-    lines.append(f"- **Blind Pred:** {pred} | **PathDep:** {dep} | **Answerable:** {ans} | **FEC:** {fec} | **SSA:** {ssa}")
-    lines.append(f"- **Strict Hard Filter Pass:** {strict_pass}")
-    lines.append(f"- **Relaxed Hard Filter Pass:** {relaxed_pass}")
-    if reason:
-        lines.append(f"- **Blind Judge Reason:** {reason}")
-    if filter_reason:
-        lines.append(f"- **Filter Reason:** {filter_reason}")
+    lines.append(f"- **Blind Pred:** {pred} | **PathDep:** {dep} | **Answerable:** {ans} | **FEC:** {fec} | **SSA:** {ssa} | **Shortcut:** {shortcut}")
+    lines.append(f"- **Quality Filter Pass:** {quality_pass}")
+    if quality_reason:
+        lines.append(f"- **Quality Reason:** {quality_reason}")
+    if blind_reason:
+        lines.append(f"- **Blind Judge Reason:** {blind_reason}")
     lines.append("")
 
 
@@ -741,7 +753,7 @@ def main():
     print(f"\n=== Step 2: Generating {args.k_candidates} candidates x {len(STRATEGIES)} strategies ===")
     total_tasks = len(paths) * len(STRATEGIES) * args.k_candidates
     print(f"  Total generation tasks: {total_tasks}")
-    results, drift_fails, drift_repaired = generate_candidates(paths, args.k_candidates, STRATEGIES, seed=args.seed, model_config=model_config)
+    results, drift_fails, drift_repaired, unsupported_type, too_direct_cue = generate_candidates(paths, args.k_candidates, STRATEGIES, seed=args.seed, model_config=model_config)
     write_jsonl(output_dir / "questions.raw.jsonl", results)
     print(f"  Generated {len(results)} candidates")
 
@@ -757,14 +769,12 @@ def main():
     results = run_judges(results, model_config)
     write_jsonl(output_dir / "questions.judged.jsonl", results)
 
-    # Step 4b: Apply new Hard filter
-    print(f"\n=== Step 4b: Applying new Hard filter ===")
-    results = apply_new_hard_filter(results)
-    write_jsonl(output_dir / "questions.new_filter.jsonl", results)
-    strict_fp = sum(1 for r in results if r.get("strict_new_hard_filter_pass"))
-    relaxed_fp = sum(1 for r in results if r.get("relaxed_new_hard_filter_pass"))
-    print(f"  Strict Hard filter pass: {strict_fp}/{len(results)}")
-    print(f"  Relaxed Hard filter pass: {relaxed_fp}/{len(results)}")
+    # Step 4b: Apply quality filter (post-judges)
+    print(f"\n=== Step 4b: Applying quality filter ===")
+    results = apply_quality_filter(results)
+    write_jsonl(output_dir / "questions.quality.jsonl", results)
+    quality_fp = sum(1 for r in results if r.get("quality_filter_pass"))
+    print(f"  Quality filter pass: {quality_fp}/{len(results)}")
 
     # Step 5: Traces
     print(f"\n=== Step 5: Building traces ===")
@@ -772,20 +782,19 @@ def main():
 
     # Step 6: Report
     print(f"\n=== Step 6: Generating report ===")
-    generate_report(results, paths, output_dir, args.k_candidates, drift_fails, drift_repaired)
+    generate_report(results, paths, output_dir, args.k_candidates, drift_fails, drift_repaired, unsupported_type, too_direct_cue)
 
     # Summary
-    blind_judged = [r for r in results if r.get("blind_difficulty_judge_status") == "ok"]
-    blind_hard = sum(1 for r in blind_judged if r.get("blind_difficulty_judge", {}).get("predicted_difficulty") == "Hard")
+    qp_blind = [r for r in results if r.get("quality_filter_pass") and r.get("blind_difficulty_judge_status") == "ok"]
+    qp_hard = sum(1 for r in qp_blind if r.get("blind_difficulty_judge", {}).get("predicted_difficulty") == "Hard")
     print(f"\n{'='*60}")
     print(f"SUMMARY")
     print(f"{'='*60}")
     print(f"  Paths: {len(paths)}")
     print(f"  Candidates: {len(results)}")
-    print(f"  Strict Hard filter pass: {strict_fp}")
-    print(f"  Relaxed Hard filter pass: {relaxed_fp}")
-    print(f"  Blind judged OK: {len(blind_judged)}")
-    print(f"  Blind Pred Hard: {blind_hard}")
+    print(f"  Quality filter pass: {quality_fp}")
+    print(f"  Quality-pass with blind judge: {len(qp_blind)}")
+    print(f"  Quality-pass Blind Pred Hard: {qp_hard}")
     print(f"  API calls: gen={generation_count} filter={filter_count} judge={judge_count}")
     print(f"\nOutput: {output_dir}")
 

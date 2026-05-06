@@ -4,12 +4,26 @@ Quality filter pipeline: full chain for evaluating a single generated question.
 - apply_final_filter: final pass/fail logic on a fully-evaluated record
 - quality_filter_pipeline: run a single record through all filters
 - _fill_remaining_fields: fill defaults when early-exiting the pipeline
+- apply_quality_filter_with_judges: post-judge quality-only filter (primary evaluation gate)
 """
 from dcqg.question_filter.grammar import enhanced_grammar_filter, check_weak_trigger
 from dcqg.question_filter.consistency import extract_gold_answer_phrase, answer_event_consistency_judge
 from dcqg.question_filter.path_coverage import path_coverage_judge
 from dcqg.question_filter.shortcut import hard_degraded_check
 from dcqg.question_filter.hard_implicitness import hard_implicitness_check
+import re as _re
+
+# Double-question detection patterns (duplicated from dcqg/generation/generator.py to avoid circular import)
+_DOUBLE_Q_PATTERNS = [
+    _re.compile(r'(?i)^How\s+did\s+.+,\s*and\s+what\b'),
+    _re.compile(r'(?i)^Why\s+did\s+.+,\s*(ultimately|and)\b'),
+    _re.compile(r'(?i)^[Ww]hat\s+led\s+to\s+.+,\s*and\s+how\b'),
+    _re.compile(r'(?i)^How\s+did\s+.+,\s*and\s+how\b'),
+    _re.compile(r'(?i)^What\s+.+,\s*and\s+how\s+did\b'),
+    _re.compile(r'(?i)^What\s+.+,\s*and\s+what\b'),
+    _re.compile(r'(?i)^How\s+.+,\s*and\s+why\b'),
+    _re.compile(r'(?i)\band\s+(what|how|why|when|where|who)\b.*\?'),
+]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -274,11 +288,13 @@ def _fill_remaining_fields(record, skip_llm=True):
 
 
 # ═══════════════════════════════════════════════════════════════
-# NEW HARD FILTER: strict and relaxed variants
-# Called explicitly by rescue script AFTER judges have run.
-# Does NOT touch apply_final_filter.
+# DEPRECATED HARD FILTERS: strict and relaxed variants
+# Kept for backward compatibility. Use apply_quality_filter_with_judges instead.
+# These functions use difficulty-level metrics as pass/fail gates, which is
+# no longer the desired behavior for main evaluation set filtering.
 # ═══════════════════════════════════════════════════════════════
 
+# DEPRECATED: kept for backward compatibility. Use apply_quality_filter_with_judges instead.
 def _common_hard_checks(record):
     """Shared checks for both strict and relaxed Hard filters.
     Returns list of failure reasons (empty = pass).
@@ -349,8 +365,9 @@ def _common_hard_checks(record):
     return reasons
 
 
+# DEPRECATED: kept for backward compatibility. Use apply_quality_filter_with_judges instead.
 def apply_strict_hard_filter(record):
-    """Strict Hard filter: requires answer_consistency=yes/partial."""
+    """DEPRECATED: Strict Hard filter. Uses difficulty metrics as gates."""
     reasons = _common_hard_checks(record)
 
     # Answer consistency — strict: must be yes or partial
@@ -370,8 +387,9 @@ def apply_strict_hard_filter(record):
     record["new_hard_filter_reason"] = record["strict_new_hard_filter_reason"]
 
 
+# DEPRECATED: kept for backward compatibility. Use apply_quality_filter_with_judges instead.
 def apply_relaxed_hard_filter(record):
-    """Relaxed Hard filter: allows answer_consistency=no if FEC=yes and pathdep=strong."""
+    """DEPRECATED: Relaxed Hard filter. Uses difficulty metrics as gates."""
     reasons = _common_hard_checks(record)
 
     # Answer consistency — relaxed: allow "no" if FEC=yes and pathdep=strong
@@ -390,3 +408,116 @@ def apply_relaxed_hard_filter(record):
     else:
         record["relaxed_new_hard_filter_pass"] = False
         record["relaxed_new_hard_filter_reason"] = "; ".join(reasons)
+
+
+# ═══════════════════════════════════════════════════════════════
+# QUALITY FILTER: post-judge quality-only filtering
+# This is the primary filter for the main evaluation set.
+# Difficulty-level metrics are reported but NEVER used as pass/fail gates.
+# ═══════════════════════════════════════════════════════════════
+
+def apply_quality_filter_with_judges(record):
+    """
+    Quality-only filter using validity/quality criteria.
+    Sets quality_filter_pass (bool) and quality_filter_reason (str) on record.
+
+    EXCLUDED from pass/fail (difficulty metrics, reported only):
+    - blind_difficulty_judge.predicted_difficulty
+    - blind_difficulty_judge.required_steps
+    - blind_difficulty_judge.single_sentence_answerable
+    - path_dependency_judge.path_dependency
+    - shortcut_without_path
+    - single_sentence_risk
+    - llm_path_judge.recommended_difficulty
+    """
+    reasons = []
+
+    # 1. generation_error must be false
+    if record.get("generation_error"):
+        reasons.append("generation_error")
+
+    # 2. grammar_pass must be true
+    if not record.get("grammar_pass", False):
+        reasons.append(f"grammar={record.get('grammar_reason', '?')}")
+
+    # 3. generated_question must exist and be non-empty
+    question = record.get("generated_question", "")
+    if not question or not question.strip():
+        reasons.append("empty_question")
+
+    # 4. No double question
+    if question:
+        for pat in _DOUBLE_Q_PATTERNS:
+            if pat.search(question):
+                reasons.append("double_question")
+                break
+
+    # 5. No trigger leakage
+    gold_trigger = record.get("gold_answer_trigger", "")
+    if gold_trigger and question and gold_trigger.lower() in question.lower():
+        reasons.append("trigger_leakage")
+
+    # 6. No answer leakage (gold_answer_phrase not in question, if phrase != trigger)
+    gold_phrase = record.get("gold_answer_phrase", "")
+    if (gold_phrase and question
+            and gold_phrase.lower() != gold_trigger.lower()
+            and gold_phrase.lower() in question.lower()):
+        reasons.append("answer_leakage")
+
+    # 7. answer_phrase_pass must be true
+    if not record.get("answer_phrase_pass", True):
+        reasons.append(f"answer_phrase={record.get('answer_phrase_reason', '?')}")
+
+    # 8. answer_type must not be "invalid"
+    answer_type = record.get("answer_type", "")
+    if answer_type == "invalid":
+        reasons.append("answer_type=invalid")
+
+    # ── Judge-dependent checks ──
+
+    blind = record.get("blind_difficulty_judge", {})
+    blind_status = record.get("blind_difficulty_judge_status", "skipped")
+
+    # 9. blind judge must have run
+    if blind_status != "ok":
+        reasons.append(f"blind_judge_status={blind_status}")
+    else:
+        # 10. answerable must be yes/partial
+        blind_ans = blind.get("answerable", "no")
+        if blind_ans not in ("yes", "partial"):
+            reasons.append(f"answerable={blind_ans}")
+
+        # 11. final_event_consistent must be yes/partial
+        blind_fec = blind.get("final_event_consistent", "no")
+        if blind_fec not in ("yes", "partial"):
+            reasons.append(f"fec={blind_fec}")
+
+    # 12. alignment: asks_expected_answer must be yes/partial
+    align = record.get("hard_alignment", {})
+    align_status = record.get("hard_alignment_status", "skipped")
+    if align_status != "ok":
+        reasons.append(f"alignment_status={align_status}")
+    else:
+        asks = align.get("asks_expected_answer", "no")
+        if asks not in ("yes", "partial"):
+            reasons.append(f"alignment_asks={asks}")
+
+        # 13. target_drift must NOT be "yes"
+        drift = align.get("target_drift", "no")
+        if drift == "yes":
+            reasons.append("target_drift=yes")
+
+    # 14. answer_consistency_label must not be "no" (judge_error passes)
+    label = record.get("answer_consistency_label", "no")
+    if label == "judge_error":
+        pass
+    elif label == "no":
+        reasons.append("answer_consistency=no")
+
+    # Set result
+    if not reasons:
+        record["quality_filter_pass"] = True
+        record["quality_filter_reason"] = "all checks passed"
+    else:
+        record["quality_filter_pass"] = False
+        record["quality_filter_reason"] = "; ".join(reasons)

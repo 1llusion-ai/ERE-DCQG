@@ -68,6 +68,97 @@ _ANSWER_TYPE_PATTERNS = {
 }
 _ANSWER_TYPE_RES = {k: [re.compile(p) for p in v] for k, v in _ANSWER_TYPE_PATTERNS.items()}
 
+# ── Hard answer type classification (for template selection) ──
+_HARD_ANSWER_TYPE_PATTERNS = {
+    "restriction_policy": [
+        r'(?i)\b(forbade|forbidden|prohibit|restrict|prevent|block|denied|banned|limited|constraint)\b',
+        r'(?i)\b(not allowed|not permitted|no longer|would not|barred|excluded)\b',
+    ],
+    "agreement_resolution": [
+        r'(?i)\b(signed|agreed|treaty|resolution|accord|pact|ceasefire|armistice)\b',
+        r'(?i)\b(agreement|settlement|convention|protocol|formal)\b',
+    ],
+    "investigation_outcome": [
+        r'(?i)\b(closed|investigated|indicted|convicted|sentenced|charged|acquitted|dropped)\b',
+        r'(?i)\b(investigation|inquiry|case|trial|verdict|prosecution)\b',
+        r'(?i)\b(without indictment|no indictment|sole suspect|no arrests)\b',
+    ],
+    "casualty_damage": [
+        r'(?i)\b(killed|died|injured|wounded|damaged|destroyed|casualties|victims|dead)\b',
+        r'(?i)\b(death|injury|damage|destruction|harm|fatality|toll)\b',
+    ],
+    "movement_action_outcome": [
+        r'(?i)\b(conducted|retreated|advanced|withdrew|arrived|departed|moved|rushed|forced)\b',
+        r'(?i)\b(withdrawal|retreat|advance|charge|assault|offensive|maneuver)\b',
+    ],
+}
+_HARD_ANSWER_TYPE_RES = {k: [re.compile(p) for p in v] for k, v in _HARD_ANSWER_TYPE_PATTERNS.items()}
+
+# Event type → hard answer type mapping (checked first)
+_EVENT_TYPE_TO_HARD = {
+    "preventing": "restriction_policy",
+    "letting": "restriction_policy",
+    "permission": "restriction_policy",
+    "restriction": "restriction_policy",
+    "prohibit": "restriction_policy",
+    "forbid": "restriction_policy",
+    "sign_agreement": "agreement_resolution",
+    "agreement": "agreement_resolution",
+    "treaty": "agreement_resolution",
+    "resolution": "agreement_resolution",
+    "criminal": "investigation_outcome",
+    "investigation": "investigation_outcome",
+    "arrest": "investigation_outcome",
+    "convict": "investigation_outcome",
+    "sentence": "investigation_outcome",
+    "charge": "investigation_outcome",
+    "death": "casualty_damage",
+    "injury": "casualty_damage",
+    "damage": "casualty_damage",
+    "destroy": "casualty_damage",
+    "kill": "casualty_damage",
+    "harm": "casualty_damage",
+    "motion": "movement_action_outcome",
+    "action": "movement_action_outcome",
+    "conquering": "movement_action_outcome",
+    "self_motion": "movement_action_outcome",
+}
+
+# Template family per hard answer type (for reporting)
+_TEMPLATE_FAMILY = {
+    "restriction_policy": "restriction",
+    "agreement_resolution": "agreement",
+    "investigation_outcome": "investigation",
+    "casualty_damage": "casualty",
+    "movement_action_outcome": "action",
+}
+
+
+def _infer_hard_answer_type(gold_answer_phrase, gold_event_type):
+    """Classify answer for Hard template selection.
+
+    Checks gold_answer_phrase first, then gold_event_type fallback.
+    Returns one of: restriction_policy, agreement_resolution, investigation_outcome,
+    casualty_damage, movement_action_outcome, or 'unsupported'.
+    """
+    phrase = gold_answer_phrase or ""
+    etype = gold_event_type or ""
+
+    # Phrase-first classification
+    for htype, patterns in _HARD_ANSWER_TYPE_RES.items():
+        for pat in patterns:
+            if pat.search(phrase):
+                return htype
+
+    # Event type fallback
+    etype_lower = etype.lower()
+    for keyword, htype in _EVENT_TYPE_TO_HARD.items():
+        if keyword in etype_lower:
+            return htype
+
+    return "unsupported"
+
+
 # Allowed question heads per answer type
 _ALLOWED_HEADS = {
     "preventing_or_letting": [
@@ -94,6 +185,30 @@ _ALLOWED_HEADS = {
     "other": [
         "what resulted", "what was the outcome", "what consequence",
         "what happened as a result", "what was the result",
+    ],
+    # Hard answer type aliases (map to same heads)
+    "restriction_policy": [
+        "what final restriction", "which limitation", "what constraint",
+        "what was forbidden", "what was prohibited", "what restriction",
+        "what limitation", "what ban", "what measure",
+    ],
+    "agreement_resolution": [
+        "what agreement", "what formal resolution", "which settlement",
+        "what terms", "what treaty", "what accord", "what was agreed",
+        "what was signed", "what pact",
+    ],
+    "investigation_outcome": [
+        "how did the investigation", "what was the final outcome of the inquiry",
+        "what happened to the case", "how did the case conclude",
+        "what was the result of the investigation", "how did the inquiry end",
+    ],
+    "casualty_damage": [
+        "what final harm", "what casualties", "what damage",
+        "what was the toll", "what destruction", "what harm",
+    ],
+    "movement_action_outcome": [
+        "what final action", "what outcome followed", "what happened to",
+        "what did", "what was the result for", "what became of",
     ],
 }
 
@@ -148,7 +263,20 @@ def _infer_answer_type(gold_answer_phrase, gold_event_type):
 
 def _get_allowed_heads(answer_type):
     """Get allowed question heads for the given answer type."""
-    return _ALLOWED_HEADS.get(answer_type, _ALLOWED_HEADS["other"])
+    if answer_type in _ALLOWED_HEADS:
+        return _ALLOWED_HEADS[answer_type]
+    # Map hard answer types to legacy types as fallback
+    _HARD_TO_LEGACY = {
+        "restriction_policy": "preventing_or_letting",
+        "agreement_resolution": "sign_agreement",
+        "investigation_outcome": "criminal_investigation",
+        "casualty_damage": "death_injury_damage",
+        "movement_action_outcome": "other",
+    }
+    legacy = _HARD_TO_LEGACY.get(answer_type)
+    if legacy and legacy in _ALLOWED_HEADS:
+        return _ALLOWED_HEADS[legacy]
+    return _ALLOWED_HEADS["other"]
 
 
 def _check_question_answer_drift(question, answer_type, gold_answer_phrase):
@@ -164,7 +292,7 @@ def _check_question_answer_drift(question, answer_type, gold_answer_phrase):
             return True, f"drift_frame: {pat.pattern}"
 
     # Check for banned drift nouns (only if not matching the target answer type)
-    if answer_type not in ("other",):
+    if answer_type not in ("other", "movement_action_outcome"):
         for noun in _DRIFT_NOUNS:
             if noun in q_lower:
                 # Check if this noun is part of the answer phrase
@@ -296,6 +424,29 @@ def check_hard_path_suitability(item):
     # Phrase starting with lowercase (likely mid-sentence fragment)
     if answer_phrase[0].islower() and not answer_phrase.startswith(("signed", "agreed", "closed", "opened")):
         return False, f"fragment_starts_lowercase: {answer_phrase}"
+
+    # Check hard answer type — reject unsupported
+    hard_type = _infer_hard_answer_type(
+        answer_phrase, item.get("gold_event_type", "")
+    )
+    if hard_type == "unsupported":
+        return False, f"unsupported_answer_type: {answer_phrase[:60]}"
+
+    # Movement/action outcome: reject weak/truncated fragments
+    if hard_type == "movement_action_outcome":
+        # Reject if ending with adjective/adverb/preposition (incomplete)
+        last_word = words[-1] if words else ""
+        _INCOMPLETE_ENDINGS = {"good", "bad", "great", "small", "large", "first", "last",
+                               "initial", "final", "early", "late", "new", "old", "fast",
+                               "slow", "quick", "gradual", "sudden", "order", "disorder",
+                               "well", "poorly", "quickly", "slowly", "away", "back",
+                               "down", "out", "off", "over", "through", "against"}
+        if last_word in _INCOMPLETE_ENDINGS:
+            return False, f"weak_or_truncated_movement_answer: ends with '{last_word}': {answer_phrase[:60]}"
+
+        # Reject short phrases (< 5 words) unless they look like named events
+        if len(words) < 5 and not any(kw in phrase_lower for kw in ["treaty", "battle", "siege", "agreement", "attack"]):
+            return False, f"weak_or_truncated_movement_answer: too short ({len(words)} words): {answer_phrase[:60]}"
 
     return True, "suitable"
 
@@ -463,6 +614,61 @@ def _check_answer_alignment(question, gold_answer_phrase):
     return True, "compatible"
 
 
+# Direct answer-type cue detection (retrieval leakage)
+_DIRECT_CUE_KEYWORDS = {
+    "restriction_policy": ["restriction", "limitation", "forbidden", "prohibited", "constraint", "imposed on"],
+    "agreement_resolution": ["agreement", "treaty", "settlement", "accord", "pact", "ceasefire"],
+    "investigation_outcome": ["investigation", "inquiry", "case", "trial", "verdict", "prosecution"],
+    "casualty_damage": ["harm", "damage", "casualties", "toll", "destruction", "fatalities"],
+    "movement_action_outcome": ["action", "outcome", "result", "consequence"],
+}
+
+
+def _check_too_direct_answer_type_cue(question, hard_answer_type, gold_answer_phrase):
+    """Check if question leaks direct answer-type retrieval cues.
+
+    If the question contains both a direct answer-type keyword AND a target
+    entity/keyword from the answer sentence, the solver can just scan for
+    answer-type keywords — no chain reasoning needed.
+
+    Returns (too_direct: bool, cue_info: str).
+    """
+    if hard_answer_type not in _DIRECT_CUE_KEYWORDS:
+        return False, ""
+
+    q_lower = question.lower()
+    a_lower = (gold_answer_phrase or "").lower()
+
+    # Check if question contains a direct answer-type keyword
+    keywords = _DIRECT_CUE_KEYWORDS[hard_answer_type]
+    found_kw = None
+    for kw in keywords:
+        if kw in q_lower:
+            found_kw = kw
+            break
+
+    if not found_kw:
+        return False, ""
+
+    # Check if question also contains a significant word from the answer phrase
+    # (3+ chars, not a stopword)
+    _STOPWORDS = {"the", "a", "an", "is", "was", "were", "are", "be", "been",
+                   "being", "have", "has", "had", "do", "does", "did", "will",
+                   "would", "could", "should", "may", "might", "shall", "can",
+                   "of", "in", "on", "at", "to", "for", "with", "from", "by",
+                   "as", "into", "through", "during", "before", "after", "and",
+                   "or", "but", "not", "no", "nor", "so", "yet", "both", "either",
+                   "neither", "each", "every", "all", "any", "few", "more", "most",
+                   "other", "some", "such", "than", "too", "very", "just", "about"}
+    answer_words = [w for w in a_lower.split() if len(w) >= 4 and w not in _STOPWORDS]
+    entity_overlap = [w for w in answer_words if w in q_lower]
+
+    if len(entity_overlap) >= 1:
+        return True, f"too_direct_answer_type_cue: keyword='{found_kw}', entity_overlap={entity_overlap[:3]}"
+
+    return False, ""
+
+
 def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=None):
     """Generate a Hard question using a specific strategy.
     Same validation chain as generate_with_retry_hardaware.
@@ -484,6 +690,15 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
     # Infer answer type for drift checks
     answer_type = _infer_answer_type(gold_answer_phrase, gold_event_type)
 
+    # Infer hard answer type for template selection
+    hard_answer_type = _infer_hard_answer_type(gold_answer_phrase, gold_event_type)
+    template_family = _TEMPLATE_FAMILY.get(hard_answer_type, "generic")
+
+    # Inject into item so prompt functions can read it
+    item = dict(item)
+    item["_hard_answer_type"] = hard_answer_type
+    item["_template_family"] = template_family
+
     question = ""
     rt = "error"
     g_ok, g_reason = False, "not attempted"
@@ -495,6 +710,7 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
     last_align_check = "not_checked"
     drift_check_fail = 0
     drift_repaired = 0
+    too_direct_cue = 0
 
     for attempt in range(max_attempts):
         attempts = attempt + 1
@@ -506,7 +722,7 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
             # Use drift repair if drift detected
             if g_reason and "drift" in g_reason:
                 prompt = build_drift_repair_prompt(
-                    item, question, drift_info, answer_type
+                    item, question, drift_info, hard_answer_type
                 )
             elif g_reason and "misaligned" in g_reason:
                 prompt = build_alignment_repair_prompt(
@@ -557,13 +773,20 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
 
         # ── Drift check (rule-based) ──
         if g_ok:
-            drifted, drift_info = _check_question_answer_drift(question, answer_type, gold_answer_phrase)
+            drifted, drift_info = _check_question_answer_drift(question, hard_answer_type, gold_answer_phrase)
             if drifted:
                 drift_check_fail += 1
                 g_ok, g_reason = False, f"drift: {drift_info}"
                 # Track if this was repaired on a subsequent attempt
                 if attempt > 0 and drift_repaired < drift_check_fail:
                     drift_repaired += 1
+
+        # ── Direct answer-type cue check (retrieval leakage) ──
+        if g_ok:
+            too_direct, cue_info = _check_too_direct_answer_type_cue(question, hard_answer_type, gold_answer_phrase)
+            if too_direct:
+                too_direct_cue += 1
+                g_ok, g_reason = False, cue_info
 
         # ── Explicitness check ──
         if g_ok:
@@ -593,7 +816,7 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
             break
 
         if g_reason not in REPAIRABLE_REASONS:
-            if not any(g_reason.startswith(r) for r in ["only ", "banned", "path_binding", "answer_misaligned", "drift"]):
+            if not any(g_reason.startswith(r) for r in ["only ", "banned", "path_binding", "answer_misaligned", "drift", "too_direct"]):
                 break
 
     if not g_ok and not question:
@@ -614,6 +837,8 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
         "gold_event_type": item.get("gold_event_type", ""),
         "answer_phrase_status": item.get("answer_phrase_status", "unknown"),
         "inferred_answer_type": answer_type,
+        "hard_answer_type": hard_answer_type,
+        "template_family": template_family,
         "reasoning_type": rt,
         "grammar_pass": g_ok,
         "grammar_reason": g_reason,
@@ -623,6 +848,7 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
         "path_binding_method": pb_method,
         "drift_check_fail": drift_check_fail,
         "drift_repaired": drift_repaired,
+        "too_direct_cue": too_direct_cue,
         "events": events,
         "supporting_sentences": item.get("supporting_sentences", []),
         "relation_subtypes": item.get("relation_subtypes", []),

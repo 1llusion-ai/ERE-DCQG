@@ -310,45 +310,96 @@ def _extract_anchors(events, supporting_sentences):
 
 # ── MULTI-STRATEGY HARD PROMPTS ────────────────────────────
 
-def _answer_type_guidance(event_type, answer_phrase):
-    """Return question framing guidance based on the final event type."""
+def _answer_type_guidance(event_type, answer_phrase, hard_answer_type=None, start_trigger=None):
+    """Return question framing guidance based on answer type.
+
+    Uses hard_answer_type (from _infer_hard_answer_type) when available,
+    falls back to event_type matching.
+
+    Oblique chain templates: constrain answer type internally but use
+    indirect question openings that do NOT leak retrieval intent.
+    The solver must discover which later event belongs to the chain.
+    """
     et = event_type.lower() if event_type else ""
     ap = answer_phrase.lower() if answer_phrase else ""
+    anchor = start_trigger or "[entity/event]"
 
-    # Sign agreement / Treaty / Resolution
+    # ── Oblique chain templates (type-constrained, retrieval-hidden) ──
+    if hard_answer_type == "restriction_policy":
+        return (
+            'OBLIQUE CHAIN openings (do NOT use "restriction", "limitation", "forbidden", "imposed"):\n'
+            f'  - "Which later settlement term addressed the military threat exposed after {anchor}?"\n'
+            f'  - "What postwar constraint followed from the chain of events that began with {anchor}?"\n'
+            f'  - "Which later provision responded to the security problem that unfolded after {anchor}?"\n'
+            'Do NOT copy answer words. Do NOT mention the final event. The solver must trace the chain.\n'
+            f'The expected answer is: "{answer_phrase}"'
+        )
+    if hard_answer_type == "agreement_resolution":
+        return (
+            'OBLIQUE CHAIN openings (do NOT use "agreement", "treaty", "settlement" if answer sentence has them):\n'
+            f'  - "Which later settlement resolved the dispute that escalated from {anchor}?"\n'
+            f'  - "What formal outcome closed the conflict whose chain began with {anchor}?"\n'
+            f'  - "Which negotiated result followed the sequence of events set off by {anchor}?"\n'
+            'Do NOT copy answer words. Do NOT mention the final event. The solver must trace the chain.\n'
+            f'The expected answer is: "{answer_phrase}"'
+        )
+    if hard_answer_type == "investigation_outcome":
+        return (
+            'OBLIQUE CHAIN openings (do NOT use "investigation", "inquiry", "case" directly):\n'
+            f'  - "What became of the proceedings connected to {anchor}?"\n'
+            f'  - "Which eventual legal outcome followed the proceedings that began around {anchor}?"\n'
+            f'  - "How was the matter ultimately resolved after the events surrounding {anchor}?"\n'
+            'Do NOT copy answer words. Do NOT mention the final event. The solver must trace the chain.\n'
+            f'The expected answer is: "{answer_phrase}"'
+        )
+    if hard_answer_type == "casualty_damage":
+        return (
+            'OBLIQUE CHAIN openings (do NOT use "harm", "damage", "casualties", "toll" directly):\n'
+            f'  - "What was ultimately reported after the unrest connected to {anchor}?"\n'
+            f'  - "Which later consequence resulted from the chain of events beginning with {anchor}?"\n'
+            f'  - "What emerged from the events set in motion by {anchor}?"\n'
+            'Do NOT copy answer words. Do NOT mention the final event. The solver must trace the chain.\n'
+            f'The expected answer is: "{answer_phrase}"'
+        )
+    if hard_answer_type == "movement_action_outcome":
+        return (
+            'OBLIQUE CHAIN openings (do NOT use "action", "outcome", "result" directly):\n'
+            f'  - "What later development followed the chain that began with {anchor}?"\n'
+            f'  - "Which subsequent event resulted after the situation around {anchor} developed?"\n'
+            f'  - "What happened next in the sequence set off by {anchor}?"\n'
+            'Do NOT copy answer words. Do NOT mention the final event. The solver must trace the chain.\n'
+            f'The expected answer is: "{answer_phrase}"'
+        )
+
+    # ── Legacy fallback (event_type matching) ──
     if any(kw in et for kw in ("sign_agreement", "agreement", "treaty", "resolution")):
         return (
             'Ask: "Which agreement/date/action formally ended or resolved ...?"\n'
             '  or: "What formal resolution resulted from ...?"\n'
             f'  The expected answer is a specific agreement/date/action: "{answer_phrase}"'
         )
-    # Preventing / Letting / Permission / Restriction
     if any(kw in et for kw in ("prevent", "letting", "permission", "restriction", "prohibit", "forbid", "allow")):
         return (
             'Ask: "What restriction/permission was ultimately imposed ...?"\n'
             '  or: "What specific constraint resulted from ...?"\n'
             f'  The expected answer is a specific restriction/permission: "{answer_phrase}"'
         )
-    # Death / Injury / Damage
     if any(kw in et for kw in ("death", "injury", "damage", "destroy", "kill", "harm")):
         return (
             'Ask: "What final harm/outcome resulted from ...?"\n'
             '  or: "What specific consequence did [entity] suffer after ...?"\n'
             f'  The expected answer is a specific harm/outcome: "{answer_phrase}"'
         )
-    # Arrest / Conviction / Sentence
     if any(kw in et for kw in ("arrest", "convict", "sentence", "charge", "trial")):
         return (
             'Ask: "What legal action/outcome ultimately followed ...?"\n'
             f'  The expected answer is a specific legal outcome: "{answer_phrase}"'
         )
-    # Transfer / Acquisition / Ownership
     if any(kw in et for kw in ("transfer", "acqui", "ownership", "purchase", "buy", "sell")):
         return (
             'Ask: "What transfer/change of ownership resulted from ...?"\n'
             f'  The expected answer is a specific transfer: "{answer_phrase}"'
         )
-    # Default: use generic but answer-aligned framing
     return (
         f'Ask a question whose natural answer is: "{answer_phrase}"\n'
         '  Use "what" framing (not "why"). Ask for the specific result/outcome/action.\n'
@@ -371,7 +422,8 @@ def prompt_hidden_endpoint(item):
     start = events[0]["trigger"]
     middle_triggers = [e["trigger"] for e in events[1:-1]]
     anchors = _extract_anchors(events, item.get("supporting_sentences", []))
-    ans_guidance = _answer_type_guidance(event_type, answer_phrase)
+    hard_answer_type = item.get("_hard_answer_type")
+    ans_guidance = _answer_type_guidance(event_type, answer_phrase, hard_answer_type, start)
 
     return f"""Generate a HARD question requiring 3+ reasoning steps. The solver must discover intermediate and final events from context.
 
@@ -434,7 +486,8 @@ def prompt_relation_composition(item):
     start = events[0]["trigger"]
     middle_triggers = [e["trigger"] for e in events[1:-1]]
     anchors = _extract_anchors(events, item.get("supporting_sentences", []))
-    ans_guidance = _answer_type_guidance(event_type, answer_phrase)
+    hard_answer_type = item.get("_hard_answer_type")
+    ans_guidance = _answer_type_guidance(event_type, answer_phrase, hard_answer_type, start)
 
     return f"""Generate a HARD question about the composed effect of a multi-step event chain.
 

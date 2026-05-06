@@ -271,3 +271,122 @@ def _fill_remaining_fields(record, skip_llm=True):
     final_pass, final_reason = apply_final_filter(record)
     record["final_filter_pass"] = final_pass
     record["final_filter_reason"] = final_reason
+
+
+# ═══════════════════════════════════════════════════════════════
+# NEW HARD FILTER: strict and relaxed variants
+# Called explicitly by rescue script AFTER judges have run.
+# Does NOT touch apply_final_filter.
+# ═══════════════════════════════════════════════════════════════
+
+def _common_hard_checks(record):
+    """Shared checks for both strict and relaxed Hard filters.
+    Returns list of failure reasons (empty = pass).
+    """
+    reasons = []
+
+    # Grammar
+    if not record.get("grammar_pass", False):
+        reasons.append(f"grammar={record.get('grammar_reason', '?')}")
+
+    # Weak trigger
+    if not record.get("weak_trigger_pass", True):
+        reasons.append(f"weak_trigger={record.get('weak_trigger_reason', '?')}")
+
+    # Answer phrase
+    if not record.get("answer_phrase_pass", True):
+        reasons.append(f"answer_phrase={record.get('answer_phrase_reason', '?')}")
+
+    # Hard implicitness
+    if not record.get("hard_implicit_chain_pass", True):
+        reasons.append(f"hard_implicit={record.get('hard_implicit_chain_reason', '?')}")
+
+    # Trigger leakage
+    question = record.get("generated_question", "")
+    gold_trigger = record.get("gold_answer_trigger", "")
+    if gold_trigger and question and gold_trigger.lower() in question.lower():
+        reasons.append("trigger_leakage")
+
+    # Blind difficulty judge: must be Hard
+    blind = record.get("blind_difficulty_judge", {})
+    blind_pred = blind.get("predicted_difficulty", "Medium")
+    if blind_pred != "Hard":
+        reasons.append(f"blind_pred={blind_pred}")
+
+    # Blind judge: answerable
+    blind_ans = blind.get("answerable", "partial")
+    if blind_ans not in ("yes", "partial"):
+        reasons.append(f"blind_answerable={blind_ans}")
+
+    # Blind judge: final_event_consistent (yes/partial required)
+    blind_fec = blind.get("final_event_consistent", "partial")
+    if blind_fec not in ("yes", "partial"):
+        reasons.append(f"blind_fec={blind_fec}")
+
+    # Blind judge: single_sentence_answerable must be no
+    blind_ssa = blind.get("single_sentence_answerable", "partial")
+    if blind_ssa != "no":
+        reasons.append(f"single_sentence_answerable={blind_ssa}")
+
+    # Path dependency: must be strong
+    pd = record.get("path_dependency_judge", {})
+    pd_level = pd.get("path_dependency", "partial")
+    if pd_level != "strong":
+        reasons.append(f"path_dependency={pd_level}")
+
+    # Hard answer alignment
+    align = record.get("hard_alignment", {})
+    asks = align.get("asks_expected_answer", "partial")
+    if asks not in ("yes", "partial"):
+        reasons.append(f"alignment_asks={asks}")
+    natural = align.get("expected_answer_natural", "partial")
+    if natural not in ("yes", "partial"):
+        reasons.append(f"alignment_natural={natural}")
+    drift = align.get("target_drift", "no")
+    if drift == "yes":
+        reasons.append(f"target_drift=yes")
+
+    return reasons
+
+
+def apply_strict_hard_filter(record):
+    """Strict Hard filter: requires answer_consistency=yes/partial."""
+    reasons = _common_hard_checks(record)
+
+    # Answer consistency — strict: must be yes or partial
+    label = record.get("answer_consistency_label", "no")
+    if label not in ("yes", "partial"):
+        reasons.append(f"answer_consistency={label}")
+
+    if not reasons:
+        record["strict_new_hard_filter_pass"] = True
+        record["strict_new_hard_filter_reason"] = "all checks passed"
+    else:
+        record["strict_new_hard_filter_pass"] = False
+        record["strict_new_hard_filter_reason"] = "; ".join(reasons)
+
+    # Also set the old field for backward compat
+    record["new_hard_filter_pass"] = record["strict_new_hard_filter_pass"]
+    record["new_hard_filter_reason"] = record["strict_new_hard_filter_reason"]
+
+
+def apply_relaxed_hard_filter(record):
+    """Relaxed Hard filter: allows answer_consistency=no if FEC=yes and pathdep=strong."""
+    reasons = _common_hard_checks(record)
+
+    # Answer consistency — relaxed: allow "no" if FEC=yes and pathdep=strong
+    label = record.get("answer_consistency_label", "no")
+    if label not in ("yes", "partial"):
+        blind = record.get("blind_difficulty_judge", {})
+        blind_fec = blind.get("final_event_consistent", "partial")
+        pd = record.get("path_dependency_judge", {})
+        pd_level = pd.get("path_dependency", "partial")
+        if not (label == "no" and blind_fec in ("yes",) and pd_level == "strong"):
+            reasons.append(f"answer_consistency={label}")
+
+    if not reasons:
+        record["relaxed_new_hard_filter_pass"] = True
+        record["relaxed_new_hard_filter_reason"] = "all checks passed"
+    else:
+        record["relaxed_new_hard_filter_pass"] = False
+        record["relaxed_new_hard_filter_reason"] = "; ".join(reasons)

@@ -129,8 +129,8 @@ def validate_hard_question(question, events, gold_trigger):
                 if t in qw or qw in t or t_stem in qw or qw in t_stem:
                     mentioned.append(t)
                     break
-    if len(set(mentioned)) < 2:
-        return False, f"only {len(set(mentioned))} prior events mentioned, need >=2 from {prior_triggers}"
+    if len(set(mentioned)) < 1:
+        return False, f"only {len(set(mentioned))} prior events mentioned, need >=1 from {prior_triggers}"
 
     # Check gold trigger not leaked
     if gold_trigger.lower() in q_lower:

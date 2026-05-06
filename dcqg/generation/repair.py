@@ -1,6 +1,7 @@
 """Repair prompts for hard-aware question generation.
 
 - build_repair_prompt: construct a repair prompt for a failed question
+- build_alignment_repair_prompt: repair prompt for alignment failures
 - REPAIRABLE_REASONS: set of failure reasons that can be fixed via repair
 """
 from dcqg.generation.prompts import fmt_ctx
@@ -13,6 +14,7 @@ REPAIRABLE_REASONS = {
     "banned phrase", "only 0 prior events mentioned, need >=2",
     "only 1 prior events mentioned, need >=2",
     "path_binding", "path_coverage", "too_explicit",
+    "double_question", "alignment_drift", "drift",
 }
 
 
@@ -104,3 +106,51 @@ Context: {ctx}
 {hard_extra}
 - Question must start with a question word and end with ?
 - Output ONLY: {{"question": "...", "reasoning_type": "..."}}"""
+
+
+def build_alignment_repair_prompt(item, failed_question, alignment_reason, difficulty="Hard"):
+    """Build repair prompt specifically for alignment failures.
+
+    When the question asks about intermediate causes/actions instead of the final answer,
+    this prompt instructs the LLM to rewrite so the natural answer matches the expected phrase.
+    """
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    prior_events = [e["trigger"] for e in events[:-1]]
+    prior_list = ", ".join(f'"{t}"' for t in prior_events)
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+    answer_phrase = item.get("gold_answer_phrase", final)
+    start = events[0]["trigger"]
+    middle_triggers = [e["trigger"] for e in events[1:-1]]
+
+    return f"""Your question was rejected because it drifted away from the expected answer.
+
+Rejected question: "{failed_question}"
+Problem: {alignment_reason}
+
+Your question asks about intermediate causes/actions. Rewrite it so the natural answer is exactly:
+"{answer_phrase}"
+
+Keep the question hard by using prior events as constraints, but the requested answer must be the final outcome/restriction/agreement/action.
+
+Context:
+{ctx}
+
+Event path (reference): {path_str}
+Expected answer: "{answer_phrase}"
+
+=== RULES ===
+1. You MAY mention the starting event "{start}" or describe it in other words.
+2. Do NOT mention intermediate events ({", ".join(f'"{t}"' for t in middle_triggers)}) or the final event "{final}".
+3. Ask about the FINAL RESULT/OUTCOME — NOT about intermediate causes or reactions.
+4. The question must require reading 3+ context sentences to answer.
+5. Do NOT use double questions (no "How did X, and what Y?").
+6. Use a SINGLE "What" question focused on the final answer.
+7. Do NOT copy the answer phrase into the question.
+
+GOOD: "What [specific result] resulted from [entity]'s {start}?"  (answer = "{answer_phrase}")
+BAD: "How did {start} influence [intermediate event]?"  (asks about intermediate, not final answer)
+BAD: "What outcry followed the destruction?"  (asks about intermediate event)
+
+Output: {{"question": "...", "answer": "{answer_phrase}", "reasoning_type": "alignment_repair", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""

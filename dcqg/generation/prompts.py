@@ -279,3 +279,277 @@ Requirements for Hard:
 
 Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "implicit_chain", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+
+
+# ── ANCHOR HELPER ──────────────────────────────────────────
+
+import re
+
+_STOPWORDS = {"The", "This", "That", "What", "When", "Where", "After", "Before",
+              "Which", "Their", "They", "There", "However", "Meanwhile", "Also",
+              "But", "And", "Yet", "Still", "Then", "From", "With", "About"}
+
+
+def _extract_anchors(events, supporting_sentences):
+    """Extract entity/location/date anchors from supporting sentences."""
+    anchors = []
+    for s in supporting_sentences[:4]:
+        text = s[1] if isinstance(s, (list, tuple)) else str(s)
+        caps = re.findall(r'[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*', text)
+        for c in caps:
+            if len(c) > 3 and c not in _STOPWORDS:
+                anchors.append(c)
+    seen = set()
+    unique = []
+    for a in anchors:
+        if a not in seen:
+            seen.add(a)
+            unique.append(a)
+    return ", ".join(unique[:5]) if unique else "[entity/location from context]"
+
+
+# ── MULTI-STRATEGY HARD PROMPTS ────────────────────────────
+
+def _answer_type_guidance(event_type, answer_phrase):
+    """Return question framing guidance based on the final event type."""
+    et = event_type.lower() if event_type else ""
+    ap = answer_phrase.lower() if answer_phrase else ""
+
+    # Sign agreement / Treaty / Resolution
+    if any(kw in et for kw in ("sign_agreement", "agreement", "treaty", "resolution")):
+        return (
+            'Ask: "Which agreement/date/action formally ended or resolved ...?"\n'
+            '  or: "What formal resolution resulted from ...?"\n'
+            f'  The expected answer is a specific agreement/date/action: "{answer_phrase}"'
+        )
+    # Preventing / Letting / Permission / Restriction
+    if any(kw in et for kw in ("prevent", "letting", "permission", "restriction", "prohibit", "forbid", "allow")):
+        return (
+            'Ask: "What restriction/permission was ultimately imposed ...?"\n'
+            '  or: "What specific constraint resulted from ...?"\n'
+            f'  The expected answer is a specific restriction/permission: "{answer_phrase}"'
+        )
+    # Death / Injury / Damage
+    if any(kw in et for kw in ("death", "injury", "damage", "destroy", "kill", "harm")):
+        return (
+            'Ask: "What final harm/outcome resulted from ...?"\n'
+            '  or: "What specific consequence did [entity] suffer after ...?"\n'
+            f'  The expected answer is a specific harm/outcome: "{answer_phrase}"'
+        )
+    # Arrest / Conviction / Sentence
+    if any(kw in et for kw in ("arrest", "convict", "sentence", "charge", "trial")):
+        return (
+            'Ask: "What legal action/outcome ultimately followed ...?"\n'
+            f'  The expected answer is a specific legal outcome: "{answer_phrase}"'
+        )
+    # Transfer / Acquisition / Ownership
+    if any(kw in et for kw in ("transfer", "acqui", "ownership", "purchase", "buy", "sell")):
+        return (
+            'Ask: "What transfer/change of ownership resulted from ...?"\n'
+            f'  The expected answer is a specific transfer: "{answer_phrase}"'
+        )
+    # Default: use generic but answer-aligned framing
+    return (
+        f'Ask a question whose natural answer is: "{answer_phrase}"\n'
+        '  Use "what" framing (not "why"). Ask for the specific result/outcome/action.\n'
+        '  GOOD: "What [specific result] resulted from ...?"\n'
+        '  BAD: "Why did X lead to Y?" (unless the answer IS an explanation)'
+    )
+
+
+def prompt_hidden_endpoint(item):
+    """Hard: mention only the start event, hide intermediate and final. Solver must trace 3+ steps."""
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    answer_phrase = item.get("gold_answer_phrase", final)
+    event_type = item.get("gold_event_type", events[-1].get("type", ""))
+    event_ids = [e.get("id", "") for e in events]
+    start = events[0]["trigger"]
+    middle_triggers = [e["trigger"] for e in events[1:-1]]
+    anchors = _extract_anchors(events, item.get("supporting_sentences", []))
+    ans_guidance = _answer_type_guidance(event_type, answer_phrase)
+
+    return f"""Generate a HARD question requiring 3+ reasoning steps. The solver must discover intermediate and final events from context.
+
+Event path (for reference):
+{path_str}
+
+Context:
+{ctx}
+
+Target final event: "{final}"
+Expected answer phrase: "{answer_phrase}"
+Event type: {event_type}
+Event IDs: {", ".join(event_ids)}
+Relations: {rel_str}
+
+=== CRITICAL: ANSWER TARGET ===
+Your question MUST be answerable with: "{answer_phrase}"
+This is NOT negotiable. If the question's natural answer would be something else, REWRITE.
+
+{ans_guidance}
+
+=== RULES ===
+
+1. You MAY mention the starting event "{start}" (or a close paraphrase).
+2. You MUST NOT mention ANY of these events: {", ".join(f'"{t}"' for t in middle_triggers + [final])}
+   These are INTERMEDIATE and FINAL events that the solver must discover.
+3. The question must require reading 3+ context sentences to answer.
+4. Include an entity/location from: {anchors}
+5. Do NOT copy the answer phrase into the question. Start with question word, end with "?".
+6. Use "what" questions. Do NOT use "why" questions.
+7. DO NOT ask about intermediate events (outcry, forces rushing, siege, etc.).
+   Ask ONLY about the FINAL RESULT: "{answer_phrase}".
+
+=== VERIFICATION ===
+Check your question:
+- Does it mention "{final}"? -> REWRITE
+- Does it mention any intermediate event ({", ".join(f'"{t}"' for t in middle_triggers)})? -> REWRITE
+- Can it be answered from 1 sentence? -> REWRITE (must require chain reasoning)
+- Would the expected answer be "{answer_phrase}"? If NO -> REWRITE
+- Does it ask about an intermediate event instead of the final result? -> REWRITE
+
+GOOD: "What [specific result type] followed [entity]'s {start}?"  (answer = "{answer_phrase}")
+BAD: "What outcry followed the destruction?"  (asks about intermediate, not "{answer_phrase}")
+BAD: "What forces rushed to reinforce?"  (asks about intermediate event)
+
+Output: {{"question": "...", "answer": "...", "reasoning_type": "hidden_endpoint", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+
+
+def prompt_relation_composition(item):
+    """Hard: ask about the composed relation, mention only start event."""
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    answer_phrase = item.get("gold_answer_phrase", final)
+    event_type = item.get("gold_event_type", events[-1].get("type", ""))
+    event_ids = [e.get("id", "") for e in events]
+    start = events[0]["trigger"]
+    middle_triggers = [e["trigger"] for e in events[1:-1]]
+    anchors = _extract_anchors(events, item.get("supporting_sentences", []))
+    ans_guidance = _answer_type_guidance(event_type, answer_phrase)
+
+    return f"""Generate a HARD question about the composed effect of a multi-step event chain.
+
+Event path (reference): {path_str}
+Context:
+{ctx}
+
+Target final event: "{final}"
+Expected answer phrase: "{answer_phrase}"
+Event type: {event_type}
+Event IDs: {", ".join(event_ids)}
+Relations: {rel_str}
+
+=== CRITICAL: ANSWER TARGET ===
+Your question MUST be answerable with: "{answer_phrase}"
+This is NOT negotiable. If the question's natural answer would be something else, REWRITE.
+
+{ans_guidance}
+
+=== RULES ===
+1. You MAY mention the starting event "{start}".
+2. Do NOT mention intermediate events ({", ".join(f'"{t}"' for t in middle_triggers)}) or the final event "{final}".
+3. Ask about the FINAL result/action/outcome — NOT about intermediate events.
+4. The solver must trace {len(events)} events across {len(events)} context sentences.
+5. Include entity from: {anchors}
+6. Do NOT copy answer phrase. Start with question word, end with "?".
+7. BANNED: "Why did..." questions. Use "What restriction/outcome/action/result..." instead.
+8. DO NOT ask about intermediate events (outcry, siege, forces, etc.).
+   Ask ONLY about the FINAL RESULT: "{answer_phrase}".
+
+=== VERIFICATION ===
+Check your question:
+- Does it start with "Why"? -> REWRITE (use "What")
+- Would the expected answer be "{answer_phrase}"? If NO -> REWRITE
+- Does it mention "{final}" or intermediate events? -> REWRITE
+- Does it ask about an intermediate event? -> REWRITE
+
+GOOD: "What [restriction/outcome/action] resulted from [entity]'s {start}?"  (answer = "{answer_phrase}")
+BAD: "What outcry followed the destruction?"  (asks about intermediate, not "{answer_phrase}")
+BAD: "Why did {start} lead to changes?"  (asks for reason, not the answer)
+
+Output: {{"question": "...", "answer": "...", "reasoning_type": "relation_composition", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+
+
+def prompt_contrastive(item):
+    """Hard: mention only start event, solver must trace chain to disambiguate."""
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    answer_phrase = item.get("gold_answer_phrase", final)
+    event_ids = [e.get("id", "") for e in events]
+    start = events[0]["trigger"]
+    middle_triggers = [e["trigger"] for e in events[1:-1]]
+    anchors = _extract_anchors(events, item.get("supporting_sentences", []))
+
+    return f"""Generate a HARD question where the solver must trace a multi-step chain to find the answer.
+
+Event path (reference): {path_str}
+Context:
+{ctx}
+
+Target final event: "{final}" (answer: "{answer_phrase}")
+Event IDs: {", ".join(event_ids)}
+Relations: {rel_str}
+
+=== RULES ===
+1. You MAY mention the starting event "{start}".
+2. Do NOT mention intermediate ({", ".join(f'"{t}"' for t in middle_triggers)}) or final "{final}" events.
+3. Describe a situation where the solver must follow the chain to determine the outcome.
+4. The question must require reading 3+ context sentences.
+5. Include entity from: {anchors}
+6. Do NOT copy answer phrase. Start with question word, end with "?".
+
+GOOD: "What ultimately happened to [entity] after {start}?"
+BAD: "After {start} and {middle_triggers[0] if middle_triggers else 'X'}, what happened?"
+
+Output: {{"question": "...", "answer": "...", "reasoning_type": "contrastive", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+
+
+def prompt_missing_bridge(item):
+    """Hard: mention only start, solver must discover bridge events to reach the end."""
+    events = item["events"]
+    path_str = " -> ".join(f'"{e["trigger"]}"' for e in events)
+    final = events[-1]["trigger"]
+    ctx = fmt_ctx(item.get("supporting_sentences", []))
+    rel_types = item.get("relation_subtypes", [])
+    rel_str = ", ".join(rel_types) if rel_types else "N/A"
+    answer_phrase = item.get("gold_answer_phrase", final)
+    event_ids = [e.get("id", "") for e in events]
+    start = events[0]["trigger"]
+    middle_triggers = [e["trigger"] for e in events[1:-1]]
+    anchors = _extract_anchors(events, item.get("supporting_sentences", []))
+
+    return f"""Generate a HARD question where the solver must discover what happened between the start and the end of a chain.
+
+Event path (reference): {path_str}
+Context:
+{ctx}
+
+Target final event: "{final}" (answer: "{answer_phrase}")
+Event IDs: {", ".join(event_ids)}
+Relations: {rel_str}
+
+=== RULES ===
+1. You MAY mention the starting event "{start}".
+2. Do NOT mention intermediate ({", ".join(f'"{t}"' for t in middle_triggers)}) or final "{final}" events.
+3. Ask what the ultimate consequence/outcome was after {start}.
+4. The solver must discover {len(events)-1} events by reading the context.
+5. Include entity from: {anchors}
+6. Do NOT copy answer phrase. Start with question word, end with "?".
+
+GOOD: "What was the final outcome for [entity] after {start}?"
+BAD: "Between {start} and {final}, what happened?" (names both endpoints)
+
+Output: {{"question": "...", "answer": "...", "reasoning_type": "missing_bridge", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""

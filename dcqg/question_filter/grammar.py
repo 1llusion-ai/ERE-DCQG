@@ -108,7 +108,8 @@ def grammar_filter(question):
     q_starters = {"what", "who", "when", "where", "why", "how", "which", "whose",
                   "did", "was", "were", "is", "are", "do", "does", "had", "has", "have",
                   "can", "could", "would", "should", "will",
-                  "after", "before", "during", "following"}
+                  "after", "before", "during", "following",
+                  "given", "between", "if", "suppose", "assuming"}
     if words[0] not in q_starters:
         return False, f"bad start: {words[0]}"
     return True, "pass"

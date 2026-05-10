@@ -140,9 +140,12 @@ def _write_report(graphs, output_path, input_info):
         req_ids = set(g.get("required_evidence_sentences", []))
         bridge_ids = set(g.get("bridge_sentence_ids", []))
         node_sids = {n.get("sentence_id") for n in g.get("nodes", [])}
+        # Bridge covered: role in {bridge, answer_bridge}
         bridge_sids = {n.get("sentence_id") for n in g.get("nodes", [])
-                       if n.get("evidence_role") == "bridge"}
-        has_answer = any(n.get("evidence_role") == "answer" for n in g.get("nodes", []))
+                       if n.get("evidence_role") in ("bridge", "answer_bridge")}
+        # Answer present: role in {answer, answer_bridge}
+        has_answer = any(n.get("evidence_role") in ("answer", "answer_bridge")
+                         for n in g.get("nodes", []))
 
         req_total += len(req_ids)
         req_covered += len(req_ids & node_sids)
@@ -376,8 +379,30 @@ def _write_report(graphs, output_path, input_info):
     valid_pct = 100 * valid_count / total if total else 0
     parse_pct = 100 * parse_ok_count / total if total else 0
 
-    if valid_pct >= 80 and parse_pct >= 95:
-        lines.append("**Schema stability: PASS**")
+    # Success criteria table
+    criteria = [
+        ("parse_ok >= 95%", parse_pct >= 95, f"{parse_ok_count}/{total} ({parse_pct:.0f}%)"),
+        ("graph_valid >= 80%", valid_pct >= 80, f"{valid_count}/{total} ({valid_pct:.0f}%)"),
+        ("required evidence coverage >= 90%", req_cov_pct >= 90, f"{req_covered}/{req_total} ({req_cov_pct:.0f}%)"),
+        ("bridge sentence coverage >= 90%", bridge_cov_pct >= 90, f"{bridge_covered}/{bridge_total} ({bridge_cov_pct:.0f}%)"),
+        ("answer node coverage >= 90%", answer_cov_pct >= 90, f"{answer_covered}/{total} ({answer_cov_pct:.0f}%)"),
+        ("avg nodes >= 3", avg_nodes >= 3, f"{avg_nodes:.1f}"),
+        ("avg edges >= 2", avg_edges >= 2, f"{avg_edges:.1f}"),
+    ]
+
+    all_pass = all(passed for _, passed, _ in criteria)
+
+    lines.append("### Success Criteria")
+    lines.append("")
+    lines.append("| Criterion | Status | Value |")
+    lines.append("|---|---|---|")
+    for name, passed, value in criteria:
+        status = "PASS" if passed else "FAIL"
+        lines.append(f"| {name} | {status} | {value} |")
+    lines.append("")
+
+    if all_pass:
+        lines.append("**Overall: ALL CRITERIA PASS**")
         lines.append("")
         lines.append("The narrative evidence graph schema is stable enough for a QG pilot.")
         lines.append(f"- {valid_count}/{total} ({valid_pct:.0f}%) graphs are valid")
@@ -399,19 +424,19 @@ def _write_report(graphs, output_path, input_info):
         lines.append("2. Focus on motivation_bridge and causal_bridge (most reliable necessity types)")
         lines.append("3. Use causal_chain and motivation reasoning operations as primary targets")
     else:
-        lines.append("**Schema stability: NEEDS WORK**")
+        failed = [name for name, passed, _ in criteria if not passed]
+        lines.append(f"**Overall: {len(failed)} CRITERIA FAILED**")
         lines.append("")
-        lines.append(f"- parse_ok: {parse_ok_count}/{total} ({parse_pct:.0f}%)")
-        lines.append(f"- graph_valid: {valid_count}/{total} ({valid_pct:.0f}%)")
+        lines.append(f"Failed: {', '.join(failed)}")
         lines.append("")
         if fail_reasons:
             top_fail = Counter(fail_reasons).most_common(3)
-            lines.append("Top failure reasons:")
+            lines.append("Top validation failure reasons:")
             for reason, cnt in top_fail:
                 lines.append(f"- {reason}: {cnt}")
         lines.append("")
         lines.append("**Recommended fixes:**")
-        lines.append("1. Address top failure reasons before proceeding to QG")
+        lines.append("1. Address failed criteria before proceeding to QG")
         lines.append("2. Consider relaxing validation constraints")
         lines.append("3. Improve prompt to reduce parse failures")
 

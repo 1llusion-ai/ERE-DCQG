@@ -27,7 +27,7 @@ VALID_EDGE_RELATIONS = {
     "same_character", "supports_inference",
 }
 
-VALID_EVIDENCE_ROLES = {"anchor", "bridge", "answer", "context"}
+VALID_EVIDENCE_ROLES = {"anchor", "bridge", "answer", "answer_bridge", "context"}
 VALID_NECESSITY = {"weak", "partial", "strong"}
 VALID_CONFIDENCE = {"high", "medium", "low"}
 
@@ -176,10 +176,10 @@ def _validate_graph(nodes, edges, req_ids, bridge_ids):
             reasons.append(f"node {n.get('id', '?')} sentence_id {sid} not in required evidence")
 
     # Check 2: bridge_sentence_ids must have bridge-role nodes
-    # A bridge sentence is "covered" if it has a bridge, answer, or anchor node
+    # A bridge sentence is "covered" if it has a bridge or answer_bridge node
     bridge_sids_covered = set()
     for n in nodes:
-        if n.get("evidence_role") in ("bridge", "answer", "anchor"):
+        if n.get("evidence_role") in ("bridge", "answer_bridge"):
             sid = n.get("sentence_id")
             if isinstance(sid, (int, float)):
                 bridge_sids_covered.add(int(sid))
@@ -187,8 +187,8 @@ def _validate_graph(nodes, edges, req_ids, bridge_ids):
     if missing_bridge:
         reasons.append(f"bridge sentences {sorted(missing_bridge)} have no bridge-role node")
 
-    # Check 3: answer node exists
-    has_answer = any(n.get("evidence_role") == "answer" for n in nodes)
+    # Check 3: answer node exists (answer or answer_bridge)
+    has_answer = any(n.get("evidence_role") in ("answer", "answer_bridge") for n in nodes)
     if not has_answer:
         reasons.append("no answer-role node found")
 
@@ -202,7 +202,7 @@ def _validate_graph(nodes, edges, req_ids, bridge_ids):
             reasons.append(f"edge target {tgt} not in nodes")
 
     # Check 7: at least one connected path to answer node
-    answer_ids = {n.get("id") for n in nodes if n.get("evidence_role") == "answer"}
+    answer_ids = {n.get("id") for n in nodes if n.get("evidence_role") in ("answer", "answer_bridge")}
     if answer_ids and node_ids:
         # BFS from any non-answer node to any answer node
         adj = {}
@@ -364,13 +364,15 @@ class NarrativeGraphExtractor:
             edges = []
 
         # Post-process: auto-label bridge nodes
-        # If a node's sentence_id is in bridge_ids but its role is "context",
-        # upgrade to "bridge"
         bridge_set = set(bridge_ids)
         for n in nodes:
             sid = n.get("sentence_id")
-            if sid in bridge_set and n.get("evidence_role") == "context":
-                n["evidence_role"] = "bridge"
+            role = n.get("evidence_role")
+            if sid in bridge_set:
+                if role == "answer":
+                    n["evidence_role"] = "answer_bridge"
+                elif role == "context":
+                    n["evidence_role"] = "bridge"
 
         # Validate
         graph_valid, validation_reason, diagnostics = _validate_graph(

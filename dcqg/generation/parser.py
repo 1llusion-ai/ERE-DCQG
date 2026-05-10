@@ -11,16 +11,29 @@ from dcqg.utils.config import get_api_config
 
 
 def parse_json_response(text):
-    """Parse JSON from LLM response, with fallback substring extraction."""
+    """Parse JSON from LLM response. Forces single JSON object only."""
     try:
         return json.loads(text)
     except (json.JSONDecodeError, TypeError):
-        try:
-            start = text.index("{")
-            end = text.rindex("}") + 1
-            return json.loads(text[start:end])
-        except (ValueError, json.JSONDecodeError, TypeError):
-            return None
+        pass
+
+    # Find the FIRST complete JSON object (not the last)
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(text[start:i + 1])
+                except (json.JSONDecodeError, TypeError):
+                    return None
+    return None
 
 
 def generate_one(prompt, temperature=0.1, max_retries=2, model=None):

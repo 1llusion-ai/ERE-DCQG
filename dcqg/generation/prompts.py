@@ -427,49 +427,26 @@ def prompt_hidden_endpoint(item):
 
     return f"""Generate a HARD question requiring 3+ reasoning steps. The solver must discover intermediate and final events from context.
 
-Event path (for reference):
-{path_str}
-
 Context:
 {ctx}
 
-Target final event: "{final}"
-Expected answer phrase: "{answer_phrase}"
-Event type: {event_type}
-Event IDs: {", ".join(event_ids)}
-Relations: {rel_str}
-
-=== CRITICAL: ANSWER TARGET ===
-Your question MUST be answerable with: "{answer_phrase}"
-This is NOT negotiable. If the question's natural answer would be something else, REWRITE.
+Expected answer: "{answer_phrase}"
+Start event (you MAY mention): "{start}"
+Do NOT mention: {", ".join(f'"{t}"' for t in middle_triggers + [final])}
 
 {ans_guidance}
 
-=== RULES ===
+RULES:
+1. Mention ONLY the start event "{start}". Do NOT mention intermediate or final events.
+2. Question must require 3+ context sentences to answer.
+3. Include an entity from: {anchors}
+4. Use "What" question. Do NOT use "Why". End with "?".
+5. Do NOT copy the answer phrase into the question.
+6. The natural answer MUST be "{answer_phrase}".
 
-1. You MAY mention the starting event "{start}" (or a close paraphrase).
-2. You MUST NOT mention ANY of these events: {", ".join(f'"{t}"' for t in middle_triggers + [final])}
-   These are INTERMEDIATE and FINAL events that the solver must discover.
-3. The question must require reading 3+ context sentences to answer.
-4. Include an entity/location from: {anchors}
-5. Do NOT copy the answer phrase into the question. Start with question word, end with "?".
-6. Use "what" questions. Do NOT use "why" questions.
-7. DO NOT ask about intermediate events (outcry, forces rushing, siege, etc.).
-   Ask ONLY about the FINAL RESULT: "{answer_phrase}".
+GOOD example: "What [result type] followed [entity]'s {start}?"
 
-=== VERIFICATION ===
-Check your question:
-- Does it mention "{final}"? -> REWRITE
-- Does it mention any intermediate event ({", ".join(f'"{t}"' for t in middle_triggers)})? -> REWRITE
-- Can it be answered from 1 sentence? -> REWRITE (must require chain reasoning)
-- Would the expected answer be "{answer_phrase}"? If NO -> REWRITE
-- Does it ask about an intermediate event instead of the final result? -> REWRITE
-
-GOOD: "What [specific result type] followed [entity]'s {start}?"  (answer = "{answer_phrase}")
-BAD: "What outcry followed the destruction?"  (asks about intermediate, not "{answer_phrase}")
-BAD: "What forces rushed to reinforce?"  (asks about intermediate event)
-
-Output: {{"question": "...", "answer": "...", "reasoning_type": "hidden_endpoint", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+Output ONLY one JSON object: {{"question": "..."}}"""
 
 
 def prompt_relation_composition(item):
@@ -491,45 +468,27 @@ def prompt_relation_composition(item):
 
     return f"""Generate a HARD question about the composed effect of a multi-step event chain.
 
-Event path (reference): {path_str}
 Context:
 {ctx}
 
-Target final event: "{final}"
-Expected answer phrase: "{answer_phrase}"
-Event type: {event_type}
-Event IDs: {", ".join(event_ids)}
-Relations: {rel_str}
-
-=== CRITICAL: ANSWER TARGET ===
-Your question MUST be answerable with: "{answer_phrase}"
-This is NOT negotiable. If the question's natural answer would be something else, REWRITE.
+Expected answer: "{answer_phrase}"
+Start event (you MAY mention): "{start}"
+Do NOT mention: {", ".join(f'"{t}"' for t in middle_triggers + [final])}
 
 {ans_guidance}
 
-=== RULES ===
-1. You MAY mention the starting event "{start}".
-2. Do NOT mention intermediate events ({", ".join(f'"{t}"' for t in middle_triggers)}) or the final event "{final}".
-3. Ask about the FINAL result/action/outcome — NOT about intermediate events.
-4. The solver must trace {len(events)} events across {len(events)} context sentences.
-5. Include entity from: {anchors}
-6. Do NOT copy answer phrase. Start with question word, end with "?".
-7. BANNED: "Why did..." questions. Use "What restriction/outcome/action/result..." instead.
-8. DO NOT ask about intermediate events (outcry, siege, forces, etc.).
-   Ask ONLY about the FINAL RESULT: "{answer_phrase}".
+RULES:
+1. Mention ONLY the start event "{start}". Do NOT mention intermediate or final events.
+2. Ask about the FINAL result/action/outcome — NOT intermediate events.
+3. Solver must trace {len(events)} events across {len(events)} context sentences.
+4. Include entity from: {anchors}
+5. Use "What" question. Do NOT use "Why". End with "?".
+6. Do NOT copy the answer phrase into the question.
+7. The natural answer MUST be "{answer_phrase}".
 
-=== VERIFICATION ===
-Check your question:
-- Does it start with "Why"? -> REWRITE (use "What")
-- Would the expected answer be "{answer_phrase}"? If NO -> REWRITE
-- Does it mention "{final}" or intermediate events? -> REWRITE
-- Does it ask about an intermediate event? -> REWRITE
+GOOD example: "What [result] resulted from [entity]'s {start}?"
 
-GOOD: "What [restriction/outcome/action] resulted from [entity]'s {start}?"  (answer = "{answer_phrase}")
-BAD: "What outcry followed the destruction?"  (asks about intermediate, not "{answer_phrase}")
-BAD: "Why did {start} lead to changes?"  (asks for reason, not the answer)
-
-Output: {{"question": "...", "answer": "...", "reasoning_type": "relation_composition", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+Output ONLY one JSON object: {{"question": "..."}}"""
 
 
 def prompt_contrastive(item):

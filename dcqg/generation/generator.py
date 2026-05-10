@@ -27,16 +27,30 @@ _DOUBLE_Q_PATTERNS = [
     r'(?i)^What\s+.+,\s*and\s+what\b',              # "What X, and what..."
     r'(?i)^How\s+.+,\s*and\s+why\b',                # "How X, and why..."
     r'(?i)\band\s+(what|how|why|when|where|who)\b.*\?', # "... and what/how/why..."
+    r',\s*and\s+how\b',                             # "..., and how..."
+    r',\s*and\s+what\b',                            # "..., and what..."
+    r'\band\s+how\s+did\b',                         # "... and how did..."
+    r'\band\s+why\s+did\b',                         # "... and why did..."
 ]
 _DOUBLE_Q_RE = [re.compile(p) for p in _DOUBLE_Q_PATTERNS]
 
+# WH-cue words for multi-WH detection
+_WH_CUES = re.compile(r'\b(what|how|why|when|where|who|which|whose)\b', re.IGNORECASE)
+
+# Bilingual / non-Latin character detection
+_NON_LATIN_RE = re.compile(r'[一-鿿Ѐ-ӿ؀-ۿ぀-ゟ゠-ヿ가-힯]')
+
 
 def _is_double_question(question):
-    """Reject questions containing two question clauses."""
+    """Reject questions containing two question clauses or multiple WH cues."""
     q = question.strip()
     for pat in _DOUBLE_Q_RE:
         if pat.search(q):
             return True, "double_question"
+    # Reject if more than 2 WH cues (one at start is normal, two is suspicious, 3+ is compound)
+    wh_matches = _WH_CUES.findall(q)
+    if len(wh_matches) >= 3:
+        return True, "double_question"
     return False, ""
 
 
@@ -349,38 +363,26 @@ def build_drift_repair_prompt(item, failed_question, drift_info, answer_type):
     allowed = _get_allowed_heads(answer_type)
     allowed_str = "\n".join(f'  - "{h}"' for h in allowed[:5])
 
-    return f"""Your question was rejected because it drifts away from the expected answer.
-
-Rejected question: "{failed_question}"
+    return f"""Your question drifted from the expected answer.
+Rejected: "{failed_question}"
 Problem: {drift_info}
 
-The expected answer is: "{answer_phrase}"
-
-Rewrite the question so the expected answer is naturally: "{answer_phrase}".
-
-The question must begin with one of these allowed openings:
-{allowed_str}
+Rewrite so the natural answer is: "{answer_phrase}"
+Must begin with: {allowed_str}
 
 Context:
 {ctx}
 
-Event path (reference): {path_str}
+RULES:
+1. Mention ONLY "{start}". Do NOT mention: {", ".join(f'"{t}"' for t in middle_triggers + [final])}
+2. Ask about FINAL result — NOT intermediate causes.
+3. Use a SINGLE "What" question. End with "?".
+4. Do NOT copy the answer phrase.
+5. BANNED: outcry, inquiry, campaign, influence, response, reason, why, how did, led to
 
-=== RULES ===
-1. You MAY mention the starting event "{start}" or describe it in other words.
-2. Do NOT mention intermediate events ({", ".join(f'"{t}"' for t in middle_triggers)}) or the final event "{final}".
-3. Ask about the FINAL RESULT/OUTCOME — NOT about intermediate causes or reactions.
-4. The question must require reading 3+ context sentences to answer.
-5. Do NOT use double questions (no "How did X, and what Y?").
-6. Use a SINGLE "What" question focused on the final answer.
-7. Do NOT copy the answer phrase into the question.
-8. BANNED words: outcry, inquiry, campaign, decision, influence, response, reason, why, how did, led to, contributed to
+GOOD example: "What [result] resulted from [entity]'s {start}?"
 
-GOOD: "What [specific result] resulted from [entity]'s {start}?"  (answer = "{answer_phrase}")
-BAD: "How did {start} influence [intermediate event]?"  (asks about intermediate, not final answer)
-BAD: "What outcry followed the destruction?"  (asks about intermediate event)
-
-Output: {{"question": "...", "answer": "{answer_phrase}", "reasoning_type": "drift_repair", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+Output ONLY one JSON object: {{"question": "..."}}"""
 
 
 # ── Hard path suitability filter ────────────────────────────
@@ -515,6 +517,16 @@ def generate_with_retry_hardaware(item, max_attempts=5):
             continue
 
         g_ok, g_reason = grammar_filter(question)
+
+        # Bilingual / non-Latin text
+        if g_ok:
+            if _NON_LATIN_RE.search(question):
+                g_ok, g_reason = False, "bilingual_text"
+
+        # Max question length
+        if g_ok:
+            if len(question.split()) > 40:
+                g_ok, g_reason = False, f"too_long: {len(question.split())} words"
 
         if g_ok and gold and gold.lower() in question.lower():
             g_ok, g_reason = False, "trigger leakage"
@@ -730,7 +742,7 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
                 )
             else:
                 prompt = build_repair_prompt(item, question, g_reason, diff, covered_indices)
-            temp = 0.2 + min(attempt * 0.1, 0.3)
+            temp = 0.2 + min(attempt * 0.05, 0.15)
 
         gen, raw = generate_one(prompt, temperature=temp)
         all_attempt_prompts.append(prompt)
@@ -760,6 +772,24 @@ def generate_multi_strategy(item, strategy_name, max_attempts=5, model_config=No
 
         # ── Grammar check ──
         g_ok, g_reason = grammar_filter(question)
+
+        # ── Bilingual / non-Latin text ──
+        if g_ok:
+            if _NON_LATIN_RE.search(question):
+                g_ok, g_reason = False, "bilingual_text"
+
+        # ── Excessive word repetition ──
+        if g_ok:
+            words = question.lower().split()
+            for w in set(words):
+                if len(w) > 2 and words.count(w) >= 4:
+                    g_ok, g_reason = False, f"word_repetition: {w}"
+                    break
+
+        # ── Max question length ──
+        if g_ok:
+            if len(question.split()) > 40:
+                g_ok, g_reason = False, f"too_long: {len(question.split())} words"
 
         # ── Trigger leakage ──
         if g_ok and gold and gold.lower() in question.lower():

@@ -64,6 +64,9 @@ VAGUE_QUESTIONS = [
 WORD_LIMIT_STRICT = 35   # mark as too_long
 WORD_LIMIT_HARD = 45     # reject
 
+# Bilingual/non-English character detection
+_NON_LATIN_RE = re.compile(r'[一-鿿Ѐ-ӿ؀-ۿ぀-ゟ゠-ヿ가-힯]')  # CJK, Cyrillic, Arabic, Hiragana, Katakana, Korean
+
 # Weak trigger sets
 HARD_BLACKLIST_TRIGGERS = {
     "said", "occurred", "happened", "took place",
@@ -87,6 +90,13 @@ ANSWER_TYPES = [
 # BASE GRAMMAR FILTER (v2 from evaluator_v2.py)
 # ═══════════════════════════════════════════════════════════════
 
+_GRAMMAR_STOPWORDS = frozenset({
+    "the", "a", "an", "of", "to", "in", "on", "for", "with", "by",
+    "and", "or", "but", "is", "was", "were", "are", "be", "been",
+    "that", "this", "it", "its", "from", "at", "as", "not", "had",
+})
+
+
 def grammar_filter(question):
     q = question.strip()
     if not q or not q.endswith("?"):
@@ -96,7 +106,8 @@ def grammar_filter(question):
         return False, "too short"
     for i in range(len(words) - 1):
         if words[i] == words[i+1] and len(words[i]) > 1:
-            return False, f"word repetition: {words[i]}"
+            if words[i] not in _GRAMMAR_STOPWORDS:
+                return False, f"word repetition: {words[i]}"
     for i in range(len(words) - 5):
         if words[i:i+3] == words[i+1:i+4] == words[i+2:i+5]:
             return False, "looping trigram"
@@ -139,7 +150,8 @@ def enhanced_grammar_filter(question, path_events=None):
     q_words = q_lower.split()
     for i in range(len(q_words) - 1):
         if q_words[i] == q_words[i + 1] and len(q_words[i]) > 1:
-            return False, f"repeat_token: {q_words[i]}"
+            if q_words[i] not in _GRAMMAR_STOPWORDS:
+                return False, f"repeat_token: {q_words[i]}"
     # Specific patterns (catches "on on" with punctuation between)
     for pat in REPEAT_TOKEN_PATTERNS:
         if re.search(pat, q_lower):
@@ -156,6 +168,10 @@ def enhanced_grammar_filter(question, path_events=None):
         if re.search(pat, q, re.IGNORECASE):
             m = re.search(pat, q, re.IGNORECASE)
             return False, f"broken_grammar: {m.group(0).strip()}"
+
+    # --- Bilingual / non-Latin text ---
+    if _NON_LATIN_RE.search(q):
+        return False, "bilingual_text"
 
     # --- Too long ---
     if len(words) > WORD_LIMIT_HARD:

@@ -537,9 +537,104 @@ def generate_report(results, selected_paths, output_dir, k_candidates, drift_fai
             lines.append(f"*No quality-pass {tier.lower()} samples.*\n")
 
     # ══════════════════════════════════════════════════════════════
-    # Section 8: Oracle Top-1 Diagnostic (NOT used for main metrics)
+    # Section 8: Quality-Pass Easy Diagnostic
     # ══════════════════════════════════════════════════════════════
-    lines.append("## 8. Oracle Top-1 Diagnostic\n")
+    lines.append("## 8. Quality-Pass Easy Diagnostic\n")
+    lines.append("*Why are quality-pass candidates judged Easy by the blind judge?*\n")
+    qp_easy = [r for r in qp_blind
+               if r["blind_difficulty_judge"]["predicted_difficulty"] == "Easy"]
+    if qp_easy:
+        lines.append("| # | Strategy | Answer Type | Ans Sent ID | SSA | Blind Reason (truncated) | PathDep | Question (truncated) |")
+        lines.append("|--:|----------|------------|-------------|-----|--------------------------|---------|---------------------|")
+        for i, r in enumerate(qp_easy[:10]):
+            blind = r.get("blind_difficulty_judge", {})
+            pd = r.get("path_dependency_judge", {})
+            # Find answer sentence id
+            answer_event_id = r.get("answer_event_id", "")
+            ans_sent_id = "?"
+            for e in r.get("events", []):
+                if e.get("id") == answer_event_id:
+                    ans_sent_id = e.get("sent_id", "?")
+                    break
+            ssa = blind.get("single_sentence_answerable", "?")
+            reason = blind.get("reason", "")[:80]
+            dep = pd.get("path_dependency", "?")
+            q = r.get("generated_question", "")[:50]
+            hat = r.get("hard_answer_type", "?")
+            lines.append(
+                f"| {i+1} | {r.get('hard_strategy', '?')} | {hat} | "
+                f"S{ans_sent_id} | {ssa} | {reason} | {dep} | {q} |"
+            )
+        lines.append("")
+    else:
+        lines.append("*No quality-pass Easy samples.*\n")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 9: Path-Level Diagnostic
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 9. Path-Level Diagnostic (Selected Hard Paths)\n")
+    lines.append("*For each selected hard path, show path-level risk factors.*\n")
+
+    # Compute path-level stats from the raw path data
+    path_risk_stats = defaultdict(lambda: {
+        "single_sentence_risk": "unknown",
+        "answer_in_final_sent": "?",
+        "doc_id": "",
+        "n_candidates": 0,
+        "n_qp": 0,
+        "best_blind_pred": "Easy",
+    })
+
+    for r in results:
+        key = r.get("dedup_key", r.get("doc_id", ""))
+        path_risk_stats[key]["n_candidates"] += 1
+        if r.get("quality_filter_pass"):
+            path_risk_stats[key]["n_qp"] += 1
+        path_risk_stats[key]["doc_id"] = r.get("doc_id", "")[:12]
+        blind = r.get("blind_difficulty_judge", {})
+        pred = blind.get("predicted_difficulty", "Easy") if isinstance(blind, dict) else "Easy"
+        rank = {"Hard": 2, "Medium": 1, "Easy": 0}.get(pred, 0)
+        best_rank = {"Hard": 2, "Medium": 1, "Easy": 0}.get(
+            path_risk_stats[key]["best_blind_pred"], 0)
+        if rank > best_rank:
+            path_risk_stats[key]["best_blind_pred"] = pred
+
+    # single_sentence_risk from path data if available
+    for p in selected_paths:
+        key = p.get("dedup_key", f"{p.get('doc_id', '')}::{p.get('answer_event_id', '')}")
+        ssr = p.get("single_sentence_risk", p.get("llm_path_judge", {}).get("single_sentence_risk", "unknown"))
+        path_risk_stats[key]["single_sentence_risk"] = ssr
+
+    # SSR distribution
+    ssr_counts = defaultdict(int)
+    for stats in path_risk_stats.values():
+        ssr_counts[stats["single_sentence_risk"]] += 1
+
+    lines.append("### Single Sentence Risk Distribution\n")
+    lines.append("| Risk Level | Count | Rate |")
+    lines.append("|------------|------:|-----:|")
+    n_paths = len(path_risk_stats)
+    for level in ["high", "medium", "low", "unknown"]:
+        if level in ssr_counts:
+            c = ssr_counts[level]
+            lines.append(f"| {level} | {c} | {c/n_paths*100:.1f}% |")
+    lines.append("")
+
+    # Path detail table
+    lines.append("### Path Detail\n")
+    lines.append("| Doc ID | Candidates | QP | Best Blind Pred | SSR |")
+    lines.append("|--------|----------:|---:|----------------:|-----|")
+    for key, stats in sorted(path_risk_stats.items(), key=lambda x: x[1]["best_blind_pred"]):
+        lines.append(
+            f"| {stats['doc_id']} | {stats['n_candidates']} | {stats['n_qp']} | "
+            f"{stats['best_blind_pred']} | {stats['single_sentence_risk']} |"
+        )
+    lines.append("")
+
+    # ══════════════════════════════════════════════════════════════
+    # Section 10: Oracle Top-1 Diagnostic (NOT used for main metrics)
+    # ══════════════════════════════════════════════════════════════
+    lines.append("## 10. Oracle Top-1 Diagnostic\n")
     lines.append("> **NOT USED FOR MAIN METRICS. Diagnostic only.**\n")
 
     path_groups = defaultdict(list)
@@ -713,6 +808,8 @@ def main():
                         default="outputs/runs/path_filter_strict_pilot/paths.filtered.strict.jsonl")
     parser.add_argument("--relaxed_paths",
                         default="outputs/runs/path_filter_strict_pilot/paths.filtered.relaxed.jsonl")
+    parser.add_argument("--pool_path", default=None,
+                        help="Direct pool JSONL (bypasses strict+relaxed loading)")
     parser.add_argument("--output_dir", default=None,
                         help="Output dir. Default: outputs/runs/hard_rescue_pilot_<timestamp>")
     parser.add_argument("--k_candidates", type=int, default=3,
@@ -743,7 +840,13 @@ def main():
 
     # Step 1: Load Hard paths
     print("\n=== Step 1: Loading Hard paths ===")
-    paths = load_hard_paths(args.strict_paths, args.relaxed_paths, limit=args.limit_paths)
+    if args.pool_path:
+        paths = read_jsonl(args.pool_path)
+        if args.limit_paths:
+            paths = paths[:args.limit_paths]
+        print(f"  Loaded {len(paths)} paths from pool: {args.pool_path}")
+    else:
+        paths = load_hard_paths(args.strict_paths, args.relaxed_paths, limit=args.limit_paths)
     print(f"  Selected {len(paths)} Hard paths")
 
     # Write selected paths

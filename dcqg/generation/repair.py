@@ -15,6 +15,7 @@ REPAIRABLE_REASONS = {
     "only 1 prior events mentioned, need >=2",
     "path_binding", "path_coverage", "too_explicit",
     "double_question", "alignment_drift", "drift",
+    "bilingual_text", "word_repetition",
 }
 
 
@@ -39,6 +40,8 @@ def build_repair_prompt(item, failed_question, failure_reason, difficulty, cover
         "too short": "Write a longer, more complete question that includes event details",
         "excessive repetition": "Remove repeated words, write naturally",
         "looping trigram": "Write naturally, avoid repeating the same phrase patterns",
+        "bilingual_text": "Write the question in English ONLY. Do not include any non-English characters.",
+        "word_repetition": "Do not repeat the same word multiple times. Write naturally.",
     }
 
     if "banned phrase" in failure_reason:
@@ -124,33 +127,21 @@ def build_alignment_repair_prompt(item, failed_question, alignment_reason, diffi
     start = events[0]["trigger"]
     middle_triggers = [e["trigger"] for e in events[1:-1]]
 
-    return f"""Your question was rejected because it drifted away from the expected answer.
-
-Rejected question: "{failed_question}"
+    return f"""Your question drifted from the expected answer.
+Rejected: "{failed_question}"
 Problem: {alignment_reason}
 
-Your question asks about intermediate causes/actions. Rewrite it so the natural answer is exactly:
-"{answer_phrase}"
-
-Keep the question hard by using prior events as constraints, but the requested answer must be the final outcome/restriction/agreement/action.
+Rewrite so the natural answer is: "{answer_phrase}"
 
 Context:
 {ctx}
 
-Event path (reference): {path_str}
-Expected answer: "{answer_phrase}"
+RULES:
+1. Mention ONLY "{start}". Do NOT mention: {", ".join(f'"{t}"' for t in middle_triggers + [final])}
+2. Ask about FINAL result — NOT intermediate causes.
+3. Use a SINGLE "What" question. End with "?".
+4. Do NOT copy the answer phrase into the question.
 
-=== RULES ===
-1. You MAY mention the starting event "{start}" or describe it in other words.
-2. Do NOT mention intermediate events ({", ".join(f'"{t}"' for t in middle_triggers)}) or the final event "{final}".
-3. Ask about the FINAL RESULT/OUTCOME — NOT about intermediate causes or reactions.
-4. The question must require reading 3+ context sentences to answer.
-5. Do NOT use double questions (no "How did X, and what Y?").
-6. Use a SINGLE "What" question focused on the final answer.
-7. Do NOT copy the answer phrase into the question.
+GOOD example: "What [result] resulted from [entity]'s {start}?"
 
-GOOD: "What [specific result] resulted from [entity]'s {start}?"  (answer = "{answer_phrase}")
-BAD: "How did {start} influence [intermediate event]?"  (asks about intermediate, not final answer)
-BAD: "What outcry followed the destruction?"  (asks about intermediate event)
-
-Output: {{"question": "...", "answer": "{answer_phrase}", "reasoning_type": "alignment_repair", "hidden_path_events": ["event_id", ...], "expected_steps": "3+"}}"""
+Output ONLY one JSON object: {{"question": "..."}}"""

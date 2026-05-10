@@ -23,6 +23,10 @@ _DOUBLE_Q_PATTERNS = [
     _re.compile(r'(?i)^What\s+.+,\s*and\s+what\b'),
     _re.compile(r'(?i)^How\s+.+,\s*and\s+why\b'),
     _re.compile(r'(?i)\band\s+(what|how|why|when|where|who)\b.*\?'),
+    _re.compile(r',\s*and\s+how\b'),
+    _re.compile(r',\s*and\s+what\b'),
+    _re.compile(r'\band\s+how\s+did\b'),
+    _re.compile(r'\band\s+why\s+did\b'),
 ]
 
 

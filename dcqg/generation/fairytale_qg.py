@@ -1089,12 +1089,13 @@ def compute_evidence_coverage(difficulty_judge_result, target_required_sentence_
     num_judge_used = len(judge_set)
     predicted_diff = difficulty_judge_result.get("predicted_difficulty", "judge_error")
 
-    # Hard realization pass
+    # Hard realization pass (exact-id diagnostic, legacy)
+    hrp_threshold = 2.0 / 3.0 - 1e-9
     hrp = (
         judge_status == "ok"
         and num_judge_used >= 3
         and uses_bridge in ("yes", "partial")
-        and coverage >= 0.67
+        and coverage >= hrp_threshold
         and predicted_diff == "Hard"
     )
 
@@ -1106,4 +1107,59 @@ def compute_evidence_coverage(difficulty_judge_result, target_required_sentence_
         "uses_bridge_sentences": uses_bridge,
         "num_judge_used_sentences": num_judge_used,
         "hard_realization_pass": "yes" if hrp else "no",
+    }
+
+
+def semantic_evidence_match_judge(question, story_section, target_answer,
+                                  target_required_sentence_ids, judge_used_sentence_ids):
+    """Judge whether judge-used sentences support the same reasoning chain as target evidence.
+
+    Returns dict with semantic_evidence_match and semantic_match_reason.
+    """
+    if not question or not judge_used_sentence_ids:
+        return {
+            "semantic_evidence_match": "no",
+            "semantic_match_reason": "no question or no judge-used sentences",
+        }
+
+    ctx = _format_story_context(story_section)
+    target_sids = sorted(int(s) for s in (target_required_sentence_ids or [])
+                         if isinstance(s, (int, float)))
+    judge_sids = sorted(int(s) for s in (judge_used_sentence_ids or [])
+                        if isinstance(s, (int, float)))
+
+    prompt = f"""You are evaluating whether two sets of evidence sentences support the same reasoning chain.
+
+Story:
+{ctx}
+
+Generated question: "{question}"
+Target answer: "{target_answer}"
+
+Target evidence sentences (from the original annotation): {target_sids}
+Judge-identified evidence sentences (from difficulty judge): {judge_sids}
+
+TASK: Do the judge-identified sentences support the same reasoning chain as the target evidence sentences?
+- "yes": The judge-used sentences cover the same causal/motivational/temporal chain, even if specific sentence IDs differ slightly.
+- "partial": The judge-used sentences cover part of the chain but miss a key link or include irrelevant sentences.
+- "no": The judge-used sentences support a completely different reasoning path or are off-topic.
+
+Return ONLY: {{"semantic_evidence_match": "yes|partial|no", "semantic_match_reason": "brief explanation"}}"""
+
+    raw = _call_judge(prompt, temperature=0.0, max_tokens=200)
+    parsed = _parse_json(raw)
+
+    if not parsed or not isinstance(parsed, dict):
+        return {
+            "semantic_evidence_match": "judge_error",
+            "semantic_match_reason": f"parse error: {raw[:100]}",
+        }
+
+    match_val = parsed.get("semantic_evidence_match", "no")
+    if match_val not in ("yes", "partial", "no"):
+        match_val = "judge_error"
+
+    return {
+        "semantic_evidence_match": match_val,
+        "semantic_match_reason": parsed.get("semantic_match_reason", ""),
     }

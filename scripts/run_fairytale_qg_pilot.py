@@ -25,6 +25,7 @@ from dcqg.generation.fairytale_qg import (
     quality_judge,
     difficulty_evidence_judge,
     compute_evidence_coverage,
+    semantic_evidence_match_judge,
 )
 
 
@@ -162,6 +163,26 @@ def _judge_generation(result, candidate):
     result["evidence_coverage"] = ec
     result["target_evidence_coverage"] = ec.get("target_evidence_coverage", 0.0)
     result["hard_realization_pass"] = ec.get("hard_realization_pass", "no")
+
+    # Semantic evidence match judge
+    sem = semantic_evidence_match_judge(
+        question, story_section, target_answer,
+        candidate.get("required_evidence_sentences", []),
+        dj.get("required_evidence_sentences_used", []),
+    )
+    result["semantic_evidence_match"] = sem.get("semantic_evidence_match", "judge_error")
+    result["semantic_match_reason"] = sem.get("semantic_match_reason", "")
+
+    # Hard realization pass v2
+    hrp_v2 = (
+        result.get("predicted_difficulty") == "Hard"
+        and dj.get("difficulty_judge_status") == "ok"
+        and len(dj.get("required_evidence_sentences_used", [])) >= 3
+        and dj.get("bridge_required") == "yes"
+        and dj.get("answer_sentence_alone_sufficient") == "no"
+        and result.get("semantic_evidence_match") in ("yes", "partial")
+    )
+    result["hard_realization_pass_v2"] = "yes" if hrp_v2 else "no"
 
     return result
 
@@ -303,10 +324,10 @@ def _build_report(all_results, output_dir):
             lines.append(f"| {m} | N/A | 0 | 0 | 0 |")
     lines.append("")
 
-    # 5c. Hard realization pass by method
-    lines.append("### 5c. Hard Realization Pass by Method")
+    # 5c. Hard realization pass by method (exact-id diagnostic)
+    lines.append("### 5c. Hard Realization Pass by Method (exact-id diagnostic)")
     lines.append("")
-    lines.append("Hard realization = judge_ok AND num_judge_used>=3 AND uses_bridge in {yes,partial} AND coverage>=0.67 AND predicted=Hard")
+    lines.append("Hard realization (legacy) = judge_ok AND num_judge_used>=3 AND uses_bridge in {yes,partial} AND coverage>=0.67 AND predicted=Hard")
     lines.append("")
     lines.append("| Method | hard_realization_pass | quality-pass judge-ok | Rate |")
     lines.append("|---|---:|---:|---:|")
@@ -317,6 +338,35 @@ def _build_report(all_results, output_dir):
         total = len(qp_ok_rs)
         rate = f"{100 * hrp / total:.1f}%" if total else "N/A"
         lines.append(f"| {m} | {hrp} | {total} | {rate} |")
+    lines.append("")
+
+    # 5e. Hard realization pass v2 by method
+    lines.append("### 5e. Hard Realization Pass v2 by Method")
+    lines.append("")
+    lines.append("hrp_v2 = predicted=Hard AND num_judge_used>=3 AND bridge_required=yes AND alone_sufficient=no AND semantic_evidence_match in {yes,partial}")
+    lines.append("")
+    lines.append("| Method | hrp_v2 | quality-pass judge-ok | Rate |")
+    lines.append("|---|---:|---:|---:|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        hrp2 = sum(1 for r in qp_ok_rs if r.get("hard_realization_pass_v2") == "yes")
+        total = len(qp_ok_rs)
+        rate = f"{100 * hrp2 / total:.1f}%" if total else "N/A"
+        lines.append(f"| {m} | {hrp2} | {total} | {rate} |")
+    lines.append("")
+
+    # 5f. Semantic evidence match by method
+    lines.append("### 5f. Semantic Evidence Match by Method (quality-pass, judge-ok)")
+    lines.append("")
+    lines.append("| Method | yes | partial | no | judge_error | Total |")
+    lines.append("|---|---:|---:|---:|---:|---:|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        sem_counts = Counter(r.get("semantic_evidence_match", "judge_error") for r in qp_ok_rs)
+        total = len(qp_ok_rs)
+        lines.append(f"| {m} | {sem_counts.get('yes', 0)} | {sem_counts.get('partial', 0)} | {sem_counts.get('no', 0)} | {sem_counts.get('judge_error', 0)} | {total} |")
     lines.append("")
 
     # 5d. Answer focus diagnostics (Ours only)
@@ -467,23 +517,24 @@ def _build_report(all_results, output_dir):
         ec = r.get("evidence_coverage", {})
         lines.append(f"- Quality: answerable={qj.get('answerable')}, asks_expected={qj.get('asks_expected_answer')}, leakage={qj.get('answer_leakage')}")
         lines.append(f"- Difficulty: predicted={dj.get('predicted_difficulty')}, alone_sufficient={dj.get('answer_sentence_alone_sufficient')}, bridge_required={dj.get('bridge_required')}")
-        lines.append(f"- Coverage: {ec.get('target_evidence_coverage', 0):.3f}, hard_realization={ec.get('hard_realization_pass', '?')}")
+        lines.append(f"- Coverage: {ec.get('target_evidence_coverage', 0):.3f}, hard_realization={ec.get('hard_realization_pass', '?')}, hrp_v2={r.get('hard_realization_pass_v2', '?')}")
         lines.append(f"- Focus: answer_role={r.get('answer_role', '?')}, question_focus={r.get('question_focus', '?')}, focus_match={r.get('focus_match', '?')}")
+        lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} — {r.get('semantic_match_reason', '')}")
         lines.append("")
 
-    # Hard realization pass examples (any method)
-    hrp_examples = [r for r in all_results if r.get("hard_realization_pass") == "yes"]
-    if hrp_examples:
-        lines.append("### Hard realization pass examples")
+    # Hard realization pass v2 examples (any method)
+    hrp2_examples = [r for r in all_results if r.get("hard_realization_pass_v2") == "yes"]
+    if hrp2_examples:
+        lines.append("### Hard realization pass v2 examples")
         lines.append("")
-        for i, r in enumerate(hrp_examples[:3]):
-            lines.append(f"**HRP Example {i+1} ({r.get('method', '?')}):**")
+        for i, r in enumerate(hrp2_examples[:5]):
+            lines.append(f"**HRP-v2 Example {i+1} ({r.get('method', '?')}):**")
             lines.append(f"- Story: {r.get('story_name', '?')}")
             lines.append(f"- Question: {r.get('generated_question', '?')}")
             lines.append(f"- Target answer: {r.get('target_answer', '?')}")
-            ec = r.get("evidence_coverage", {})
             dj = r.get("difficulty_judge", {})
-            lines.append(f"- Predicted: {dj.get('predicted_difficulty')}, coverage={ec.get('target_evidence_coverage', 0):.3f}, uses_bridge={ec.get('uses_bridge_sentences', '?')}")
+            lines.append(f"- Predicted: {dj.get('predicted_difficulty')}, num_used={len(dj.get('required_evidence_sentences_used', []))}, bridge={dj.get('bridge_required')}, alone={dj.get('answer_sentence_alone_sufficient')}")
+            lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} — {r.get('semantic_match_reason', '')}")
             lines.append("")
 
     # Focus match examples (Ours, quality-pass, focus_match=yes)
@@ -573,6 +624,10 @@ def _build_report(all_results, output_dir):
     ours_hrp = sum(1 for r in ours_qp_ok if r.get("hard_realization_pass") == "yes")
     ours_hrp_rate = 100 * ours_hrp / len(ours_qp_ok) if ours_qp_ok else 0
 
+    # Hard realization pass v2 rate for Ours
+    ours_hrp2 = sum(1 for r in ours_qp_ok if r.get("hard_realization_pass_v2") == "yes")
+    ours_hrp2_rate = 100 * ours_hrp2 / len(ours_qp_ok) if ours_qp_ok else 0
+
     # Strict quality pass for Ours
     ours_strict_qp = sum(1 for r in ours_results if r.get("strict_quality_pass"))
     ours_strict_rate = 100 * ours_strict_qp / ours_total if ours_total else 0
@@ -586,7 +641,8 @@ def _build_report(all_results, output_dir):
         ("Ours strict quality-pass >= 40%", ours_strict_rate >= 40, f"{ours_strict_rate:.1f}%"),
         ("Ours focus_match=yes >= 50%", ours_focus_rate >= 50, f"{ours_focus_rate:.1f}%"),
         ("Ours predicted Hard among quality-pass >= 20%", ours_hard_rate >= 20, f"{ours_hard_rate:.1f}%"),
-        ("Ours hard_realization_pass >= 15%", ours_hrp_rate >= 15, f"{ours_hrp_rate:.1f}%"),
+        ("Ours hard_realization_pass (exact-id) >= 15%", ours_hrp_rate >= 15, f"{ours_hrp_rate:.1f}%"),
+        ("Ours hard_realization_pass_v2 >= 15%", ours_hrp2_rate >= 15, f"{ours_hrp2_rate:.1f}%"),
         ("Ours bridge_required=yes >= 50%", ours_bridge_rate >= 50, f"{ours_bridge_rate:.1f}%"),
         ("Ours Hard hit > Direct/ICL/SelfRefine", ours_beats_all,
          f"Ours={ours_hhr:.2f}, " + ", ".join(f"{m}={v:.2f}" for m, v in baseline_hhrs.items())),

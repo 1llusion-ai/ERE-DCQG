@@ -337,6 +337,7 @@ class FairytaleEvidenceAuditor:
                 "story_name": rec.get("story_name", ""),
                 "story_section": rec.get("story_section", ""),
                 "question": rec.get("question", ""),
+                "answer": rec.get("answer1", ""),
                 "answer1": rec.get("answer1", ""),
                 "answer2": rec.get("answer2", ""),
                 "local_or_sum": rec.get("local_or_sum", ""),
@@ -366,6 +367,7 @@ class FairytaleEvidenceAuditor:
                     "necessity_type": a["necessity_type"],
                     "evidence_necessity_reason": a["evidence_necessity_reason"],
                     "assessment_status": "ok",
+                    "fairytale_evidence_status": "ok",
                     "contradiction_count": n_contra,
                 })
             else:
@@ -381,6 +383,7 @@ class FairytaleEvidenceAuditor:
                     "necessity_type": "background_context",
                     "evidence_necessity_reason": "assessment_failed",
                     "assessment_status": "llm_error",
+                    "fairytale_evidence_status": "llm_error",
                     "contradiction_count": 0,
                 })
 

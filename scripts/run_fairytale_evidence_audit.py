@@ -21,7 +21,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from dcqg.datasets.fairytaleqa_loader import load_fairytaleqa
-from dcqg.path.fairytale_evidence_audit import FairytaleEvidenceAuditor
+from dcqg.path.fairytale_evidence_audit import FairytaleEvidenceAuditor, _split_sentences
 
 
 def parse_args():
@@ -104,6 +104,34 @@ def _write_report(candidates, output_path, load_info):
     # --- Consistency diagnostics ---
     contradictions = sum(c.get("contradiction_count", 0) for c in candidates)
     parse_fail = sum(1 for c in candidates if not c.get("fairytale_evidence_parse_ok", True))
+    missing_trace = sum(1 for c in candidates
+                        if not c.get("fairytale_evidence_prompt")
+                        or not c.get("fairytale_evidence_raw"))
+
+    # Count invalid required_evidence_sentences (out of range)
+    invalid_req_count = 0
+    for c in candidates:
+        num_sents = c.get("num_sentences_in_section", 0)
+        for sid in c.get("required_evidence_sentences", []):
+            if sid >= num_sents:
+                invalid_req_count += 1
+
+    # Count Hard candidates that violate Hard classification rules
+    hard_violation = 0
+    for c in candidates:
+        if c.get("evidence_difficulty") != "Hard":
+            continue
+        suff = c.get("answer_sentence_alone_sufficient", "yes")
+        num_req = c.get("num_required_sentences", 1)
+        removal = c.get("bridge_removal_effect", "none")
+        nec_type = c.get("necessity_type", "background_context")
+        if not (suff == "no"
+                and num_req >= 3
+                and removal in ("ambiguous", "unanswerable")
+                and nec_type in ("answer_identification", "disambiguation",
+                                 "causal_bridge", "temporal_bridge",
+                                 "motivation_bridge", "summary_synthesis")):
+            hard_violation += 1
 
     lines = []
     lines.append("# FairytaleQA Evidence Audit Report")
@@ -135,7 +163,7 @@ def _write_report(candidates, output_path, load_info):
     # Section 3: Fairytale labels vs evidence difficulty
     lines.append("## 3. Fairytale Labels vs Evidence Difficulty")
     lines.append("")
-    lines.append("### 3a. local-or-sum × difficulty")
+    lines.append("### 3a. local-or-sum x difficulty")
     lines.append("")
     lines.append("| local-or-sum | Easy | Medium | Hard | Total |")
     lines.append("|---|---:|---:|---:|---:|")
@@ -145,7 +173,7 @@ def _write_report(candidates, output_path, load_info):
         lines.append(f"| {los} | {d.get('Easy', 0)} | {d.get('Medium', 0)} | {d.get('Hard', 0)} | {t} |")
     lines.append("")
 
-    lines.append("### 3b. ex-or-im × difficulty")
+    lines.append("### 3b. ex-or-im x difficulty")
     lines.append("")
     lines.append("| ex-or-im | Easy | Medium | Hard | Total |")
     lines.append("|---|---:|---:|---:|---:|")
@@ -155,7 +183,7 @@ def _write_report(candidates, output_path, load_info):
         lines.append(f"| {eoi} | {d.get('Easy', 0)} | {d.get('Medium', 0)} | {d.get('Hard', 0)} | {t} |")
     lines.append("")
 
-    lines.append("### 3c. attribute × difficulty")
+    lines.append("### 3c. attribute x difficulty")
     lines.append("")
     lines.append("| attribute | Easy | Medium | Hard | Total |")
     lines.append("|---|---:|---:|---:|---:|")
@@ -225,6 +253,9 @@ def _write_report(candidates, output_path, load_info):
     lines.append("|---|---:|")
     lines.append(f"| Parse failures | {parse_fail} |")
     lines.append(f"| Contradictions fixed | {contradictions} |")
+    lines.append(f"| Missing trace fields | {missing_trace} |")
+    lines.append(f"| Invalid required sentence IDs | {invalid_req_count} |")
+    lines.append(f"| Hard validation violations | {hard_violation} |")
     lines.append(f"| Status = ok | {status_counts.get('ok', 0)} |")
     lines.append(f"| Status = llm_error | {status_counts.get('llm_error', 0)} |")
     lines.append("")
@@ -266,9 +297,9 @@ def _write_report(candidates, output_path, load_info):
             lines.append(f"- evidence_necessity_reason: {c.get('evidence_necessity_reason', 'N/A')}")
             lines.append("")
 
-            # Show evidence sentences
+            # Show evidence sentences (must use same splitter as auditor)
             section = c.get("story_section", "")
-            sentences = section.split(". ") if section else []
+            sentences = _split_sentences(section)
             req_ids = c.get("required_evidence_sentences", [])
             bridge_ids = c.get("bridge_sentence_ids", [])
             if req_ids:

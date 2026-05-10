@@ -38,7 +38,58 @@ def parse_args():
                    help="Output directory (default: auto-generated)")
     p.add_argument("--resume", action="store_true",
                    help="Resume from existing partial output")
+    # Targeted filtering for Hard candidate pool
+    p.add_argument("--filter_implicit", action="store_true",
+                   help="Only audit implicit (ex_or_im=implicit) QA pairs")
+    p.add_argument("--filter_attributes", default=None,
+                   help="Comma-separated attribute whitelist "
+                        "(e.g. 'causal relationship,prediction,feeling,action')")
+    p.add_argument("--question_prefix", default=None,
+                   help="Comma-separated question prefixes to keep "
+                        "(e.g. 'why,how,what will,what caused')")
     return p.parse_args()
+
+
+def _question_prefix(question):
+    """Extract question prefix (first 1-2 words, lowercased)."""
+    q = question.strip().lower()
+    for prefix in ["what will", "what happened after", "what caused",
+                    "what did", "what is", "what are", "what was",
+                    "how did", "how does", "how can", "how will",
+                    "why did", "why does", "why was", "why were",
+                    "who did", "who was", "when did", "where did"]:
+        if q.startswith(prefix):
+            return prefix
+    # Fallback to first word
+    return q.split()[0] if q else "other"
+
+
+def _apply_filters(records, filter_implicit, filter_attributes, question_prefix):
+    """Apply targeted filters to QA records. Returns (filtered, filter_info)."""
+    filtered = list(records)
+    criteria = []
+
+    if filter_implicit:
+        filtered = [r for r in filtered if r.get("ex_or_im", "").lower() == "implicit"]
+        criteria.append("ex_or_im=implicit")
+
+    if filter_attributes:
+        attrs = {a.strip().lower() for a in filter_attributes.split(",")}
+        filtered = [r for r in filtered if r.get("attribute", "").lower() in attrs]
+        criteria.append(f"attribute in {sorted(attrs)}")
+
+    if question_prefix:
+        prefixes = [p.strip().lower() for p in question_prefix.split(",")]
+        filtered = [r for r in filtered
+                    if any(r.get("question", "").lower().startswith(px) for px in prefixes)]
+        criteria.append(f"question_prefix in {sorted(prefixes)}")
+
+    filter_info = {
+        "criteria": criteria,
+        "pool_before_filter": len(records),
+        "pool_after_filter": len(filtered),
+    }
+    return filtered, filter_info
 
 
 def _default_output_dir():
@@ -46,7 +97,7 @@ def _default_output_dir():
     return f"outputs/runs/fairytale_evidence_audit_{ts}"
 
 
-def _write_report(candidates, output_path, load_info):
+def _write_report(candidates, output_path, load_info, filter_info=None):
     """Write the audit report."""
     total = len(candidates)
     if total == 0:
@@ -97,6 +148,8 @@ def _write_report(candidates, output_path, load_info):
     hard_cands = [c for c in candidates if c.get("evidence_difficulty") == "Hard"]
     hard_reasoning = Counter(c.get("reasoning_operation", "N/A") for c in hard_cands)
     hard_nec_type = Counter(c.get("necessity_type", "N/A") for c in hard_cands)
+    hard_by_attr = Counter(c.get("attribute", "N/A") for c in hard_cands)
+    hard_by_prefix = Counter(_question_prefix(c.get("question", "")) for c in hard_cands)
 
     # --- Status ---
     status_counts = Counter(c.get("assessment_status", "N/A") for c in candidates)
@@ -145,6 +198,10 @@ def _write_report(candidates, output_path, load_info):
     lines.append("|---|---|")
     lines.append(f"| Split | {load_info.get('split', 'N/A')} |")
     lines.append(f"| Total QA pairs loaded | {load_info.get('total_loaded', 0)} |")
+    if filter_info and filter_info.get("criteria"):
+        lines.append(f"| Pool before filter | {filter_info['pool_before_filter']} |")
+        lines.append(f"| Pool after filter | {filter_info['pool_after_filter']} |")
+        lines.append(f"| Filter criteria | {'; '.join(filter_info['criteria'])} |")
     lines.append(f"| QA pairs assessed | {total} |")
     lines.append(f"| Fields available | {load_info.get('fields_available', 'N/A')} |")
     lines.append(f"| Source | {load_info.get('source', 'N/A')} |")
@@ -214,6 +271,22 @@ def _write_report(candidates, output_path, load_info):
     lines.append("|---|---:|")
     for nt in sorted(hard_nec_type.keys()):
         lines.append(f"| {nt} | {hard_nec_type[nt]} |")
+    lines.append("")
+
+    lines.append("### Hard by attribute")
+    lines.append("")
+    lines.append("| Attribute | Count |")
+    lines.append("|---|---:|")
+    for attr in sorted(hard_by_attr.keys()):
+        lines.append(f"| {attr} | {hard_by_attr[attr]} |")
+    lines.append("")
+
+    lines.append("### Hard by question prefix")
+    lines.append("")
+    lines.append("| Prefix | Count |")
+    lines.append("|---|---:|")
+    for px in sorted(hard_by_prefix.keys()):
+        lines.append(f"| {px} | {hard_by_prefix[px]} |")
     lines.append("")
 
     # Section 5: Answer sufficiency diagnostics
@@ -368,23 +441,48 @@ def main():
     output_jsonl = os.path.join(output_dir, "candidates.jsonl")
     report_path = os.path.join(output_dir, "audit_report.md")
 
+    # Build filter summary for display
+    has_filters = args.filter_implicit or args.filter_attributes or args.question_prefix
+    filter_desc = []
+    if args.filter_implicit:
+        filter_desc.append("implicit")
+    if args.filter_attributes:
+        filter_desc.append(f"attr={args.filter_attributes}")
+    if args.question_prefix:
+        filter_desc.append(f"prefix={args.question_prefix}")
+
     print(f"=== FairytaleQA Evidence Audit ===")
     print(f"Split:        {args.split}")
     print(f"Limit:        {args.limit} QA pairs")
+    print(f"Filters:      {'; '.join(filter_desc) if filter_desc else 'none'}")
     print(f"Model:        {args.model or '(default JUDGE_MODEL)'}")
     print(f"Output dir:   {output_dir}")
     print()
 
-    # Load data
+    # Load full split (no limit) to get accurate pool size for filtering
     print("Loading FairytaleQA dataset...")
     try:
-        all_records = load_fairytaleqa(split=args.split, limit=args.limit)
+        all_records = load_fairytaleqa(split=args.split, limit=None)
     except RuntimeError as e:
         print(f"ERROR: {e}")
         sys.exit(1)
 
     total_loaded = len(all_records)
-    print(f"Loaded {total_loaded} QA pairs")
+    print(f"Loaded {total_loaded} QA pairs from {args.split}")
+
+    # Apply targeted filters
+    filter_info = {"criteria": [], "pool_before_filter": total_loaded, "pool_after_filter": total_loaded}
+    if has_filters:
+        all_records, filter_info = _apply_filters(
+            all_records, args.filter_implicit, args.filter_attributes, args.question_prefix
+        )
+        print(f"After filter: {len(all_records)} QA pairs "
+              f"(criteria: {'; '.join(filter_info['criteria'])})")
+
+    # Apply limit
+    if args.limit and len(all_records) > args.limit:
+        all_records = all_records[:args.limit]
+    print(f"Will audit:   {len(all_records)} QA pairs")
 
     # Determine available fields
     if all_records:
@@ -483,7 +581,7 @@ def main():
     print(f"  Medium: {diff_counts.get('Medium', 0)}")
     print(f"  Hard:   {diff_counts.get('Hard', 0)}")
 
-    _write_report(all_candidates, report_path, load_info)
+    _write_report(all_candidates, report_path, load_info, filter_info)
     print(f"\nReport: {report_path}")
     print(f"Candidates: {output_jsonl}")
 

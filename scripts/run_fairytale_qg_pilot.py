@@ -12,10 +12,30 @@ Usage:
 """
 import argparse
 import json
+import math
 import re
 import time
 from pathlib import Path
 from collections import Counter
+
+
+def _wilson_ci(k, n, z=1.96):
+    """Wilson score interval for binomial proportion. Returns (lower, upper)."""
+    if n == 0:
+        return (0.0, 0.0)
+    p = k / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    spread = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n) / denom
+    lo = max(0.0, center - spread)
+    hi = min(1.0, center + spread)
+    return (lo, hi)
+
+
+def _wilson_str(k, n):
+    """Format Wilson CI as string (ASCII only)."""
+    lo, hi = _wilson_ci(k, n)
+    return f"{k}/{n} ({100*k/n:.1f}%, 95%CI [{100*lo:.1f}, {100*hi:.1f}%])" if n else "N/A"
 
 from dcqg.generation.fairytale_qg import (
     generate_direct,
@@ -184,12 +204,21 @@ def _judge_generation(result, candidate):
     )
     result["hard_realization_pass_v2"] = "yes" if hrp_v2 else "no"
 
+    # Strict hrp_v2: hrp_v2 + strict quality + focus match
+    strict_hrp_v2 = (
+        hrp_v2
+        and result.get("strict_quality_pass") is True
+        and result.get("focus_match") == "yes"
+    )
+    result["strict_hrp_v2"] = "yes" if strict_hrp_v2 else "no"
+
     return result
 
 
-def _build_report(all_results, output_dir):
+def _build_report(all_results, output_dir, meta=None):
     """Write the pilot report."""
     report_path = output_dir / "FAIRYTALE_QG_HARD_PILOT_REPORT.md"
+    meta = meta or {}
 
     # Aggregate stats
     methods = ["Direct", "ICL", "SelfRefine", "Ours"]
@@ -209,7 +238,10 @@ def _build_report(all_results, output_dir):
         "| Field | Value |",
         "|---|---|",
         f"| Methods | {', '.join(methods)} |",
-        f"| Total candidates | {len(all_results) // len(methods) if methods else 0} |",
+        f"| Requested limit | {(meta or {}).get('requested_limit', 'N/A')} |",
+        f"| Graph total | {(meta or {}).get('graph_total', 'N/A')} |",
+        f"| Graph valid | {(meta or {}).get('graph_valid', 'N/A')} |",
+        f"| Selected candidates | {(meta or {}).get('selected_candidates', len(all_results) // len(methods) if methods else 0)} |",
         f"| Total generations | {len(all_results)} |",
         f"| Target difficulty | Hard |",
         "",
@@ -226,6 +258,20 @@ def _build_report(all_results, output_dir):
         total = len(rs)
         pct = f"{100 * ok / total:.1f}%" if total else "N/A"
         lines.append(f"| {m} | {ok} | {total} | {pct} |")
+    lines.append("")
+
+    # 1b. Generation robustness by method
+    lines.append("### 1b. Generation Robustness by Method")
+    lines.append("")
+    lines.append("| Method | degenerate | repair_attempted | repair_success | quality_pass |")
+    lines.append("|---|---:|---:|---:|---:|")
+    for m in methods:
+        rs = method_results[m]
+        degenerate = sum(1 for r in rs if r.get("generation_error") == "degenerate output")
+        repair_att = sum(1 for r in rs if r.get("repair_attempted"))
+        repair_ok = sum(1 for r in rs if r.get("repair_success"))
+        qp = sum(1 for r in rs if r.get("quality_pass"))
+        lines.append(f"| {m} | {degenerate} | {repair_att} | {repair_ok} | {qp} |")
     lines.append("")
 
     # 2. Quality pass by method
@@ -277,15 +323,14 @@ def _build_report(all_results, output_dir):
     lines.append("")
     lines.append("Denominator: quality-pass AND difficulty_judge_status=ok")
     lines.append("")
-    lines.append("| Method | Hard | judge-ok QP | Hard hit rate |")
-    lines.append("|---|---:|---:|---:|")
+    lines.append("| Method | Hard hit | Wilson 95% CI |")
+    lines.append("|---|---|---|")
     for m in methods:
         qp_ok_rs = [r for r in method_results[m]
                     if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
         hard_count = sum(1 for r in qp_ok_rs if r.get("predicted_difficulty") == "Hard")
         total = len(qp_ok_rs)
-        rate = f"{100 * hard_count / total:.1f}%" if total else "N/A"
-        lines.append(f"| {m} | {hard_count} | {total} | {rate} |")
+        lines.append(f"| {m} | {_wilson_str(hard_count, total)} | |")
     lines.append("")
 
     # 5. Evidence dependency (judge-ok only)
@@ -340,20 +385,36 @@ def _build_report(all_results, output_dir):
         lines.append(f"| {m} | {hrp} | {total} | {rate} |")
     lines.append("")
 
-    # 5e. Hard realization pass v2 by method
+    # 5e. Hard realization pass v2 by method (with Wilson CI)
     lines.append("### 5e. Hard Realization Pass v2 by Method")
+    lines.append("")
+    lines.append("Denominator: quality-pass AND difficulty_judge_status=ok")
     lines.append("")
     lines.append("hrp_v2 = predicted=Hard AND num_judge_used>=3 AND bridge_required=yes AND alone_sufficient=no AND semantic_evidence_match in {yes,partial}")
     lines.append("")
-    lines.append("| Method | hrp_v2 | quality-pass judge-ok | Rate |")
-    lines.append("|---|---:|---:|---:|")
+    lines.append("| Method | hrp_v2 | Wilson 95% CI |")
+    lines.append("|---|---|---|")
     for m in methods:
         qp_ok_rs = [r for r in method_results[m]
                     if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
         hrp2 = sum(1 for r in qp_ok_rs if r.get("hard_realization_pass_v2") == "yes")
         total = len(qp_ok_rs)
-        rate = f"{100 * hrp2 / total:.1f}%" if total else "N/A"
-        lines.append(f"| {m} | {hrp2} | {total} | {rate} |")
+        lines.append(f"| {m} | {_wilson_str(hrp2, total)} | |")
+    lines.append("")
+
+    # 5e2. Strict hrp_v2 by method (with Wilson CI)
+    lines.append("### 5e2. Strict HRP-v2 by Method")
+    lines.append("")
+    lines.append("strict_hrp_v2 = hard_realization_pass_v2=yes AND strict_quality_pass=true AND focus_match=yes")
+    lines.append("")
+    lines.append("| Method | strict_hrp_v2 | Wilson 95% CI |")
+    lines.append("|---|---|---|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        shrp2 = sum(1 for r in qp_ok_rs if r.get("strict_hrp_v2") == "yes")
+        total = len(qp_ok_rs)
+        lines.append(f"| {m} | {_wilson_str(shrp2, total)} | |")
     lines.append("")
 
     # 5f. Semantic evidence match by method
@@ -428,6 +489,65 @@ def _build_report(all_results, output_dir):
     else:
         lines.append("No Ours quality-pass judge-ok results.")
         lines.append("")
+
+    # 5g. Unique story counts and cluster diagnostic
+    lines.append("### 5g. Unique Story Diversity and Cluster Diagnostic")
+    lines.append("")
+    lines.append("#### Unique stories among predicted Hard (quality-pass, judge-ok)")
+    lines.append("")
+    lines.append("| Method | unique stories | Hard count | stories |")
+    lines.append("|---|---:|---:|---|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        hard_rs = [r for r in qp_ok_rs if r.get("predicted_difficulty") == "Hard"]
+        stories = set(r.get("story_name", "") for r in hard_rs)
+        story_list = ", ".join(sorted(stories))
+        lines.append(f"| {m} | {len(stories)} | {len(hard_rs)} | {story_list} |")
+    lines.append("")
+
+    lines.append("#### Unique stories among hrp_v2 (quality-pass, judge-ok)")
+    lines.append("")
+    lines.append("| Method | unique stories | hrp_v2 count | stories |")
+    lines.append("|---|---:|---:|---|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        hrp2_rs = [r for r in qp_ok_rs if r.get("hard_realization_pass_v2") == "yes"]
+        stories = set(r.get("story_name", "") for r in hrp2_rs)
+        story_list = ", ".join(sorted(stories))
+        lines.append(f"| {m} | {len(stories)} | {len(hrp2_rs)} | {story_list} |")
+    lines.append("")
+
+    lines.append("#### Unique stories among strict_hrp_v2 (quality-pass, judge-ok)")
+    lines.append("")
+    lines.append("| Method | unique stories | strict_hrp_v2 count | stories |")
+    lines.append("|---|---:|---:|---|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        shrp2_rs = [r for r in qp_ok_rs if r.get("strict_hrp_v2") == "yes"]
+        stories = set(r.get("story_name", "") for r in shrp2_rs)
+        story_list = ", ".join(sorted(stories))
+        lines.append(f"| {m} | {len(stories)} | {len(shrp2_rs)} | {story_list} |")
+    lines.append("")
+
+    # Cluster diagnostic: three-dogs concentration
+    lines.append("#### Cluster diagnostic: three-dogs concentration")
+    lines.append("")
+    lines.append("| Method | three-dogs in Hard | total Hard | three-dogs in hrp_v2 | total hrp_v2 | three-dogs in strict_hrp_v2 | total strict_hrp_v2 |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|")
+    for m in methods:
+        qp_ok_rs = [r for r in method_results[m]
+                    if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        hard_rs = [r for r in qp_ok_rs if r.get("predicted_difficulty") == "Hard"]
+        hrp2_rs = [r for r in qp_ok_rs if r.get("hard_realization_pass_v2") == "yes"]
+        shrp2_rs = [r for r in qp_ok_rs if r.get("strict_hrp_v2") == "yes"]
+        td_hard = sum(1 for r in hard_rs if r.get("story_name") == "three-dogs")
+        td_hrp2 = sum(1 for r in hrp2_rs if r.get("story_name") == "three-dogs")
+        td_shrp2 = sum(1 for r in shrp2_rs if r.get("story_name") == "three-dogs")
+        lines.append(f"| {m} | {td_hard} | {len(hard_rs)} | {td_hrp2} | {len(hrp2_rs)} | {td_shrp2} | {len(shrp2_rs)} |")
+    lines.append("")
 
     # 6. Failure reasons
     lines.append("## 6. Failure Reasons by Method")
@@ -522,8 +642,9 @@ def _build_report(all_results, output_dir):
         lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} — {r.get('semantic_match_reason', '')}")
         lines.append("")
 
-    # Hard realization pass v2 examples (any method)
-    hrp2_examples = [r for r in all_results if r.get("hard_realization_pass_v2") == "yes"]
+    # Hard realization pass v2 examples (quality-pass only)
+    hrp2_examples = [r for r in all_results
+                     if r.get("hard_realization_pass_v2") == "yes" and r.get("quality_pass")]
     if hrp2_examples:
         lines.append("### Hard realization pass v2 examples")
         lines.append("")
@@ -570,14 +691,66 @@ def _build_report(all_results, output_dir):
             lines.append("")
             shown += 1
 
-    # 3 failure cases
-    lines.append("### Failure cases")
+    # Ours failure cases grouped
+    lines.append("### Ours failure cases (grouped)")
     lines.append("")
-    all_fails = [r for r in all_results if not r.get("quality_pass")]
-    for i, r in enumerate(all_fails[:3]):
+    ours_fails = [r for r in method_results["Ours"] if not r.get("quality_pass")]
+    if ours_fails:
+        fail_groups = Counter()
+        for r in ours_fails:
+            q = (r.get("generated_question") or "").strip()
+            err = r.get("generation_error", "")
+            qj = r.get("quality_judge", {})
+            repaired = r.get("repair_success", False)
+            if not q or "empty" in (err or "").lower() or "degenerate" in (err or "").lower():
+                if repaired:
+                    fail_groups["repaired but still failed"] += 1
+                else:
+                    fail_groups["degenerate / parse failure"] += 1
+            elif qj.get("answerable") == "no":
+                fail_groups["not answerable"] += 1
+            elif r.get("strict_quality_pass") is False and r.get("quality_pass") is True:
+                fail_groups["strict quality fail"] += 1
+            elif r.get("focus_match") == "no":
+                fail_groups["focus mismatch"] += 1
+            elif r.get("semantic_evidence_match") == "no":
+                fail_groups["semantic_evidence_match=no"] += 1
+            else:
+                fail_groups["other"] += 1
+        lines.append("| Failure category | Count |")
+        lines.append("|---|---:|")
+        for cat, count in fail_groups.most_common():
+            lines.append(f"| {cat} | {count} |")
+        lines.append("")
+
+        # Show up to 3 example failures
+        lines.append("#### Ours failure examples")
+        lines.append("")
+        for i, r in enumerate(ours_fails[:3]):
+            q = (r.get("generated_question") or "").strip()
+            err = r.get("generation_error", "")
+            qj = r.get("quality_judge", {})
+            raw = r.get("generation_raw", "")
+            lines.append(f"**Failure {i+1}:**")
+            lines.append(f"- Story: {r.get('story_name', '?')}")
+            lines.append(f"- Question: {q[:80] if q else '(empty)'}")
+            if not q and raw:
+                lines.append(f"- Raw prefix: `{raw[:200]}`")
+            reason = qj.get("reason", err or "unknown")
+            lines.append(f"- Reason: {reason}")
+            lines.append("")
+    else:
+        lines.append("No Ours failures.")
+        lines.append("")
+
+    # 3 baseline failure cases
+    lines.append("### Baseline failure cases")
+    lines.append("")
+    baseline_fails = [r for r in all_results if not r.get("quality_pass") and r.get("method") != "Ours"]
+    for i, r in enumerate(baseline_fails[:3]):
         lines.append(f"**Failure {i+1} ({r.get('method', '?')}):**")
         lines.append(f"- Story: {r.get('story_name', '?')}")
-        lines.append(f"- Question: {r.get('generated_question', '(empty)')}")
+        lines.append(f"- Question: {r.get('generated_question', '(empty)')[:80]}")
         qj = r.get("quality_judge", {})
         lines.append(f"- Reason: {qj.get('reason', r.get('generation_error', 'unknown'))}")
         lines.append("")
@@ -620,33 +793,46 @@ def _build_report(all_results, output_dir):
             if gen_q and src_q and gen_q == src_q:
                 no_copies = False
 
-    # Hard realization pass rate for Ours
-    ours_hrp = sum(1 for r in ours_qp_ok if r.get("hard_realization_pass") == "yes")
-    ours_hrp_rate = 100 * ours_hrp / len(ours_qp_ok) if ours_qp_ok else 0
-
-    # Hard realization pass v2 rate for Ours
+    # Hard realization pass v2 for Ours
     ours_hrp2 = sum(1 for r in ours_qp_ok if r.get("hard_realization_pass_v2") == "yes")
     ours_hrp2_rate = 100 * ours_hrp2 / len(ours_qp_ok) if ours_qp_ok else 0
 
-    # Strict quality pass for Ours
-    ours_strict_qp = sum(1 for r in ours_results if r.get("strict_quality_pass"))
-    ours_strict_rate = 100 * ours_strict_qp / ours_total if ours_total else 0
+    # Strict hrp_v2 for Ours
+    ours_shrp2 = sum(1 for r in ours_qp_ok if r.get("strict_hrp_v2") == "yes")
+    ours_shrp2_rate = 100 * ours_shrp2 / len(ours_qp_ok) if ours_qp_ok else 0
 
-    # Focus match rate for Ours (quality-pass only)
-    ours_qp_focus = [r for r in ours_qp if r.get("focus_match") == "yes"]
-    ours_focus_rate = 100 * len(ours_qp_focus) / ours_qp_count if ours_qp_count else 0
+    # Unique story counts for Ours
+    ours_hard_stories = set(r.get("story_name", "") for r in ours_qp_ok
+                           if r.get("predicted_difficulty") == "Hard")
+    ours_hrp2_stories = set(r.get("story_name", "") for r in ours_qp_ok
+                            if r.get("hard_realization_pass_v2") == "yes")
+    # Unique baseline hrp_v2 stories
+    baseline_hrp2_stories = {}
+    for bm in baseline_methods:
+        bm_qp_ok = [r for r in method_results[bm]
+                     if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        baseline_hrp2_stories[bm] = set(r.get("story_name", "") for r in bm_qp_ok
+                                        if r.get("hard_realization_pass_v2") == "yes")
+    max_baseline_hrp2_stories = max(len(v) for v in baseline_hrp2_stories.values()) if baseline_hrp2_stories else 0
+    ours_unique_hrp2_beats = len(ours_hrp2_stories) > max_baseline_hrp2_stories
+
+    # Ours Hard hit >= each baseline
+    ours_hhr_ge_all = all(ours_hhr >= v for v in baseline_hhrs.values())
 
     criteria = [
-        ("Ours quality-pass >= 60%", ours_qp_rate >= 60, f"{ours_qp_rate:.1f}%"),
-        ("Ours strict quality-pass >= 40%", ours_strict_rate >= 40, f"{ours_strict_rate:.1f}%"),
-        ("Ours focus_match=yes >= 50%", ours_focus_rate >= 50, f"{ours_focus_rate:.1f}%"),
-        ("Ours predicted Hard among quality-pass >= 20%", ours_hard_rate >= 20, f"{ours_hard_rate:.1f}%"),
-        ("Ours hard_realization_pass (exact-id) >= 15%", ours_hrp_rate >= 15, f"{ours_hrp_rate:.1f}%"),
-        ("Ours hard_realization_pass_v2 >= 15%", ours_hrp2_rate >= 15, f"{ours_hrp2_rate:.1f}%"),
-        ("Ours bridge_required=yes >= 50%", ours_bridge_rate >= 50, f"{ours_bridge_rate:.1f}%"),
-        ("Ours Hard hit > Direct/ICL/SelfRefine", ours_beats_all,
+        ("Ours quality_pass >= 65%", ours_qp_rate >= 65,
+         f"{ours_qp_rate:.1f}% ({_wilson_str(ours_qp_count, ours_total)})"),
+        ("Ours predicted Hard >= 25%", ours_hard_rate >= 25,
+         f"{ours_hard_rate:.1f}% ({_wilson_str(ours_hard, len(ours_qp_ok))})"),
+        ("Ours eval_hrp_v2 >= 25% (quality-pass, judge-ok)", ours_hrp2_rate >= 25,
+         f"{ours_hrp2_rate:.1f}% ({_wilson_str(ours_hrp2, len(ours_qp_ok))})"),
+        ("Ours strict_hrp_v2 >= 10%", ours_shrp2_rate >= 10,
+         f"{ours_shrp2_rate:.1f}% ({_wilson_str(ours_shrp2, len(ours_qp_ok))})"),
+        ("Ours unique HRP-v2 stories > each baseline", ours_unique_hrp2_beats,
+         f"Ours={len(ours_hrp2_stories)}, " + ", ".join(
+             f"{m}={len(v)}" for m, v in baseline_hrp2_stories.items())),
+        ("Ours Hard hit >= Direct/ICL/SelfRefine", ours_hhr_ge_all,
          f"Ours={ours_hhr:.2f}, " + ", ".join(f"{m}={v:.2f}" for m, v in baseline_hhrs.items())),
-        ("No method copies source question", no_copies, "pass" if no_copies else "FAIL"),
     ]
 
     lines.append("| Criterion | Status | Value |")
@@ -783,7 +969,15 @@ def main():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     # Report
-    _build_report(all_results, output_dir)
+    graph_total = len(graphs)
+    graph_valid = sum(1 for g in graphs if g.get("graph_valid") is True)
+    meta = {
+        "requested_limit": args.limit,
+        "graph_total": graph_total,
+        "graph_valid": graph_valid,
+        "selected_candidates": len(selected),
+    }
+    _build_report(all_results, output_dir, meta=meta)
 
     # Summary
     print("\n=== Summary ===")

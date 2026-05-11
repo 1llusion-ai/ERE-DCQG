@@ -14,7 +14,7 @@ import json
 import re
 import time
 
-from dcqg.utils.api_client import call_api, call_openai_compatible
+from dcqg.utils.api_client import call_openai_compatible
 from dcqg.utils.config import get_api_config
 from dcqg.generation.parser import parse_json_response
 from dcqg.question_filter.grammar import grammar_filter
@@ -250,16 +250,40 @@ def _is_degenerate(text):
     # All dots or punctuation
     if len(t) > 10 and all(c in '.?! \n' for c in t):
         return True
+    # Repeated ". . ." or "... . ." pattern
+    if re.search(r'(\.\s*){5,}', t):
+        return True
     # Repetitive pattern (e.g., "WhyWhy why why")
     words = t.split()
     if len(words) > 5:
         unique = set(w.lower() for w in words)
         if len(unique) <= 2:
             return True
+    # Same token repeats 3+ times consecutively
+    for i in range(len(words) - 2):
+        if words[i].lower() == words[i+1].lower() == words[i+2].lower():
+            return True
     # Too short
     if len(t) < 5:
         return True
+    # High punctuation/dot ratio (>40% non-alphanumeric)
+    if len(t) > 20:
+        non_alpha = sum(1 for c in t if not c.isalnum() and not c.isspace())
+        if non_alpha / len(t) > 0.4:
+            return True
     return False
+
+
+def _question_length_ok(question):
+    """Check question is 6-35 words and has no repeated token spam."""
+    words = question.strip().split()
+    if len(words) < 6 or len(words) > 35:
+        return False
+    # Same token repeats 3+ times consecutively
+    for i in range(len(words) - 2):
+        if words[i].lower() == words[i+1].lower() == words[i+2].lower():
+            return False
+    return True
 
 
 # ── Prompt builders ────────────────────────────────────────────
@@ -494,13 +518,54 @@ Requirements:
 Output: {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
 
 
+def build_repair_prompt(story_section, target_answer, difficulty, focus_key,
+                        required_evidence_sentences):
+    """Compact repair prompt for degenerate/parse failures. No graph dump."""
+    ctx = _format_story_context(story_section, sentence_ids=required_evidence_sentences)
+    diff_def = difficulty_instruction(difficulty)
+    focus = ANSWER_FOCUS_TEMPLATES[focus_key]
+
+    return f"""Generate ONE reading-comprehension question.
+
+Story (evidence sentences only):
+{ctx}
+
+Target answer: "{target_answer}"
+Difficulty: {difficulty} — {diff_def}
+Question focus: {focus['label']}
+
+Rules:
+1. Question must be answerable from the story above.
+2. Natural answer must be: "{target_answer}"
+3. Do NOT mention "{target_answer}" in the question.
+4. Start with a question word, end with "?".
+5. Question must be 6-35 words, grammatically correct.
+6. No repeated words or filler tokens.
+7. Output exactly one JSON object, nothing else.
+
+Output: {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
+
+
 # ── LLM call helpers ───────────────────────────────────────────
 
 def _call_llm(prompt, temperature=0.1, max_tokens=250, timeout=90):
-    """Single API call to SiliconFlow. Returns raw text or error string."""
-    resp = call_api(prompt, system="Output ONLY a valid JSON object. Follow the question requirements EXACTLY.",
-                    temperature=temperature, max_tokens=max_tokens, timeout=timeout)
-    return resp if resp else "ERROR: empty response"
+    """Single API call using json_mode=True. Returns raw text or error string."""
+    cfg = get_api_config()
+    try:
+        resp = call_openai_compatible(
+            prompt,
+            api_url=cfg["SILICONFLOW_API_URL"],
+            api_key=cfg["SILICONFLOW_API_KEY"],
+            model=cfg["MODEL"],
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=True,
+            system="Output ONLY a valid JSON object. Follow the question requirements EXACTLY.",
+            timeout=timeout,
+        )
+        return resp.strip() if resp else "ERROR: empty response"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 def _call_judge(prompt, temperature=0.0, max_tokens=300, timeout=90):
@@ -524,10 +589,13 @@ def _call_judge(prompt, temperature=0.0, max_tokens=300, timeout=90):
 
 
 def _parse_json(text):
-    """Parse JSON from LLM response."""
+    """Parse JSON from LLM response. Returns dict or None."""
     if not text or text.startswith("ERROR"):
         return None
-    return parse_json_response(text)
+    result = parse_json_response(text)
+    if isinstance(result, dict):
+        return result
+    return None
 
 
 def _validate_question(question, target_answer):
@@ -783,7 +851,11 @@ Return ONLY: {{"answer_match": "yes|no", "needs_3_plus": "yes|no", "focus_match"
 def generate_ours(story_section, target_answer, difficulty, nodes, edges,
                   required_evidence_sentences, bridge_sentence_ids,
                   reasoning_operation, necessity_type, max_retries=3):
-    """Generate question using Narrative Evidence Graph guided method (Ours)."""
+    """Generate question using Narrative Evidence Graph guided method (Ours).
+
+    Robust retry: first attempts use full prompt, later attempts use compact
+    repair prompt for degenerate/parse failures.
+    """
     # Classify answer focus once
     focus_key, answer_role, answer_node_type = classify_answer_focus(nodes, target_answer)
 
@@ -793,31 +865,79 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
     last_prompt = ""
     last_raw = ""
     best_focus_match = "unknown"
+    attempts_trace = []
 
     for attempt in range(max_retries + 1):
-        prompt = build_ours_prompt(
-            story_section, target_answer, difficulty, nodes, edges,
-            required_evidence_sentences, bridge_sentence_ids,
-            reasoning_operation, necessity_type,
-        )
-        temp = 0.1 + min(attempt * 0.1, 0.3)
+        # After 2 full-prompt failures, switch to compact repair prompt
+        use_repair = (attempt >= 2 and reason in (
+            "degenerate output", "empty", "parse failure"))
+        if use_repair:
+            prompt = build_repair_prompt(
+                story_section, target_answer, difficulty, focus_key,
+                required_evidence_sentences,
+            )
+            temp = 0.1
+            prompt_type = "repair"
+        else:
+            prompt = build_ours_prompt(
+                story_section, target_answer, difficulty, nodes, edges,
+                required_evidence_sentences, bridge_sentence_ids,
+                reasoning_operation, necessity_type,
+            )
+            temp = 0.05 if attempt == 0 else 0.1
+            prompt_type = "full"
+
         raw = _call_llm(prompt, temperature=temp)
         last_prompt = prompt
         last_raw = raw
 
+        # Trace every attempt
+        trace_entry = {
+            "attempt": attempt,
+            "prompt_type": prompt_type,
+            "temperature": temp,
+            "raw_prefix": (raw[:200] if raw else ""),
+            "degenerate": _is_degenerate(raw),
+            "parse_ok": False,
+            "question": "",
+            "validate_reason": "",
+            "self_check_reason": "",
+        }
+
         if _is_degenerate(raw):
             reason = "degenerate output"
+            trace_entry["validate_reason"] = reason
+            attempts_trace.append(trace_entry)
             continue
 
         gen = _parse_json(raw)
+        trace_entry["parse_ok"] = gen is not None
+        if not gen:
+            reason = "parse failure"
+            trace_entry["validate_reason"] = reason
+            attempts_trace.append(trace_entry)
+            continue
+
         question = gen.get("question", "") if gen else ""
+        trace_entry["question"] = question[:100]
+
+        # Hard output length guard
+        if question and not _question_length_ok(question):
+            reason = "question length out of range"
+            trace_entry["validate_reason"] = reason
+            attempts_trace.append(trace_entry)
+            continue
+
         ok, reason = _validate_question(question, target_answer)
+        trace_entry["validate_reason"] = reason
         if ok:
             # Self-check: verify answer match, sentence count, and focus
             sc_ok, sc_reason, focus_match = _self_check_ours(
                 question, story_section, target_answer, focus_key
             )
             best_focus_match = focus_match
+            trace_entry["self_check_reason"] = sc_reason
+            attempts_trace.append(trace_entry)
             if sc_ok:
                 return {
                     "generated_question": question,
@@ -830,10 +950,16 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
                     "answer_node_type": answer_node_type,
                     "question_focus": focus_key,
                     "focus_match": focus_match,
+                    "attempts_trace": attempts_trace,
+                    "repair_attempted": any(t["prompt_type"] == "repair" for t in attempts_trace),
+                    "repair_success": any(t["prompt_type"] == "repair" and t == attempts_trace[-1] for t in attempts_trace),
                 }, 1 + attempt
             else:
                 reason = f"self-check failed: {sc_reason}"
                 continue
+        else:
+            attempts_trace.append(trace_entry)
+            continue
 
     return {
         "generated_question": question,
@@ -846,6 +972,9 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         "answer_node_type": answer_node_type,
         "question_focus": focus_key,
         "focus_match": best_focus_match,
+        "attempts_trace": attempts_trace,
+        "repair_attempted": any(t["prompt_type"] == "repair" for t in attempts_trace),
+        "repair_success": False,
     }, max_retries + 1
 
 

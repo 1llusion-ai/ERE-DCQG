@@ -821,10 +821,7 @@ def _build_report(all_results, output_dir, meta=None):
         lines.append(f"- Reason: {qj.get('reason', r.get('generation_error', 'unknown'))}")
         lines.append("")
 
-    # Success criteria
-    lines.append("## 9. Success Criteria")
-    lines.append("")
-
+    # Success criteria (variables computed first, table printed after pairwise diff)
     ours_results = method_results["Ours"]
     ours_qp = [r for r in ours_results if r.get("quality_pass")]
     ours_qp_ok = [r for r in ours_qp if r.get("difficulty_judge_status") == "ok"]
@@ -884,6 +881,68 @@ def _build_report(all_results, output_dir, meta=None):
 
     # Ours Hard hit >= each baseline
     ours_hhr_ge_all = all(ours_hhr >= v for v in baseline_hhrs.values())
+
+    # Pairwise difference table (Ours vs each baseline)
+    lines.append("## 8b. Pairwise Difference Table (Ours - Baseline)")
+    lines.append("")
+    lines.append("| Metric | Ours | " + " | ".join(baseline_methods) + " | " +
+                 " | ".join(f"Ours-{m}" for m in baseline_methods) + " |")
+    lines.append("|---|---" + "|---:" * len(baseline_methods) + "|---" * len(baseline_methods) + "|")
+
+    # quality_pass rate
+    ours_qp_pct = 100 * ours_qp_count / ours_total if ours_total else 0
+    row = f"| quality_pass | {ours_qp_pct:.1f}% ({ours_qp_count}/{ours_total})"
+    diffs = []
+    for bm in baseline_methods:
+        bm_total = len(method_results[bm])
+        bm_qp = sum(1 for r in method_results[bm] if r.get("quality_pass"))
+        bm_pct = 100 * bm_qp / bm_total if bm_total else 0
+        row += f" | {bm_pct:.1f}% ({bm_qp}/{bm_total})"
+        diffs.append(f"{ours_qp_pct - bm_pct:+.1f}pp")
+    row += " | " + " | ".join(diffs) + " |"
+    lines.append(row)
+
+    # Hard hit rate (quality-pass, judge-ok)
+    row = f"| Hard hit | {100*ours_hhr:.1f}% ({ours_hard}/{len(ours_qp_ok)})"
+    diffs = []
+    for bm in baseline_methods:
+        bm_qp_ok = [r for r in method_results[bm]
+                     if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        bm_hard = sum(1 for r in bm_qp_ok if r.get("predicted_difficulty") == "Hard")
+        bm_rate = 100 * bm_hard / len(bm_qp_ok) if bm_qp_ok else 0
+        row += f" | {bm_rate:.1f}% ({bm_hard}/{len(bm_qp_ok)})"
+        diffs.append(f"{100*ours_hhr - bm_rate:+.1f}pp")
+    row += " | " + " | ".join(diffs) + " |"
+    lines.append(row)
+
+    # HRP-v2 rate
+    row = f"| HRP-v2 | {ours_hrp2_rate:.1f}% ({ours_hrp2}/{len(ours_qp_ok)})"
+    diffs = []
+    for bm in baseline_methods:
+        bm_qp_ok = [r for r in method_results[bm]
+                     if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        bm_hrp2 = sum(1 for r in bm_qp_ok if r.get("hard_realization_pass_v2") == "yes")
+        bm_rate = 100 * bm_hrp2 / len(bm_qp_ok) if bm_qp_ok else 0
+        row += f" | {bm_rate:.1f}% ({bm_hrp2}/{len(bm_qp_ok)})"
+        diffs.append(f"{ours_hrp2_rate - bm_rate:+.1f}pp")
+    row += " | " + " | ".join(diffs) + " |"
+    lines.append(row)
+
+    # Unique HRP-v2 stories
+    row = f"| unique HRP-v2 stories | {len(ours_hrp2_stories)}"
+    diffs = []
+    for bm in baseline_methods:
+        bm_count = len(baseline_hrp2_stories.get(bm, set()))
+        row += f" | {bm_count}"
+        diffs.append(f"{len(ours_hrp2_stories) - bm_count:+d}")
+    row += " | " + " | ".join(diffs) + " |"
+    lines.append(row)
+
+    lines.append("")
+
+    # Success criteria header
+    lines.append("## 9. Success Criteria")
+    lines.append("")
 
     criteria = [
         ("Ours quality_pass >= 65%", ours_qp_rate >= 65,

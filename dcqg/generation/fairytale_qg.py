@@ -758,7 +758,7 @@ def generate_self_refine(story_section, target_answer, difficulty, max_retries=2
         # Extract issues text for the revise prompt
         if critique and isinstance(critique, dict):
             issues = critique.get("issues", [])
-            critique_text = "; ".join(issues) if issues else "needs improvement"
+            critique_text = "; ".join(str(i) for i in issues) if issues else "needs improvement"
         else:
             critique_text = "needs improvement"
 

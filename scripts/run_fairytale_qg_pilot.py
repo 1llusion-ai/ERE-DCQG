@@ -19,6 +19,19 @@ from pathlib import Path
 from collections import Counter
 
 
+def _ascii_safe(text):
+    """Replace Unicode dashes/smart punctuation with ASCII equivalents."""
+    if not text:
+        return ""
+    return (text
+            .replace('—', ' - ')  # em dash
+            .replace('–', '-')     # en dash
+            .replace('‘', "'")     # left single quote
+            .replace('’', "'")     # right single quote
+            .replace('“', '"')     # left double quote
+            .replace('”', '"'))    # right double quote
+
+
 def _wilson_ci(k, n, z=1.96):
     """Wilson score interval for binomial proportion. Returns (lower, upper)."""
     if n == 0:
@@ -486,6 +499,59 @@ def _build_report(all_results, output_dir, meta=None):
                 lines.append(f"- Target answer: {r.get('target_answer', '?')}")
                 lines.append(f"- answer_role={r.get('answer_role', '?')}, question_focus={r.get('question_focus', '?')}")
                 lines.append("")
+
+        # Per-focus metrics (all Ours, not just quality-pass)
+        ours_all = method_results["Ours"]
+        if ours_all:
+            lines.append("#### Per question_focus metrics (all Ours)")
+            lines.append("")
+            lines.append("| Focus | N | quality_pass | Hard | hrp_v2 | strict_hrp_v2 | focus_match=yes |")
+            lines.append("|---|---:|---:|---:|---:|---:|---:|")
+            all_focuses = sorted(set(r.get("question_focus", "unknown") for r in ours_all))
+            for focus in all_focuses:
+                fr = [r for r in ours_all if r.get("question_focus") == focus]
+                n = len(fr)
+                qp = sum(1 for r in fr if r.get("quality_pass"))
+                hard = sum(1 for r in fr if r.get("quality_pass") and r.get("predicted_difficulty") == "Hard")
+                hrp2 = sum(1 for r in fr if r.get("quality_pass") and r.get("hard_realization_pass_v2") == "yes")
+                shrp2 = sum(1 for r in fr if r.get("quality_pass") and r.get("strict_hrp_v2") == "yes")
+                fm = sum(1 for r in fr if r.get("focus_match") == "yes")
+                lines.append(f"| {focus} | {n} | {qp} | {hard} | {hrp2} | {shrp2} | {fm} |")
+            lines.append("")
+
+        # Per answer_role metrics (all Ours)
+        if ours_all:
+            lines.append("#### Per answer_role metrics (all Ours)")
+            lines.append("")
+            lines.append("| answer_role | N | quality_pass | Hard | hrp_v2 | strict_hrp_v2 |")
+            lines.append("|---|---:|---:|---:|---:|---:|")
+            all_roles = sorted(set(r.get("answer_role", "unknown") for r in ours_all))
+            for role in all_roles:
+                rr = [r for r in ours_all if r.get("answer_role") == role]
+                n = len(rr)
+                qp = sum(1 for r in rr if r.get("quality_pass"))
+                hard = sum(1 for r in rr if r.get("quality_pass") and r.get("predicted_difficulty") == "Hard")
+                hrp2 = sum(1 for r in rr if r.get("quality_pass") and r.get("hard_realization_pass_v2") == "yes")
+                shrp2 = sum(1 for r in rr if r.get("quality_pass") and r.get("strict_hrp_v2") == "yes")
+                lines.append(f"| {role} | {n} | {qp} | {hard} | {hrp2} | {shrp2} |")
+            lines.append("")
+
+        # Per answer_node_type metrics (all Ours)
+        if ours_all:
+            lines.append("#### Per answer_node_type metrics (all Ours)")
+            lines.append("")
+            lines.append("| node_type | N | quality_pass | Hard | hrp_v2 | strict_hrp_v2 |")
+            lines.append("|---|---:|---:|---:|---:|---:|")
+            all_ntypes = sorted(set(r.get("answer_node_type", "unknown") for r in ours_all))
+            for ntype in all_ntypes:
+                nr = [r for r in ours_all if r.get("answer_node_type") == ntype]
+                n = len(nr)
+                qp = sum(1 for r in nr if r.get("quality_pass"))
+                hard = sum(1 for r in nr if r.get("quality_pass") and r.get("predicted_difficulty") == "Hard")
+                hrp2 = sum(1 for r in nr if r.get("quality_pass") and r.get("hard_realization_pass_v2") == "yes")
+                shrp2 = sum(1 for r in nr if r.get("quality_pass") and r.get("strict_hrp_v2") == "yes")
+                lines.append(f"| {ntype} | {n} | {qp} | {hard} | {hrp2} | {shrp2} |")
+            lines.append("")
     else:
         lines.append("No Ours quality-pass judge-ok results.")
         lines.append("")
@@ -639,7 +705,7 @@ def _build_report(all_results, output_dir, meta=None):
         lines.append(f"- Difficulty: predicted={dj.get('predicted_difficulty')}, alone_sufficient={dj.get('answer_sentence_alone_sufficient')}, bridge_required={dj.get('bridge_required')}")
         lines.append(f"- Coverage: {ec.get('target_evidence_coverage', 0):.3f}, hard_realization={ec.get('hard_realization_pass', '?')}, hrp_v2={r.get('hard_realization_pass_v2', '?')}")
         lines.append(f"- Focus: answer_role={r.get('answer_role', '?')}, question_focus={r.get('question_focus', '?')}, focus_match={r.get('focus_match', '?')}")
-        lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} — {r.get('semantic_match_reason', '')}")
+        lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} - {_ascii_safe(r.get('semantic_match_reason', ''))}")
         lines.append("")
 
     # Hard realization pass v2 examples (quality-pass only)
@@ -655,7 +721,7 @@ def _build_report(all_results, output_dir, meta=None):
             lines.append(f"- Target answer: {r.get('target_answer', '?')}")
             dj = r.get("difficulty_judge", {})
             lines.append(f"- Predicted: {dj.get('predicted_difficulty')}, num_used={len(dj.get('required_evidence_sentences_used', []))}, bridge={dj.get('bridge_required')}, alone={dj.get('answer_sentence_alone_sufficient')}")
-            lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} — {r.get('semantic_match_reason', '')}")
+            lines.append(f"- Semantic match: {r.get('semantic_evidence_match', '?')} - {_ascii_safe(r.get('semantic_match_reason', ''))}")
             lines.append("")
 
     # Focus match examples (Ours, quality-pass, focus_match=yes)
@@ -709,12 +775,12 @@ def _build_report(all_results, output_dir, meta=None):
                     fail_groups["degenerate / parse failure"] += 1
             elif qj.get("answerable") == "no":
                 fail_groups["not answerable"] += 1
-            elif r.get("strict_quality_pass") is False and r.get("quality_pass") is True:
-                fail_groups["strict quality fail"] += 1
+            elif qj.get("asks_expected_answer") == "no":
+                fail_groups["answer mismatch"] += 1
+            elif qj.get("fluency") == "no":
+                fail_groups["not fluent"] += 1
             elif r.get("focus_match") == "no":
                 fail_groups["focus mismatch"] += 1
-            elif r.get("semantic_evidence_match") == "no":
-                fail_groups["semantic_evidence_match=no"] += 1
             else:
                 fail_groups["other"] += 1
         lines.append("| Failure category | Count |")

@@ -792,12 +792,12 @@ def generate_self_refine(story_section, target_answer, difficulty, max_retries=2
     }, 3
 
 
-def _self_check_ours(question, story_section, target_answer, focus_key=None):
+def _self_check_ours(question, story_section, target_answer, focus_key=None, difficulty="Hard"):
     """Lightweight self-check for Ours questions.
 
     Checks:
     1. Natural answer matches target_answer
-    2. For Hard: requires 3+ sentences
+    2. Sentence count requirement (difficulty-aware)
     3. Question focus matches answer role (if focus_key provided)
 
     Returns (ok, reason, focus_match).
@@ -810,6 +810,14 @@ def _self_check_ours(question, story_section, target_answer, focus_key=None):
         focus_check = f"""
 3. Does the QUESTION FOCUS match "{focus_label}"? For example, if the answer is about a larger purpose, the question should ask about the larger purpose, not an immediate/local cause."""
 
+    # Difficulty-aware sentence count check
+    if difficulty == "Easy":
+        sentence_check = "2. Is the question answerable from the story?"
+    elif difficulty == "Medium":
+        sentence_check = "2. Does answering require reading at least 2 sentences (not just 1)?"
+    else:  # Hard
+        sentence_check = "2. Does answering require reading 3 or more sentences (not just 1-2)?"
+
     prompt = f"""Quick check on this reading-comprehension question.
 
 Story:
@@ -820,9 +828,9 @@ Expected answer: "{target_answer}"
 
 Check these things:
 1. Does answering this question naturally lead to "{target_answer}" (or a close paraphrase)?
-2. Does answering require reading 3 or more sentences (not just 1-2)?{focus_check}
+{sentence_check}{focus_check}
 
-Return ONLY: {{"answer_match": "yes|no", "needs_3_plus": "yes|no", "focus_match": "yes|no", "reason": "brief"}}"""
+Return ONLY: {{"answer_match": "yes|no", "meets_sentence_req": "yes|no", "focus_match": "yes|no", "reason": "brief"}}"""
 
     raw = _call_judge(prompt, temperature=0.0, max_tokens=200)
     parsed = _parse_json(raw)
@@ -832,17 +840,24 @@ Return ONLY: {{"answer_match": "yes|no", "needs_3_plus": "yes|no", "focus_match"
         return True, "self-check parse failure, passing through", "unknown"
 
     ans_match = parsed.get("answer_match", "yes") == "yes"
-    needs_3 = parsed.get("needs_3_plus", "yes") == "yes"
+    # Backward compatibility: check meets_sentence_req first, fall back to needs_3_plus
+    meets_req = parsed.get("meets_sentence_req", parsed.get("needs_3_plus", "yes")) == "yes"
+    # For Easy, always pass sentence requirement
+    if difficulty == "Easy":
+        meets_req = True
     focus_ok = parsed.get("focus_match", "yes") == "yes"
 
-    if ans_match and needs_3 and focus_ok:
+    if ans_match and meets_req and focus_ok:
         return True, "ok", "yes"
 
     reasons = []
     if not ans_match:
         reasons.append("answer mismatch")
-    if not needs_3:
-        reasons.append("needs only 1-2 sentences")
+    if not meets_req:
+        if difficulty == "Medium":
+            reasons.append("needs only 1 sentence")
+        else:
+            reasons.append("needs only 1-2 sentences")
     if not focus_ok:
         reasons.append("focus mismatch")
     return False, "; ".join(reasons), "yes" if focus_ok else "no"
@@ -933,7 +948,7 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         if ok:
             # Self-check: verify answer match, sentence count, and focus
             sc_ok, sc_reason, focus_match = _self_check_ours(
-                question, story_section, target_answer, focus_key
+                question, story_section, target_answer, focus_key, difficulty=difficulty
             )
             best_focus_match = focus_match
             trace_entry["self_check_reason"] = sc_reason
@@ -1129,6 +1144,7 @@ Return ONLY a JSON object:
             "bridge_removal_effect": "judge_error",
             "reason": f"parse error after retry: {raw[:200]}",
             "difficulty_judge_raw": raw,
+            "difficulty_judge_prompt": prompt,
             "difficulty_judge_status": "parse_error",
             "difficulty_judge_parse_ok": False,
         }
@@ -1170,6 +1186,7 @@ Return ONLY a JSON object:
     parsed["difficulty_judge_raw"] = raw
     parsed["difficulty_judge_status"] = "ok"
     parsed["difficulty_judge_parse_ok"] = True
+    parsed["difficulty_judge_prompt"] = prompt
     return parsed
 
 

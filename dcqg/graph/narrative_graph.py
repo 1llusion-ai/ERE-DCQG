@@ -40,7 +40,7 @@ def _split_sentences(text):
     return [s.strip() for s in parts if s.strip()]
 
 
-def _build_graph_prompt(candidate):
+def _build_graph_prompt(candidate, difficulty="Hard"):
     """Build LLM prompt for narrative evidence graph extraction."""
     section = candidate.get("story_section", "")
     sentences = _split_sentences(section)
@@ -64,6 +64,32 @@ def _build_graph_prompt(candidate):
             req_sent_listing.append(f"  [S{sid}]{role_tag} {sentences[sid]}")
     req_sent_text = "\n".join(req_sent_listing)
 
+    # Difficulty-aware mandatory requirements
+    if difficulty == "Easy":
+        mandatory = f"""## MANDATORY requirements
+
+1. Create at least 1 node for the required evidence sentence(s).
+2. For the sentence that directly states the answer, set evidence_role="answer".
+3. Edges are optional for Easy questions.
+4. Do NOT return empty nodes list."""
+    elif difficulty == "Medium":
+        mandatory = f"""## MANDATORY requirements
+
+1. Create nodes for each required evidence sentence (total {len(req_ids)} nodes minimum).
+2. For the sentence(s) that directly state the answer, set evidence_role="answer".
+3. Create at least 1 edge showing how the nodes connect.
+4. Do NOT return empty nodes/edges lists."""
+    else:  # Hard
+        mandatory = f"""## MANDATORY requirements
+
+1. Create EXACTLY one node per required evidence sentence (total {len(req_ids)} nodes minimum).
+2. For sentences marked [BRIDGE], set evidence_role="bridge" on that node.
+3. For the sentence(s) that directly state the answer, set evidence_role="answer".
+4. For the sentence that provides the starting context, set evidence_role="anchor".
+5. Create edges showing how the nodes connect causally/temporally to the answer.
+6. At least 2 edges with necessity="strong".
+7. Do NOT return empty nodes/edges lists. You MUST extract at least {len(req_ids)} nodes."""
+
     return f"""You are an expert narrative analyst. Extract a Narrative Evidence Graph
 from the story section below, grounded in the required evidence sentences.
 
@@ -75,6 +101,7 @@ Answer: {answer}
 
 Reasoning operation: {reasoning_op}
 Necessity type: {necessity_type}
+Target difficulty: {difficulty}
 
 ## Required evidence sentences (you MUST create nodes for ALL of these)
 
@@ -83,15 +110,7 @@ Necessity type: {necessity_type}
 Required evidence sentence IDs: {req_ids}
 Bridge sentence IDs (marked [BRIDGE] above): {bridge_ids}
 
-## MANDATORY requirements
-
-1. Create EXACTLY one node per required evidence sentence (total {len(req_ids)} nodes minimum).
-2. For sentences marked [BRIDGE], set evidence_role="bridge" on that node.
-3. For the sentence(s) that directly state the answer, set evidence_role="answer".
-4. For the sentence that provides the starting context, set evidence_role="anchor".
-5. Create edges showing how the nodes connect causally/temporally to the answer.
-6. At least 2 edges with necessity="strong".
-7. Do NOT return empty nodes/edges lists. You MUST extract at least {len(req_ids)} nodes.
+{mandatory}
 
 ## Node schema
 
@@ -135,8 +154,14 @@ def _parse_graph_response(resp):
     return None, None, False
 
 
-def _validate_graph(nodes, edges, req_ids, bridge_ids):
-    """Validate graph structure. Returns (valid, reason, diagnostics)."""
+def _validate_graph(nodes, edges, req_ids, bridge_ids, difficulty="Hard"):
+    """Validate graph structure. Returns (valid, reason, diagnostics).
+
+    Difficulty-aware validation:
+    - Easy: allow one answer node, no edge/bridge/path requirement
+    - Medium: require >= 2 nodes if available, >= 1 edge, bridge check only if bridge_ids non-empty
+    - Hard: unchanged (>= 3 nodes, >= 2 edges, all checks)
+    """
     reasons = []
     req_set = set(req_ids)
     bridge_set = set(bridge_ids)
@@ -156,13 +181,24 @@ def _validate_graph(nodes, edges, req_ids, bridge_ids):
         if "participants" not in n:
             reasons.append(f"node {n.get('id', '?')} missing participants")
 
-    # Check 5: at least 3 nodes
-    if len(nodes) < 3:
-        reasons.append(f"only {len(nodes)} nodes (need >= 3)")
+    # Difficulty-aware node/edge thresholds
+    if difficulty == "Easy":
+        min_nodes = max(1, len(req_ids))
+        min_edges = 0
+    elif difficulty == "Medium":
+        min_nodes = max(2, len(req_ids))
+        min_edges = 1
+    else:  # Hard
+        min_nodes = 3
+        min_edges = 2
 
-    # Check 6: at least 2 edges
-    if len(edges) < 2:
-        reasons.append(f"only {len(edges)} edges (need >= 2)")
+    # Check 5: node count
+    if len(nodes) < min_nodes:
+        reasons.append(f"only {len(nodes)} nodes (need >= {min_nodes})")
+
+    # Check 6: edge count
+    if len(edges) < min_edges:
+        reasons.append(f"only {len(edges)} edges (need >= {min_edges})")
 
     # Build node ID set
     node_ids = {n.get("id") for n in nodes if isinstance(n, dict)}
@@ -176,16 +212,17 @@ def _validate_graph(nodes, edges, req_ids, bridge_ids):
             reasons.append(f"node {n.get('id', '?')} sentence_id {sid} not in required evidence")
 
     # Check 2: bridge_sentence_ids must have bridge-role nodes
-    # A bridge sentence is "covered" if it has a bridge or answer_bridge node
-    bridge_sids_covered = set()
-    for n in nodes:
-        if n.get("evidence_role") in ("bridge", "answer_bridge"):
-            sid = n.get("sentence_id")
-            if isinstance(sid, (int, float)):
-                bridge_sids_covered.add(int(sid))
-    missing_bridge = bridge_set - bridge_sids_covered
-    if missing_bridge:
-        reasons.append(f"bridge sentences {sorted(missing_bridge)} have no bridge-role node")
+    # Skip for Easy (bridge_set often empty) and Medium when no bridge sentences
+    if difficulty == "Hard" or (difficulty == "Medium" and bridge_set):
+        bridge_sids_covered = set()
+        for n in nodes:
+            if n.get("evidence_role") in ("bridge", "answer_bridge"):
+                sid = n.get("sentence_id")
+                if isinstance(sid, (int, float)):
+                    bridge_sids_covered.add(int(sid))
+        missing_bridge = bridge_set - bridge_sids_covered
+        if missing_bridge:
+            reasons.append(f"bridge sentences {sorted(missing_bridge)} have no bridge-role node")
 
     # Check 3: answer node exists (answer or answer_bridge)
     has_answer = any(n.get("evidence_role") in ("answer", "answer_bridge") for n in nodes)
@@ -202,32 +239,32 @@ def _validate_graph(nodes, edges, req_ids, bridge_ids):
             reasons.append(f"edge target {tgt} not in nodes")
 
     # Check 7: at least one connected path to answer node
-    answer_ids = {n.get("id") for n in nodes if n.get("evidence_role") in ("answer", "answer_bridge")}
-    if answer_ids and node_ids:
-        # BFS from any non-answer node to any answer node
-        adj = {}
-        for e in edges:
-            s, t = e.get("source"), e.get("target")
-            if s and t:
-                adj.setdefault(s, []).append(t)
-        # Check if any node can reach an answer node
-        reachable = False
-        for start in node_ids - answer_ids:
-            visited = {start}
-            queue = [start]
-            while queue:
-                cur = queue.pop(0)
-                if cur in answer_ids:
-                    reachable = True
+    # Skip for Easy (single node has no path) and Medium (2-node path is trivial)
+    if difficulty == "Hard":
+        answer_ids = {n.get("id") for n in nodes if n.get("evidence_role") in ("answer", "answer_bridge")}
+        if answer_ids and node_ids:
+            adj = {}
+            for e in edges:
+                s, t = e.get("source"), e.get("target")
+                if s and t:
+                    adj.setdefault(s, []).append(t)
+            reachable = False
+            for start in node_ids - answer_ids:
+                visited = {start}
+                queue = [start]
+                while queue:
+                    cur = queue.pop(0)
+                    if cur in answer_ids:
+                        reachable = True
+                        break
+                    for nxt in adj.get(cur, []):
+                        if nxt not in visited:
+                            visited.add(nxt)
+                            queue.append(nxt)
+                if reachable:
                     break
-                for nxt in adj.get(cur, []):
-                    if nxt not in visited:
-                        visited.add(nxt)
-                        queue.append(nxt)
-            if reachable:
-                break
-        if not reachable:
-            reasons.append("no connected path to answer node")
+            if not reachable:
+                reasons.append("no connected path to answer node")
 
     if not reasons:
         return True, "all checks passed", {
@@ -304,7 +341,7 @@ def _normalize_edge(e):
 
 
 class NarrativeGraphExtractor:
-    """Extract narrative evidence graphs from FairytaleQA Hard candidates."""
+    """Extract narrative evidence graphs from FairytaleQA candidates."""
 
     def __init__(self, model=None, max_retries=2):
         cfg = get_api_config()
@@ -313,22 +350,35 @@ class NarrativeGraphExtractor:
         self.model = model or cfg["JUDGE_MODEL"]
         self.max_retries = max_retries
 
-    def extract(self, candidate):
+    def extract(self, candidate, difficulty=None):
         """Extract a narrative graph from a single candidate.
+
+        Args:
+            candidate: dict with story_section, required_evidence_sentences, etc.
+            difficulty: "Easy", "Medium", or "Hard". If None, inferred from candidate.
 
         Returns graph record dict.
         """
+        if difficulty is None:
+            difficulty = candidate.get("evidence_difficulty", "Hard")
+
         req_ids = candidate.get("required_evidence_sentences", [])
         bridge_ids = candidate.get("bridge_sentence_ids", [])
 
-        prompt = _build_graph_prompt(candidate)
+        prompt = _build_graph_prompt(candidate, difficulty=difficulty)
 
         raw_resp = None
         nodes = None
         edges = None
         parse_ok = False
 
-        min_nodes = max(3, len(req_ids))
+        # Difficulty-aware min_nodes for retry logic
+        if difficulty == "Easy":
+            min_nodes = max(1, len(req_ids))
+        elif difficulty == "Medium":
+            min_nodes = max(2, len(req_ids))
+        else:
+            min_nodes = max(3, len(req_ids))
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -348,7 +398,6 @@ class NarrativeGraphExtractor:
                 if parse_ok and nodes and len(nodes) >= min_nodes:
                     break
                 if parse_ok and attempt < self.max_retries:
-                    # Retry with explicit reminder
                     prompt = prompt + f"\n\nPREVIOUS ATTEMPT returned only {len(nodes or [])} nodes. You MUST return at least {min_nodes} nodes, one per required evidence sentence."
             except Exception as e:
                 raw_resp = f"ERROR: {e}"
@@ -356,7 +405,7 @@ class NarrativeGraphExtractor:
                     break
 
         # Normalize
-        if nodes and edges:
+        if nodes is not None and edges is not None:
             nodes = [_normalize_node(n, i) for i, n in enumerate(nodes)]
             edges = [_normalize_edge(e) for e in edges]
         else:
@@ -374,9 +423,9 @@ class NarrativeGraphExtractor:
                 elif role == "context":
                     n["evidence_role"] = "bridge"
 
-        # Validate
+        # Validate with difficulty-aware rules
         graph_valid, validation_reason, diagnostics = _validate_graph(
-            nodes, edges, req_ids, bridge_ids
+            nodes, edges, req_ids, bridge_ids, difficulty=difficulty
         )
 
         # Build graph record
@@ -384,7 +433,7 @@ class NarrativeGraphExtractor:
             "story_name": candidate.get("story_name", ""),
             "question": candidate.get("question", ""),
             "answer": candidate.get("answer", "") or candidate.get("answer1", ""),
-            "target_difficulty": "Hard",
+            "target_difficulty": difficulty,
             "attribute": candidate.get("attribute", ""),
             "reasoning_operation": candidate.get("reasoning_operation", ""),
             "necessity_type": candidate.get("necessity_type", ""),

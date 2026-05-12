@@ -162,6 +162,233 @@ def classify_answer_focus(nodes, target_answer):
     return "state", role, ntype
 
 
+# ── Graph-structured difficulty policy ─────────────────────────
+
+RELATION_PRIORITY = {
+    "motivates": 6, "causes": 5, "explains": 4,
+    "results_in": 3, "enables": 2, "prevents": 2,
+    "temporal_before": 1, "contrasts_with": 1,
+    "same_character": 0, "supports_inference": 1,
+}
+
+RELATION_WORDING = {
+    "motivates": "Ask about goal, reason, intention, motivation.",
+    "causes": "Ask about consequence or outcome.",
+    "results_in": "Ask about consequence or outcome.",
+    "explains": "Ask what explains a later state/action.",
+    "enables": "Ask what made something possible.",
+    "prevents": "Ask what made something impossible.",
+    "temporal_before": "Use only as ordering support, not as main Hard signal.",
+}
+
+
+def select_graph_substructure(nodes, edges, difficulty, target_answer):
+    """Select a difficulty-appropriate graph substructure.
+
+    Returns dict with:
+      selected_nodes, selected_edges, graph_policy, graph_policy_reason,
+      relation_chain, evidence_roles_used
+    """
+    if not nodes:
+        return {
+            "selected_nodes": [], "selected_edges": [],
+            "graph_policy": "graph_invalid",
+            "graph_policy_reason": "no nodes available",
+            "relation_chain": [], "evidence_roles_used": [],
+        }
+
+    # Find answer node
+    answer_nodes = [n for n in nodes if n.get("evidence_role") in ("answer", "answer_bridge")]
+    answer_node = answer_nodes[0] if answer_nodes else nodes[0]
+
+    def _edge_priority(e):
+        return RELATION_PRIORITY.get(e.get("relation", ""), 0)
+
+    def _edges_into(node_id):
+        """Edges where node_id is the target (directed into)."""
+        return [e for e in edges if e.get("target") == node_id]
+
+    def _edges_touching(node_id):
+        """Edges where node_id is source or target (undirected)."""
+        return [e for e in edges if e.get("source") == node_id or e.get("target") == node_id]
+
+    def _node_by_id(nid):
+        for n in nodes:
+            if n["id"] == nid:
+                return n
+        return None
+
+    def _roles_and_chain(sel_nodes, sel_edges):
+        roles = []
+        for n in sel_nodes:
+            r = n.get("evidence_role", "context")
+            if r not in roles:
+                roles.append(r)
+        chain = [e.get("relation", "") for e in sel_edges]
+        return roles, chain
+
+    # ── Easy: answer node only ──
+    if difficulty == "Easy":
+        sel_nodes = [answer_node]
+        sel_edges = []
+        roles, chain = _roles_and_chain(sel_nodes, sel_edges)
+        return {
+            "selected_nodes": sel_nodes, "selected_edges": sel_edges,
+            "graph_policy": "answer_only",
+            "graph_policy_reason": f"Easy: using answer node {answer_node['id']} only",
+            "relation_chain": chain, "evidence_roles_used": roles,
+        }
+
+    # ── Medium: answer + best one related node ──
+    if difficulty == "Medium":
+        into_edges = _edges_into(answer_node["id"])
+        if into_edges:
+            best_edge = max(into_edges, key=_edge_priority)
+            other_id = best_edge["source"]
+            other_node = _node_by_id(other_id)
+            sel_nodes = [answer_node, other_node] if other_node else [answer_node]
+            sel_edges = [best_edge]
+            reason = f"Medium: answer {answer_node['id']} + {other_id} via {best_edge['relation']}"
+        else:
+            # Fallback: answer + any bridge/context node
+            bridge_nodes = [n for n in nodes
+                           if n.get("evidence_role") in ("bridge", "anchor", "context")
+                           and n["id"] != answer_node["id"]]
+            if bridge_nodes:
+                other_node = bridge_nodes[0]
+                sel_nodes = [answer_node, other_node]
+                sel_edges = [e for e in _edges_touching(answer_node["id"])
+                            if (e.get("source") == other_node["id"] or e.get("target") == other_node["id"])][:1]
+                reason = f"Medium fallback: answer {answer_node['id']} + {other_node['id']} (no directed edge into answer)"
+            else:
+                sel_nodes = [answer_node]
+                sel_edges = []
+                reason = f"Medium fallback: answer node only (no related nodes found)"
+        roles, chain = _roles_and_chain(sel_nodes, sel_edges)
+        gp = "two_node_relation"
+        return {
+            "selected_nodes": sel_nodes, "selected_edges": sel_edges,
+            "graph_policy": gp,
+            "graph_policy_reason": reason,
+            "relation_chain": chain, "evidence_roles_used": roles,
+        }
+
+    # ── Hard: 3+ node chain into answer ──
+    # Build adjacency for path finding
+    adj = {}  # node_id -> list of (edge, neighbor_id)
+    for e in edges:
+        src, tgt = e.get("source"), e.get("target")
+        adj.setdefault(src, []).append((e, tgt))
+        adj.setdefault(tgt, []).append((e, src))
+
+    def _find_best_path(start_id, target_id, directed=True):
+        """BFS to find best path from start to target, maximizing cumulative relation priority."""
+        from collections import deque
+        best_path = None
+        best_score = -1
+        queue = deque([(start_id, [(None, start_id)], 0)])
+        visited = {start_id}
+        max_depth = 5
+        while queue:
+            curr, path, score = queue.popleft()
+            if len(path) > max_depth:
+                continue
+            if curr == target_id and len(path) > 1:
+                if score > best_score:
+                    best_score = score
+                    best_path = path
+                continue
+            for edge, neigh in adj.get(curr, []):
+                if neigh in visited:
+                    continue
+                # For directed, only follow edges where curr is source
+                if directed and edge.get("source") != curr:
+                    continue
+                ep = _edge_priority(edge)
+                visited.add(neigh)
+                queue.append((neigh, path + [(edge, neigh)], score + ep))
+        return best_path
+
+    # Try directed paths from non-answer nodes into answer
+    non_answer_ids = [n["id"] for n in nodes if n["id"] != answer_node["id"]]
+    best_directed = None
+    best_directed_score = -1
+    for start_id in non_answer_ids:
+        path = _find_best_path(start_id, answer_node["id"], directed=True)
+        if path and len(path) >= 3:
+            score = sum(_edge_priority(e) for e, _ in path if e)
+            if score > best_directed_score:
+                best_directed_score = score
+                best_directed = path
+
+    if best_directed and len(best_directed) >= 3:
+        # Extract selected nodes and edges from path
+        sel_node_ids = [nid for _, nid in best_directed]
+        sel_edges_list = [e for e, _ in best_directed if e]
+        sel_nodes = [_node_by_id(nid) for nid in sel_node_ids if _node_by_id(nid)]
+        roles, chain = _roles_and_chain(sel_nodes, sel_edges_list)
+        pure_temporal = all(r == "temporal_before" for r in chain) if chain else False
+        reason = f"Hard: directed path {' → '.join(sel_node_ids)}"
+        if pure_temporal:
+            reason += " [pure_temporal_chain]"
+        return {
+            "selected_nodes": sel_nodes, "selected_edges": sel_edges_list,
+            "graph_policy": "multi_node_chain",
+            "graph_policy_reason": reason,
+            "relation_chain": chain, "evidence_roles_used": roles,
+        }
+
+    # Undirected fallback
+    best_undirected = None
+    best_undirected_score = -1
+    for start_id in non_answer_ids:
+        path = _find_best_path(start_id, answer_node["id"], directed=False)
+        if path and len(path) >= 3:
+            score = sum(_edge_priority(e) for e, _ in path if e)
+            if score > best_undirected_score:
+                best_undirected_score = score
+                best_undirected = path
+
+    if best_undirected and len(best_undirected) >= 3:
+        sel_node_ids = [nid for _, nid in best_undirected]
+        sel_edges_list = [e for e, _ in best_undirected if e]
+        sel_nodes = [_node_by_id(nid) for nid in sel_node_ids if _node_by_id(nid)]
+        roles, chain = _roles_and_chain(sel_nodes, sel_edges_list)
+        pure_temporal = all(r == "temporal_before" for r in chain) if chain else False
+        reason = f"Hard: undirected_fallback path {' → '.join(sel_node_ids)}"
+        if pure_temporal:
+            reason += " [pure_temporal_chain]"
+        return {
+            "selected_nodes": sel_nodes, "selected_edges": sel_edges_list,
+            "graph_policy": "multi_node_chain",
+            "graph_policy_reason": reason,
+            "relation_chain": chain, "evidence_roles_used": roles,
+        }
+
+    # Expand: answer + best adjacent strong edges
+    touching = _edges_touching(answer_node["id"])
+    touching.sort(key=_edge_priority, reverse=True)
+    sel_nodes = [answer_node]
+    sel_edges_list = []
+    seen_ids = {answer_node["id"]}
+    for e in touching[:2]:
+        other_id = e["target"] if e["source"] == answer_node["id"] else e["source"]
+        if other_id not in seen_ids:
+            n = _node_by_id(other_id)
+            if n:
+                sel_nodes.append(n)
+                sel_edges_list.append(e)
+                seen_ids.add(other_id)
+    roles, chain = _roles_and_chain(sel_nodes, sel_edges_list)
+    reason = f"Hard: expanded from answer node with {len(sel_edges_list)} edges (no 3+ node path found)"
+    return {
+        "selected_nodes": sel_nodes, "selected_edges": sel_edges_list,
+        "graph_policy": "multi_node_chain",
+        "graph_policy_reason": reason,
+        "relation_chain": chain, "evidence_roles_used": roles,
+    }
+
+
 # ── ICL examples (narrative domain) ────────────────────────────
 
 NARRATIVE_ICL_EXAMPLES = {
@@ -417,15 +644,37 @@ Output ONLY: {{"question": "...", "answer": "{target_answer}", "reasoning_type":
 
 def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
                      required_evidence_sentences, bridge_sentence_ids,
-                     reasoning_operation, necessity_type):
-    """Ours: narrative evidence graph guided QG with answer-role-aware focus."""
-    ctx = _format_story_context(story_section, sentence_ids=required_evidence_sentences)
-    diff_def = difficulty_instruction(difficulty)
-    graph_str = _format_graph_for_prompt(nodes, edges)
+                     reasoning_operation, necessity_type, graph_substructure=None):
+    """Ours: narrative evidence graph guided QG with graph-structured difficulty policy.
 
-    # Build evidence role summary
+    When graph_substructure is provided, only the selected subgraph is shown
+    in the prompt — this is the difficulty-control signal.
+    """
+    # Use selected subgraph if provided, otherwise fall back to full graph
+    if graph_substructure and graph_substructure.get("selected_nodes"):
+        prompt_nodes = graph_substructure["selected_nodes"]
+        prompt_edges = graph_substructure.get("selected_edges", [])
+        gp = graph_substructure.get("graph_policy", "unknown")
+        gp_reason = graph_substructure.get("graph_policy_reason", "")
+        gp_roles = graph_substructure.get("evidence_roles_used", [])
+        gp_chain = graph_substructure.get("relation_chain", [])
+    else:
+        prompt_nodes = nodes
+        prompt_edges = edges
+        gp = "legacy"
+        gp_reason = "no substructure provided"
+        gp_roles = []
+        gp_chain = []
+
+    # Derive evidence sentence IDs from selected nodes
+    selected_sids = sorted(set(n.get("sentence_id", 0) for n in prompt_nodes))
+    ctx = _format_story_context(story_section, sentence_ids=selected_sids or required_evidence_sentences)
+    diff_def = difficulty_instruction(difficulty)
+    graph_str = _format_graph_for_prompt(prompt_nodes, prompt_edges)
+
+    # Build evidence role summary from selected nodes
     role_summary = {}
-    for n in nodes:
+    for n in prompt_nodes:
         role = n.get("evidence_role", "context")
         sid = n.get("sentence_id", "?")
         role_summary.setdefault(role, []).append(f"S{sid}")
@@ -436,12 +685,12 @@ def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
             role_lines.append(f"  {role}: {', '.join(role_summary[role])}")
     roles_str = "\n".join(role_lines)
 
-    # Build edge chain description
+    # Build edge chain description from selected edges
     edge_chain = " -> ".join(
-        f"{e['source']}({e['relation']})" for e in edges
+        f"{e['source']}({e['relation']})" for e in prompt_edges
     )
-    if edges:
-        last_target = edges[-1].get("target", "")
+    if prompt_edges:
+        last_target = prompt_edges[-1].get("target", "")
         edge_chain += f" -> {last_target}"
 
     # Classify answer role and determine question focus
@@ -454,24 +703,52 @@ ANSWER ROLE: The target answer "{target_answer}" has role={answer_role}, node_ty
 QUESTION FOCUS: {focus['label']}
 FOCUS STRATEGY: {focus['strategy']}"""
 
-    # For Hard: describe the reasoning chain the question should require
-    reasoning_guide = ""
-    if difficulty == "Hard":
-        bridge_sents = [f"S{n['sentence_id']}" for n in nodes if n.get("evidence_role") in ("bridge", "answer_bridge")]
-        anchor_sents = [f"S{n['sentence_id']}" for n in nodes if n.get("evidence_role") == "anchor"]
-        answer_sents = [f"S{n['sentence_id']}" for n in nodes if n.get("evidence_role") in ("answer", "answer_bridge")]
+    # Relation-aware wording for selected edges
+    relation_guidance = ""
+    if gp_chain:
+        wording_parts = []
+        for rel in dict.fromkeys(gp_chain):  # unique, ordered
+            if rel in RELATION_WORDING:
+                wording_parts.append(f"  {rel}: {RELATION_WORDING[rel]}")
+        if wording_parts:
+            relation_guidance = "\nRELATION GUIDANCE:\n" + "\n".join(wording_parts)
+
+    # Graph policy section
+    policy_section = f"""
+GRAPH POLICY: {gp}
+Policy reason: {gp_reason}
+Selected evidence roles: {', '.join(gp_roles) if gp_roles else 'none'}
+Selected relation chain: {' → '.join(gp_chain) if gp_chain else 'none'}"""
+
+    # Difficulty-specific guidance
+    difficulty_guidance = ""
+    if difficulty == "Easy":
+        difficulty_guidance = """
+EASY REQUIREMENTS:
+- Use ONLY the answer node. The question must be answerable from one sentence.
+- Do NOT mention bridge events. Do NOT ask motivation or causal-chain questions.
+- Focus: direct fact, local action/state, local description."""
+    elif difficulty == "Medium":
+        difficulty_guidance = """
+MEDIUM REQUIREMENTS:
+- Use the answer node + one supporting node.
+- Use relation-aware phrasing for one bridge relation only.
+- Do NOT require full chain reasoning.
+- Focus: local cause, local consequence, simple state/action explanation."""
+    elif difficulty == "Hard":
+        bridge_sents = [f"S{n['sentence_id']}" for n in prompt_nodes if n.get("evidence_role") in ("bridge", "answer_bridge")]
+        anchor_sents = [f"S{n['sentence_id']}" for n in prompt_nodes if n.get("evidence_role") == "anchor"]
+        answer_sents = [f"S{n['sentence_id']}" for n in prompt_nodes if n.get("evidence_role") in ("answer", "answer_bridge")]
         total_sents = len(anchor_sents) + len(bridge_sents) + len(answer_sents)
 
-        reasoning_guide = f"""
-
-HARD QUESTION (requires {total_sents} sentences: {anchor_sents} + {bridge_sents} + {answer_sents}):
-- Anchor {anchor_sents}: initial event or context.
-- Bridge {bridge_sents}: development or connection linking anchor to answer.
-- Answer {answer_sents}: where the target answer appears.
-- The question MUST require reading ALL {total_sents} sentences to answer correctly.
+        difficulty_guidance = f"""
+HARD REQUIREMENTS:
+- Use the full reasoning chain (anchor → bridge → answer).
+- The question must require reading ALL {total_sents} sentences: {anchor_sents} + {bridge_sents} + {answer_sents}.
+- Prefer causal/motivation/explanation framing.
 - The question must NOT be answerable from the answer sentence alone.
 - If any sentence is removed, the reader cannot fully answer the question.
-- CRITICAL: Match the question focus to the answer role (see ANSWER ROLE above). Do NOT ask a local/immediate question if the answer is about a larger purpose or final outcome."""
+- CRITICAL: Match the question focus to the answer role. Do NOT ask a local/immediate question if the answer is about a larger purpose or final outcome."""
 
     # Forbidden patterns based on focus
     forbidden = ""
@@ -494,8 +771,9 @@ Target answer: "{target_answer}"
 Difficulty: {difficulty}
 {diff_def}
 
-Evidence Graph:
+Selected Evidence Subgraph:
 {graph_str}
+{policy_section}
 
 Evidence roles:
 {roles_str}
@@ -503,9 +781,8 @@ Evidence roles:
 Reasoning chain: {edge_chain}
 Reasoning operation: {reasoning_operation}
 Necessity type: {necessity_type}
-Required evidence sentences: {required_evidence_sentences}
-Bridge sentences: {bridge_sentence_ids}
-{focus_guide}{reasoning_guide}{forbidden}
+{relation_guidance}
+{focus_guide}{difficulty_guidance}{forbidden}
 
 Requirements:
 1. Answerable from the story alone.
@@ -519,11 +796,26 @@ Output: {{"question": "...", "answer": "{target_answer}", "reasoning_type": "dir
 
 
 def build_repair_prompt(story_section, target_answer, difficulty, focus_key,
-                        required_evidence_sentences):
-    """Compact repair prompt for degenerate/parse failures. No graph dump."""
-    ctx = _format_story_context(story_section, sentence_ids=required_evidence_sentences)
+                        required_evidence_sentences, graph_substructure=None):
+    """Compact repair prompt for degenerate/parse failures. No graph dump.
+
+    Uses selected subgraph nodes' sentence IDs when available, so repair
+    attempts preserve the same graph_policy as the full prompt.
+    """
+    # Use selected subgraph sentence IDs if available
+    if graph_substructure and graph_substructure.get("selected_nodes"):
+        repair_sids = sorted(set(
+            n.get("sentence_id", 0) for n in graph_substructure["selected_nodes"]
+        ))
+    else:
+        repair_sids = required_evidence_sentences
+
+    ctx = _format_story_context(story_section, sentence_ids=repair_sids or required_evidence_sentences)
     diff_def = difficulty_instruction(difficulty)
     focus = ANSWER_FOCUS_TEMPLATES[focus_key]
+
+    gp = graph_substructure.get("graph_policy", "") if graph_substructure else ""
+    gp_hint = f"\nGraph policy: {gp}" if gp else ""
 
     return f"""Generate ONE reading-comprehension question.
 
@@ -532,7 +824,7 @@ Story (evidence sentences only):
 
 Target answer: "{target_answer}"
 Difficulty: {difficulty} — {diff_def}
-Question focus: {focus['label']}
+Question focus: {focus['label']}{gp_hint}
 
 Rules:
 1. Question must be answerable from the story above.
@@ -792,15 +1084,17 @@ def generate_self_refine(story_section, target_answer, difficulty, max_retries=2
     }, 3
 
 
-def _self_check_ours(question, story_section, target_answer, focus_key=None, difficulty="Hard"):
+def _self_check_ours(question, story_section, target_answer, focus_key=None,
+                     difficulty="Hard", graph_policy=None):
     """Lightweight self-check for Ours questions.
 
     Checks:
     1. Natural answer matches target_answer
     2. Sentence count requirement (difficulty-aware)
     3. Question focus matches answer role (if focus_key provided)
+    4. Graph policy compliance (if graph_policy provided)
 
-    Returns (ok, reason, focus_match).
+    Returns (ok, reason, focus_match, graph_policy_compliance).
     """
     ctx = _format_story_context(story_section)
 
@@ -812,11 +1106,24 @@ def _self_check_ours(question, story_section, target_answer, focus_key=None, dif
 
     # Difficulty-aware sentence count check
     if difficulty == "Easy":
-        sentence_check = "2. Is the question answerable from the story?"
+        sentence_check = "2. Is the question answerable from one sentence (the answer sentence alone)?"
     elif difficulty == "Medium":
         sentence_check = "2. Does answering require reading at least 2 sentences (not just 1)?"
     else:  # Hard
         sentence_check = "2. Does answering require reading 3 or more sentences (not just 1-2)?"
+
+    # Graph policy compliance check
+    policy_check = ""
+    if graph_policy:
+        if graph_policy == "answer_only":
+            policy_check = """
+4. Is this question answerable from the answer sentence ALONE (no bridge or multi-sentence reasoning needed)?"""
+        elif graph_policy in ("two_node_relation", "two_node_relation_fallback"):
+            policy_check = """
+4. Does the question reference exactly one supporting relationship (not a full chain)?"""
+        elif graph_policy == "multi_node_chain":
+            policy_check = """
+4. Does the question require a multi-step reasoning chain (not answerable from one sentence)?"""
 
     prompt = f"""Quick check on this reading-comprehension question.
 
@@ -828,16 +1135,16 @@ Expected answer: "{target_answer}"
 
 Check these things:
 1. Does answering this question naturally lead to "{target_answer}" (or a close paraphrase)?
-{sentence_check}{focus_check}
+{sentence_check}{focus_check}{policy_check}
 
-Return ONLY: {{"answer_match": "yes|no", "meets_sentence_req": "yes|no", "focus_match": "yes|no", "reason": "brief"}}"""
+Return ONLY: {{"answer_match": "yes|no", "meets_sentence_req": "yes|no", "focus_match": "yes|no", "graph_policy_compliance": "yes|no", "reason": "brief"}}"""
 
     raw = _call_judge(prompt, temperature=0.0, max_tokens=200)
     parsed = _parse_json(raw)
 
     if not parsed or not isinstance(parsed, dict):
         # On parse failure, don't block — pass through
-        return True, "self-check parse failure, passing through", "unknown"
+        return True, "self-check parse failure, passing through", "unknown", "unknown"
 
     ans_match = parsed.get("answer_match", "yes") == "yes"
     # Backward compatibility: check meets_sentence_req first, fall back to needs_3_plus
@@ -846,9 +1153,10 @@ Return ONLY: {{"answer_match": "yes|no", "meets_sentence_req": "yes|no", "focus_
     if difficulty == "Easy":
         meets_req = True
     focus_ok = parsed.get("focus_match", "yes") == "yes"
+    policy_ok = parsed.get("graph_policy_compliance", "yes") == "yes"
 
-    if ans_match and meets_req and focus_ok:
-        return True, "ok", "yes"
+    if ans_match and meets_req and focus_ok and policy_ok:
+        return True, "ok", "yes", "yes"
 
     reasons = []
     if not ans_match:
@@ -860,7 +1168,9 @@ Return ONLY: {{"answer_match": "yes|no", "meets_sentence_req": "yes|no", "focus_
             reasons.append("needs only 1-2 sentences")
     if not focus_ok:
         reasons.append("focus mismatch")
-    return False, "; ".join(reasons), "yes" if focus_ok else "no"
+    if not policy_ok:
+        reasons.append(f"graph_policy non-compliant ({graph_policy})")
+    return False, "; ".join(reasons), "yes" if focus_ok else "no", "yes" if policy_ok else "no"
 
 
 def generate_ours(story_section, target_answer, difficulty, nodes, edges,
@@ -871,8 +1181,21 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
     Robust retry: first attempts use full prompt, later attempts use compact
     repair prompt for degenerate/parse failures.
     """
+    # Select graph substructure once (difficulty-controlled)
+    graph_sub = select_graph_substructure(nodes, edges, difficulty, target_answer)
+
     # Classify answer focus once
     focus_key, answer_role, answer_node_type = classify_answer_focus(nodes, target_answer)
+
+    # Common fields for all return dicts
+    gp_fields = {
+        "graph_policy": graph_sub["graph_policy"],
+        "graph_policy_reason": graph_sub["graph_policy_reason"],
+        "selected_node_ids": [n["id"] for n in graph_sub["selected_nodes"]],
+        "selected_edge_relations": [e.get("relation", "") for e in graph_sub["selected_edges"]],
+        "evidence_roles_used": graph_sub["evidence_roles_used"],
+        "relation_chain": graph_sub["relation_chain"],
+    }
 
     question = ""
     reason = "unknown"
@@ -880,6 +1203,7 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
     last_prompt = ""
     last_raw = ""
     best_focus_match = "unknown"
+    best_policy_compliance = "unknown"
     attempts_trace = []
 
     for attempt in range(max_retries + 1):
@@ -889,7 +1213,7 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         if use_repair:
             prompt = build_repair_prompt(
                 story_section, target_answer, difficulty, focus_key,
-                required_evidence_sentences,
+                required_evidence_sentences, graph_substructure=graph_sub,
             )
             temp = 0.1
             prompt_type = "repair"
@@ -897,7 +1221,7 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
             prompt = build_ours_prompt(
                 story_section, target_answer, difficulty, nodes, edges,
                 required_evidence_sentences, bridge_sentence_ids,
-                reasoning_operation, necessity_type,
+                reasoning_operation, necessity_type, graph_substructure=graph_sub,
             )
             temp = 0.05 if attempt == 0 else 0.1
             prompt_type = "full"
@@ -946,11 +1270,13 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         ok, reason = _validate_question(question, target_answer)
         trace_entry["validate_reason"] = reason
         if ok:
-            # Self-check: verify answer match, sentence count, and focus
-            sc_ok, sc_reason, focus_match = _self_check_ours(
-                question, story_section, target_answer, focus_key, difficulty=difficulty
+            # Self-check: verify answer match, sentence count, focus, and graph policy
+            sc_ok, sc_reason, focus_match, policy_compliance = _self_check_ours(
+                question, story_section, target_answer, focus_key,
+                difficulty=difficulty, graph_policy=graph_sub["graph_policy"],
             )
             best_focus_match = focus_match
+            best_policy_compliance = policy_compliance
             trace_entry["self_check_reason"] = sc_reason
             attempts_trace.append(trace_entry)
             if sc_ok:
@@ -965,9 +1291,11 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
                     "answer_node_type": answer_node_type,
                     "question_focus": focus_key,
                     "focus_match": focus_match,
+                    "graph_policy_compliance": policy_compliance,
                     "attempts_trace": attempts_trace,
                     "repair_attempted": any(t["prompt_type"] == "repair" for t in attempts_trace),
                     "repair_success": any(t["prompt_type"] == "repair" and t == attempts_trace[-1] for t in attempts_trace),
+                    **gp_fields,
                 }, 1 + attempt
             else:
                 reason = f"self-check failed: {sc_reason}"
@@ -987,9 +1315,11 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         "answer_node_type": answer_node_type,
         "question_focus": focus_key,
         "focus_match": best_focus_match,
+        "graph_policy_compliance": best_policy_compliance,
         "attempts_trace": attempts_trace,
         "repair_attempted": any(t["prompt_type"] == "repair" for t in attempts_trace),
         "repair_success": False,
+        **gp_fields,
     }, max_retries + 1
 
 

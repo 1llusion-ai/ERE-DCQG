@@ -290,6 +290,120 @@ def _select_balanced_candidates(candidates_path, target_per_level=150, seed=42):
     return selected
 
 
+def _select_story_matched_candidates(candidates_path, candidates_per_level_per_story=1, max_stories=None, seed=42):
+    """Story-matched candidate selection.
+
+    Groups candidates by story_name and evidence_difficulty. Keeps only stories
+    with >= 1 Easy, >= 1 Medium, >= 1 Hard. Selects exactly
+    candidates_per_level_per_story per level per story, deterministically.
+
+    Candidate preference within story:
+      - Easy: prefer answer_sentence_alone_sufficient=yes and num_required_sentences=1
+      - Medium: prefer num_required_sentences=2
+      - Hard: prefer necessity_type in {motivation_bridge, causal_bridge, summary_synthesis}
+        and non-temporal reasoning if available
+
+    Returns list of candidate dicts tagged with 'target_difficulty' and 'story_group_id'.
+    """
+    import random
+    rng = random.Random(seed)
+
+    # Load and group by (story_name, evidence_difficulty)
+    story_levels = {}  # story_name -> {"Easy": [...], "Medium": [...], "Hard": [...]}
+    with open(candidates_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            diff = rec.get("evidence_difficulty", "")
+            if diff not in ("Easy", "Medium", "Hard"):
+                continue
+            sn = rec.get("story_name", "")
+            if sn not in story_levels:
+                story_levels[sn] = {"Easy": [], "Medium": [], "Hard": []}
+            story_levels[sn][diff].append(rec)
+
+    # Filter to stories with at least 1 candidate per level
+    eligible = {
+        sn: levels for sn, levels in story_levels.items()
+        if len(levels["Easy"]) >= 1 and len(levels["Medium"]) >= 1 and len(levels["Hard"]) >= 1
+    }
+    eligible_names = sorted(eligible.keys())
+    print(f"  Pool: {len(story_levels)} total stories, {len(eligible_names)} eligible (>=1 Easy/Med/Hard each)")
+
+    if max_stories and max_stories < len(eligible_names):
+        rng.shuffle(eligible_names)
+        eligible_names = sorted(eligible_names[:max_stories])
+        print(f"  Limited to {len(eligible_names)} stories (max_stories={max_stories})")
+
+    # Preference scoring helpers
+    def _easy_preference(c):
+        score = 0
+        if c.get("answer_sentence_alone_sufficient") == "yes":
+            score += 10
+        if c.get("num_required_sentences", 99) == 1:
+            score += 5
+        return score
+
+    def _medium_preference(c):
+        score = 0
+        if c.get("num_required_sentences", 0) == 2:
+            score += 10
+        elif c.get("num_required_sentences", 0) == 3:
+            score += 3
+        return score
+
+    def _hard_preference(c):
+        score = 0
+        nt = c.get("necessity_type", "")
+        if nt in ("motivation_bridge", "causal_bridge", "summary_synthesis"):
+            score += 10
+        elif nt in ("disambiguation", "answer_identification"):
+            score += 7
+        elif nt in ("temporal_bridge",):
+            score += 3
+        ro = c.get("reasoning_operation", "")
+        temporal_ops = ("temporal_order", "explicit_lookup")
+        if ro and ro not in temporal_ops:
+            score += 5
+        if c.get("bridge_removal_effect") in ("ambiguous", "unanswerable"):
+            score += 3
+        return score
+
+    # Select candidates per story
+    selected = []
+    for idx, sn in enumerate(eligible_names):
+        levels = eligible[sn]
+
+        for diff, preference_fn in [
+            ("Easy", _easy_preference),
+            ("Medium", _medium_preference),
+            ("Hard", _hard_preference),
+        ]:
+            pool = levels[diff]
+            # Sort by preference (descending), then deterministic shuffle within ties
+            scored = [(preference_fn(c), i, c) for i, c in enumerate(pool)]
+            scored.sort(key=lambda x: (-x[0], x[1]))  # highest score first, then original order
+            # Take top candidates_per_level_per_story
+            chosen = [c for _, _, c in scored[:candidates_per_level_per_story]]
+            for c in chosen:
+                c_out = dict(c)
+                c_out["target_difficulty"] = diff
+                c_out["story_group_id"] = idx
+                selected.append(c_out)
+
+    # Summary
+    by_diff = {"Easy": 0, "Medium": 0, "Hard": 0}
+    for c in selected:
+        by_diff[c["target_difficulty"]] += 1
+    print(f"  Selected: {len(selected)} candidates ({by_diff['Easy']}E/{by_diff['Medium']}M/{by_diff['Hard']}H) "
+          f"from {len(eligible_names)} stories "
+          f"({candidates_per_level_per_story} per level per story)")
+
+    return selected
+
+
 # ---------------------------------------------------------------------------
 # Graph extraction
 # ---------------------------------------------------------------------------
@@ -372,6 +486,13 @@ def _run_method(method_name, candidate, graph_data):
                 "quality_pass": False,
                 "generation_error": "graph_invalid" if graph_data is not None else "graph_missing",
                 "attempts": 0,
+                "graph_policy": "graph_invalid",
+                "graph_policy_reason": "graph data invalid or missing",
+                "graph_policy_compliance": "no",
+                "selected_node_ids": [],
+                "selected_edge_relations": [],
+                "evidence_roles_used": [],
+                "relation_chain": [],
             }
         result, attempts = generate_ours(
             story_section, target_answer, difficulty,
@@ -568,10 +689,381 @@ def _compute_crossqg_metrics(all_results):
 
 
 # ---------------------------------------------------------------------------
+# Story-matched diagnostics
+# ---------------------------------------------------------------------------
+
+def _compute_story_matched_diagnostics(all_results):
+    """Compute story-level diagnostics for story_matched evaluation.
+
+    Returns dict with:
+      - stories: per-story metrics
+      - win_tie_loss: Ours vs each baseline at story level
+      - story_spearman: per-story Spearman where all 3 levels are valid
+      - per_story_failures: per-story failure counts by method
+    """
+    methods = ["Direct", "ICL", "SelfRefine", "Ours"]
+    baseline_methods = ["Direct", "ICL", "SelfRefine"]
+    levels = ["Easy", "Medium", "Hard"]
+    ordinal = {"Easy": 1, "Medium": 2, "Hard": 3}
+
+    # Group by story and method
+    stories = {}
+    for r in all_results:
+        sn = r.get("story_name", "")
+        m = r.get("method", "")
+        if sn not in stories:
+            stories[sn] = {}
+        if m not in stories[sn]:
+            stories[sn][m] = []
+        stories[sn][m].append(r)
+
+    # Per-story metrics
+    story_metrics = {}
+    for sn, method_results in stories.items():
+        sm = {"story_name": sn}
+        for m in methods:
+            rs = method_results.get(m, [])
+            valid = [r for r in rs if r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+            correct = sum(1 for r in valid if r.get("predicted_difficulty") == r.get("target_difficulty"))
+            n_valid = len(valid)
+            n_total = len(rs)
+            n_qp = sum(1 for r in rs if r.get("quality_pass"))
+            sm[f"{m}_n_total"] = n_total
+            sm[f"{m}_n_qp"] = n_qp
+            sm[f"{m}_n_valid"] = n_valid
+            sm[f"{m}_correct"] = correct
+            sm[f"{m}_accuracy"] = correct / n_valid if n_valid else 0.0
+            # Per-level (quality-pass + judge-ok subset)
+            for level in levels:
+                lr = [r for r in valid if r.get("target_difficulty") == level]
+                lc = sum(1 for r in lr if r.get("predicted_difficulty") == level)
+                sm[f"{m}_{level}_correct"] = lc
+                sm[f"{m}_{level}_total"] = len(lr)
+            # Per-level raw counts (all results)
+            for level in levels:
+                lr_raw = [r for r in rs if r.get("target_difficulty") == level]
+                sm[f"{m}_{level}_raw"] = len(lr_raw)
+        story_metrics[sn] = sm
+
+    # Win/Tie/Loss: Ours vs each baseline at story level
+    win_tie_loss = {}
+    for bm in baseline_methods:
+        wins, ties, losses = 0, 0, 0
+        for sn, sm in story_metrics.items():
+            ours_acc = sm.get("Ours_accuracy", 0.0)
+            bm_acc = sm.get(f"{bm}_accuracy", 0.0)
+            if ours_acc > bm_acc:
+                wins += 1
+            elif ours_acc == bm_acc:
+                ties += 1
+            else:
+                losses += 1
+        n_stories = wins + ties + losses
+        win_tie_loss[bm] = {
+            "wins": wins,
+            "ties": ties,
+            "losses": losses,
+            "n_stories": n_stories,
+        }
+
+    # Story-level Spearman: only stories where all 3 levels are valid for the method
+    story_spearman = {}
+    for m in methods:
+        rhos = []
+        skipped = 0
+        for sn, sm in story_metrics.items():
+            target_vals = []
+            pred_vals = []
+            for level in levels:
+                key_t = f"{m}_{level}_total"
+                if sm.get(key_t, 0) > 0:
+                    target_vals.append(ordinal[level])
+                    # Get the actual predicted value from results
+                    rs = stories[sn].get(m, [])
+                    lr = [r for r in rs if r.get("target_difficulty") == level
+                          and r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+                    if lr:
+                        pred = lr[0].get("predicted_difficulty", "Medium")
+                        pred_vals.append(ordinal.get(pred, 2))
+            if len(target_vals) >= 3:
+                rhos.append(_spearman(target_vals, pred_vals))
+            else:
+                skipped += 1
+        story_spearman[m] = {
+            "n_valid_stories": len(rhos),
+            "n_skipped": skipped,
+            "mean_rho": sum(rhos) / len(rhos) if rhos else 0.0,
+            "rho_values": rhos,
+        }
+
+    # Per-story failure counts by method
+    per_story_failures = {}
+    for m in methods:
+        fail_dist = {}
+        for sn, sm in story_metrics.items():
+            n_fail = sm.get(f"{m}_n_total", 0) - sm.get(f"{m}_n_qp", 0)
+            fail_dist[sn] = n_fail
+        per_story_failures[m] = fail_dist
+
+    return {
+        "story_metrics": story_metrics,
+        "win_tie_loss": win_tie_loss,
+        "story_spearman": story_spearman,
+        "per_story_failures": per_story_failures,
+        "n_stories": len(story_metrics),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Retry / budget diagnostics
+# ---------------------------------------------------------------------------
+
+def _compute_retry_budget_diagnostics(all_results):
+    """Compute retry and budget diagnostics for all methods.
+
+    Returns dict keyed by method with:
+      - average_attempts, max_attempts
+      - repair_prompt_used_rate (Ours)
+      - retry_reason_distribution
+      - failure_reason_distribution
+      - Ours: graph_policy_self_check_failure_rate
+    """
+    methods = ["Direct", "ICL", "SelfRefine", "Ours"]
+    diags = {}
+
+    for m in methods:
+        rs = [r for r in all_results if r.get("method") == m]
+        n_total = len(rs)
+
+        # Attempts
+        attempts = [r.get("attempts", 0) for r in rs]
+        avg_attempts = sum(attempts) / len(attempts) if attempts else 0.0
+        max_attempts_val = max(attempts) if attempts else 0
+
+        # Repair prompt rate (Ours only)
+        repair_used = 0
+        repair_success = 0
+        if m == "Ours":
+            for r in rs:
+                if r.get("repair_attempted"):
+                    repair_used += 1
+                    if r.get("repair_success"):
+                        repair_success += 1
+
+        # Retry reason distribution (from attempts_trace for Ours, generation_error for others)
+        retry_reasons = {}
+        failure_reasons = {}
+        for r in rs:
+            # Failure reasons
+            if not r.get("quality_pass"):
+                err = r.get("generation_error", "unknown")
+                # Classify failure
+                if "degenerate" in str(err):
+                    reason = "degenerate output"
+                elif "parse" in str(err).lower():
+                    reason = "parse failure"
+                elif "graph" in str(err).lower():
+                    reason = "graph issue"
+                elif "empty" in str(err):
+                    reason = "empty output"
+                elif "question length" in str(err):
+                    reason = "question length"
+                elif "self-check" in str(err):
+                    reason = "self-check failed"
+                elif "judge_error" in str(err):
+                    reason = "judge error"
+                else:
+                    qj = r.get("quality_judge", {})
+                    if qj:
+                        if qj.get("answerable") == "no":
+                            reason = "not answerable"
+                        elif qj.get("fluency") == "no":
+                            reason = "not fluent"
+                        elif qj.get("asks_expected_answer") == "no":
+                            reason = "wrong answer"
+                        elif qj.get("answer_leakage") == "yes":
+                            reason = "answer leakage"
+                        else:
+                            reason = str(err)[:60]
+                    else:
+                        reason = str(err)[:60]
+                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+
+            # Retry traces
+            trace = r.get("attempts_trace", [])
+            for t in trace:
+                reason = t.get("validate_reason", "") or t.get("self_check_reason", "")
+                if reason:
+                    reason_short = reason[:80]
+                    retry_reasons[reason_short] = retry_reasons.get(reason_short, 0) + 1
+
+        # Ours graph_policy self-check failure rate
+        gp_sc_failure = 0
+        gp_sc_total = 0
+        if m == "Ours":
+            for r in rs:
+                gp = r.get("graph_policy", "")
+                if gp and gp != "graph_invalid":
+                    gp_sc_total += 1
+                    if r.get("graph_policy_compliance") != "yes":
+                        gp_sc_failure += 1
+
+        md = {
+            "n_total": n_total,
+            "average_attempts": avg_attempts,
+            "max_attempts": max_attempts_val,
+            "attempt_distribution": {},
+            "retry_reasons": retry_reasons,
+            "failure_reasons": failure_reasons,
+        }
+
+        # Attempt distribution
+        for a in attempts:
+            md["attempt_distribution"][a] = md["attempt_distribution"].get(a, 0) + 1
+
+        if m == "Ours":
+            md["repair_prompt_used"] = repair_used
+            md["repair_prompt_used_rate"] = repair_used / n_total if n_total else 0.0
+            md["repair_prompt_success"] = repair_success
+            md["graph_policy_sc_failure"] = gp_sc_failure
+            md["graph_policy_sc_total"] = gp_sc_total
+            md["graph_policy_sc_failure_rate"] = gp_sc_failure / gp_sc_total if gp_sc_total else 0.0
+
+        diags[m] = md
+
+    return diags
+
+
+# ---------------------------------------------------------------------------
+# Similarity diagnostics (diagnostic only, no filtering)
+# ---------------------------------------------------------------------------
+
+def _compute_similarity_diagnostics(all_results):
+    """Compute per-story per-method similarity diagnostics.
+
+    For each story and method:
+      - Easy-Medium, Medium-Hard, Easy-Hard lexical similarity (character n-gram)
+      - Evidence sentence overlap among judge-used evidence
+      - Difficulty collapse counts (all 3 predicted same, collapse to Medium)
+
+    These are diagnostics only. No filtering or regeneration based on similarity.
+    """
+    methods = ["Direct", "ICL", "SelfRefine", "Ours"]
+    levels = ["Easy", "Medium", "Hard"]
+
+    def _char_ngram_similarity(text_a, text_b, n=4):
+        """Character n-gram Jaccard similarity."""
+        if not text_a or not text_b:
+            return 0.0
+        a_ngrams = set(text_a[i:i+n] for i in range(len(text_a) - n + 1))
+        b_ngrams = set(text_b[i:i+n] for i in range(len(text_b) - n + 1))
+        if not a_ngrams or not b_ngrams:
+            return 0.0
+        return len(a_ngrams & b_ngrams) / len(a_ngrams | b_ngrams)
+
+    # Group by (story_name, method)
+    story_method_qs = {}
+    for r in all_results:
+        sn = r.get("story_name", "")
+        m = r.get("method", "")
+        q = r.get("generated_question", "")
+        diff = r.get("target_difficulty", "")
+        dj = r.get("difficulty_judge", {})
+        used_evidence = dj.get("required_evidence_sentences_used", [])
+        pred = r.get("predicted_difficulty", "?")
+        key = (sn, m)
+        if key not in story_method_qs:
+            story_method_qs[key] = {}
+        story_method_qs[key][diff] = {
+            "question": q,
+            "used_evidence": used_evidence,
+            "predicted": pred,
+            "quality_pass": r.get("quality_pass", False),
+            "judge_ok": r.get("difficulty_judge_status") == "ok",
+        }
+
+    # Per-method aggregate similarity
+    method_similarities = {}
+    for m in methods:
+        pairs = {"Easy-Medium": [], "Medium-Hard": [], "Easy-Hard": []}
+        evidence_overlaps = {"Easy-Medium": [], "Medium-Hard": [], "Easy-Hard": []}
+        collapses = {"total_stories": 0, "collapse_all_three": 0, "collapse_to_medium": 0,
+                      "collapse_to_easy": 0, "collapse_to_hard": 0}
+
+        for (sn, method), diffs in story_method_qs.items():
+            if method != m:
+                continue
+            # Check collapse (all 3 quality-pass judge-ok)
+            qp_diffs = {d: v for d, v in diffs.items()
+                        if v["quality_pass"] and v["judge_ok"]}
+            if len(qp_diffs) >= 3:
+                collapses["total_stories"] += 1
+                preds = set(v["predicted"] for v in qp_diffs.values())
+                if len(preds) == 1:
+                    collapses["collapse_all_three"] += 1
+                    if "Medium" in preds:
+                        collapses["collapse_to_medium"] += 1
+                    elif "Easy" in preds:
+                        collapses["collapse_to_easy"] += 1
+                    elif "Hard" in preds:
+                        collapses["collapse_to_hard"] += 1
+
+            # Pairwise similarities
+            for pair, (l1, l2) in {
+                "Easy-Medium": ("Easy", "Medium"),
+                "Medium-Hard": ("Medium", "Hard"),
+                "Easy-Hard": ("Easy", "Hard"),
+            }.items():
+                if l1 in diffs and l2 in diffs:
+                    q1 = diffs[l1]["question"]
+                    q2 = diffs[l2]["question"]
+                    if q1 and q2:
+                        sim = _char_ngram_similarity(q1, q2)
+                        pairs[pair].append(sim)
+                    # Evidence overlap
+                    e1 = set(diffs[l1].get("used_evidence", []))
+                    e2 = set(diffs[l2].get("used_evidence", []))
+                    if e1 and e2:
+                        overlap = len(e1 & e2) / len(e1 | e2)
+                    else:
+                        overlap = 0.0
+                    evidence_overlaps[pair].append(overlap)
+
+        avg_pairs = {}
+        for pair in pairs:
+            vals = pairs[pair]
+            avg_pairs[pair] = {
+                "mean": sum(vals) / len(vals) if vals else 0.0,
+                "max": max(vals) if vals else 0.0,
+                "min": min(vals) if vals else 0.0,
+                "n": len(vals),
+            }
+
+        avg_evidence = {}
+        for pair in evidence_overlaps:
+            vals = evidence_overlaps[pair]
+            avg_evidence[pair] = {
+                "mean": sum(vals) / len(vals) if vals else 0.0,
+                "max": max(vals) if vals else 0.0,
+                "n": len(vals),
+            }
+
+        method_similarities[m] = {
+            "question_similarity": avg_pairs,
+            "evidence_overlap": avg_evidence,
+            "collapses": collapses,
+            "n_stories_with_3qp": collapses["total_stories"],
+        }
+
+    return method_similarities
+
+
+# ---------------------------------------------------------------------------
 # Report generation
 # ---------------------------------------------------------------------------
 
-def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=None, bootstrap_diag=None):
+def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=None, bootstrap_diag=None,
+                  story_diag=None, retry_diag=None, similarity_diag=None):
     """Write the CrossQG evaluation report."""
     report_path = output_dir / "CROSSQG_EVAL_REPORT.md"
     meta = meta or {}
@@ -585,6 +1077,7 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
         if m in method_results:
             method_results[m].append(r)
 
+    selection_mode = meta.get("selection_mode", "balanced")
     lines = [
         "# FairytaleQA CrossQG Evaluation Report",
         "",
@@ -595,14 +1088,21 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
         "| Field | Value |",
         "|---|---|",
         f"| Methods | {', '.join(methods)} |",
+        f"| Selection mode | {selection_mode} |",
         f"| Target per level | {meta.get('target_per_level', 'N/A')} |",
         f"| Selected Easy | {meta.get('n_easy', 'N/A')} |",
         f"| Selected Medium | {meta.get('n_medium', 'N/A')} |",
         f"| Selected Hard | {meta.get('n_hard', 'N/A')} |",
         f"| Total selected | {meta.get('n_total', 'N/A')} |",
+        f"| Total stories | {meta.get('n_stories', 'N/A')} |",
         f"| Total generations | {len(all_results)} |",
-        "",
     ]
+
+    if selection_mode == "story_matched":
+        lines.append(f"| Candidates per level per story | {meta.get('candidates_per_level_per_story', 'N/A')} |")
+        lines.append(f"| Max stories | {meta.get('max_stories', 'N/A')} |")
+
+    lines.append("")
 
     # Graph extraction stats
     lines.append("### Graph Extraction Success")
@@ -808,6 +1308,154 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
         lines.append(f"| {m} | {len(stories)} | {len(predicted_hard)} |")
     lines.append("")
 
+    # ── Ours Graph Policy Diagnostics ──────────────────────────────
+    ours_rs = [r for r in all_results if r.get("method") == "Ours"]
+    ours_with_gp = [r for r in ours_rs if r.get("graph_policy") and r["graph_policy"] != "graph_invalid"]
+
+    if ours_with_gp:
+        lines.append("## Ours Graph Policy Diagnostics")
+        lines.append("")
+
+        # 1. Graph policy distribution by target difficulty
+        lines.append("### GP-1. Graph Policy Distribution by Target Difficulty")
+        lines.append("")
+        gp_types = ["answer_only", "two_node_relation", "multi_node_chain"]
+        header = "| Target | " + " | ".join(gp_types) + " | fallback | total |"
+        sep = "|---|" + "|".join("---:" for _ in gp_types) + "|---:|---:|"
+        lines.append(header)
+        lines.append(sep)
+        for diff in levels:
+            diff_rs = [r for r in ours_with_gp if r.get("target_difficulty") == diff]
+            counts = {gp: 0 for gp in gp_types}
+            fallback = 0
+            for r in diff_rs:
+                gp = r.get("graph_policy", "")
+                if gp in counts:
+                    counts[gp] += 1
+                else:
+                    fallback += 1
+            row = f"| {diff} | " + " | ".join(str(counts[gp]) for gp in gp_types) + f" | {fallback} | {len(diff_rs)} |"
+            lines.append(row)
+        lines.append("")
+
+        # 2. Graph policy compliance rate by target difficulty
+        lines.append("### GP-2. Graph Policy Compliance Rate by Target Difficulty")
+        lines.append("")
+        lines.append("| Target | compliant | total | pct |")
+        lines.append("|---|---:|---:|---:|")
+        for diff in levels:
+            diff_rs = [r for r in ours_with_gp if r.get("target_difficulty") == diff]
+            compliant = sum(1 for r in diff_rs if r.get("graph_policy_compliance") == "yes")
+            pct = f"{100*compliant/len(diff_rs):.1f}%" if diff_rs else "N/A"
+            lines.append(f"| {diff} | {compliant} | {len(diff_rs)} | {pct} |")
+        lines.append("")
+
+        # 3. Per-policy accuracy / macro F1 / Hard hit
+        lines.append("### GP-3. Per-Policy Difficulty Accuracy")
+        lines.append("")
+        lines.append("| Policy | n_valid | accuracy | hard_hit |")
+        lines.append("|---|---:|---:|---:|")
+        for gp in gp_types + ["other"]:
+            if gp == "other":
+                gp_rs = [r for r in ours_with_gp
+                         if r.get("graph_policy") not in gp_types
+                         and r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+            else:
+                gp_rs = [r for r in ours_with_gp
+                         if r.get("graph_policy") == gp
+                         and r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+            if not gp_rs:
+                lines.append(f"| {gp} | 0 | N/A | N/A |")
+                continue
+            correct = sum(1 for r in gp_rs if r.get("predicted_difficulty") == r.get("target_difficulty"))
+            acc = f"{100*correct/len(gp_rs):.1f}%"
+            hard_rs = [r for r in gp_rs if r.get("target_difficulty") == "Hard"]
+            hard_hit = sum(1 for r in hard_rs if r.get("predicted_difficulty") == "Hard")
+            hard_pct = f"{100*hard_hit/len(hard_rs):.1f}%" if hard_rs else "N/A"
+            lines.append(f"| {gp} | {len(gp_rs)} | {acc} | {hard_pct} |")
+        lines.append("")
+
+        # 4. Selected relation chain distribution (top 10)
+        lines.append("### GP-4. Selected Relation Chain Distribution (top 10)")
+        lines.append("")
+        chain_counts = {}
+        for r in ours_with_gp:
+            chain = " → ".join(r.get("relation_chain", [])) or "(none)"
+            chain_counts[chain] = chain_counts.get(chain, 0) + 1
+        sorted_chains = sorted(chain_counts.items(), key=lambda x: -x[1])[:10]
+        lines.append("| Relation chain | count | pct |")
+        lines.append("|---|---:|---:|")
+        total_chains = len(ours_with_gp)
+        for chain, cnt in sorted_chains:
+            pct = f"{100*cnt/total_chains:.1f}%"
+            lines.append(f"| {chain} | {cnt} | {pct} |")
+        lines.append("")
+
+        # 5. Hard: relation type vs predicted difficulty
+        hard_ours = [r for r in ours_with_gp if r.get("target_difficulty") == "Hard"
+                     and r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        if hard_ours:
+            lines.append("### GP-5. Hard: Relation Type vs Predicted Difficulty")
+            lines.append("")
+            rel_pred = {}
+            for r in hard_ours:
+                for rel in r.get("relation_chain", []):
+                    rel_pred.setdefault(rel, {"Easy": 0, "Medium": 0, "Hard": 0})
+                    pred = r.get("predicted_difficulty", "?")
+                    if pred in rel_pred[rel]:
+                        rel_pred[rel][pred] += 1
+            lines.append("| Relation | Easy | Medium | Hard | total |")
+            lines.append("|---|---:|---:|---:|---:|")
+            for rel in sorted(rel_pred, key=lambda x: -sum(rel_pred[x].values())):
+                d = rel_pred[rel]
+                total = sum(d.values())
+                lines.append(f"| {rel} | {d['Easy']} | {d['Medium']} | {d['Hard']} | {total} |")
+            lines.append("")
+
+        # 6. Repair prompt usage by difficulty and graph_policy
+        lines.append("### GP-6. Repair Prompt Usage by Difficulty and Graph Policy")
+        lines.append("")
+        lines.append("| Target | Policy | repair_used | total | pct |")
+        lines.append("|---|---|---:|---:|---:|")
+        for diff in levels:
+            for gp in gp_types:
+                gp_diff_rs = [r for r in ours_with_gp
+                             if r.get("target_difficulty") == diff and r.get("graph_policy") == gp]
+                if not gp_diff_rs:
+                    continue
+                repair = sum(1 for r in gp_diff_rs if r.get("repair_attempted"))
+                pct = f"{100*repair/len(gp_diff_rs):.1f}%"
+                lines.append(f"| {diff} | {gp} | {repair} | {len(gp_diff_rs)} | {pct} |")
+        lines.append("")
+
+        # 7. Hard pure_temporal_chain count
+        hard_temporal = [r for r in ours_with_gp
+                        if r.get("target_difficulty") == "Hard"
+                        and r.get("graph_policy") == "multi_node_chain"
+                        and "pure_temporal_chain" in r.get("graph_policy_reason", "")]
+        lines.append(f"### GP-7. Hard Pure Temporal Chain Count: {len(hard_temporal)}")
+        lines.append("")
+
+        # 8. Easy answer_sentence_alone rate
+        easy_ours = [r for r in ours_with_gp if r.get("target_difficulty") == "Easy"
+                     and r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        if easy_ours:
+            alone_yes = sum(1 for r in easy_ours
+                           if r.get("difficulty_judge", {}).get("answer_sentence_alone_sufficient") == "yes")
+            pct = f"{100*alone_yes/len(easy_ours):.1f}%"
+            lines.append(f"### GP-8. Easy Answer-Sentence-Alone Rate: {pct} ({alone_yes}/{len(easy_ours)})")
+            lines.append("")
+
+        # 9. Hard answer_sentence_alone=no rate
+        hard_ours_valid = [r for r in ours_with_gp if r.get("target_difficulty") == "Hard"
+                          and r.get("quality_pass") and r.get("difficulty_judge_status") == "ok"]
+        if hard_ours_valid:
+            alone_no = sum(1 for r in hard_ours_valid
+                          if r.get("difficulty_judge", {}).get("answer_sentence_alone_sufficient") == "no")
+            pct = f"{100*alone_no/len(hard_ours_valid):.1f}%"
+            lines.append(f"### GP-9. Hard Answer-Sentence-Alone=No Rate: {pct} ({alone_no}/{len(hard_ours_valid)})")
+            lines.append("")
+
     # 7. Pairwise difference table
     lines.append("## 7. Pairwise Difference Table (Ours - Baseline)")
     lines.append("")
@@ -865,27 +1513,76 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
     spearman_pass = all(ours_cm["spearman"] >= b for b in baseline_spearman)
     spearman_small_margin = spearman_pass and min_spearman_margin < 0.05
 
-    criteria = [
-        ("selected >= 150 per level",
-         meta.get("n_easy", 0) >= 150 and meta.get("n_medium", 0) >= 150 and meta.get("n_hard", 0) >= 150,
-         f"Easy={meta.get('n_easy')}, Medium={meta.get('n_medium')}, Hard={meta.get('n_hard')}"),
-        ("Ours quality_pass not << baselines",
-         ours_cm["n_quality_pass"] / max(1, ours_cm["n_total"]) >= min(
-             crossqg_metrics[m]["n_quality_pass"] / max(1, crossqg_metrics[m]["n_total"])
-             for m in baseline_methods) - 0.05,
-         f"Ours={ours_cm['n_quality_pass']}/{ours_cm['n_total']}"),
-        ("Ours overall accuracy >= each baseline",
-         all(ours_cm["overall_accuracy"] >= b for b in baseline_accs),
-         f"Ours={ours_cm['overall_accuracy']*100:.1f}%"),
-        ("Ours macro accuracy >= each baseline",
-         all(ours_cm["macro_accuracy"] >= b for b in baseline_macro),
-         f"Ours={ours_cm['macro_accuracy']*100:.1f}%"),
-        ("Ours Spearman >= each baseline",
-         spearman_pass,
-         f"Ours={ours_cm['spearman']:.3f} (min margin={min_spearman_margin:+.3f} vs SelfRefine)"
-         if spearman_small_margin else
-         f"Ours={ours_cm['spearman']:.3f}"),
-    ]
+    if selection_mode == "story_matched":
+        # Story-matched criteria
+        n_stories_val = meta.get("n_stories", 0)
+        story_count_pass = n_stories_val >= 100
+
+        # Verify every selected story has equal Easy/Med/Hard count
+        # In story_matched mode, each method generates for each candidate.
+        # Expected per-level per-story = n_methods × candidates_per_level_per_story
+        expected_per_level = len(methods) * meta.get("candidates_per_level_per_story", 1)
+        stories_levels = {}
+        for r in all_results:
+            sn = r.get("story_name", "")
+            diff = r.get("target_difficulty", "")
+            stories_levels.setdefault(sn, {}).setdefault(diff, 0)
+            stories_levels[sn][diff] += 1
+        equal_levels = all(
+            s.get("Easy", 0) == s.get("Medium", 0) == s.get("Hard", 0) == expected_per_level
+            for s in stories_levels.values()
+        )
+
+        # All methods have identical denominators
+        method_counts = {}
+        for m in methods:
+            method_counts[m] = sum(1 for r in all_results if r.get("method") == m)
+        identical_denom = len(set(method_counts.values())) == 1
+
+        criteria = [
+            ("selected stories >= 100", story_count_pass,
+             f"selected stories={n_stories_val}"),
+            ("every story has equal Easy/Med/Hard count", equal_levels,
+             f"all {len(stories_levels)} stories have 1E/1M/1H" if equal_levels else "some stories unbalanced"),
+            ("all methods have identical denominator", identical_denom,
+             f"denominators: {method_counts}"),
+            ("Ours quality_pass not << baselines",
+             ours_cm["n_quality_pass"] / max(1, ours_cm["n_total"]) >= min(
+                 crossqg_metrics[m]["n_quality_pass"] / max(1, crossqg_metrics[m]["n_total"])
+                 for m in baseline_methods) - 0.05,
+             f"Ours={ours_cm['n_quality_pass']}/{ours_cm['n_total']}"),
+            ("Ours overall accuracy >= each baseline",
+             all(ours_cm["overall_accuracy"] >= b for b in baseline_accs),
+             f"Ours={ours_cm['overall_accuracy']*100:.1f}%"),
+            ("Ours macro accuracy >= each baseline",
+             all(ours_cm["macro_accuracy"] >= b for b in baseline_macro),
+             f"Ours={ours_cm['macro_accuracy']*100:.1f}%"),
+            ("Ours Spearman >= each baseline",
+             spearman_pass,
+             f"Ours={ours_cm['spearman']:.3f}"),
+        ]
+    else:
+        criteria = [
+            ("selected >= 150 per level",
+             meta.get("n_easy", 0) >= 150 and meta.get("n_medium", 0) >= 150 and meta.get("n_hard", 0) >= 150,
+             f"Easy={meta.get('n_easy')}, Medium={meta.get('n_medium')}, Hard={meta.get('n_hard')}"),
+            ("Ours quality_pass not << baselines",
+             ours_cm["n_quality_pass"] / max(1, ours_cm["n_total"]) >= min(
+                 crossqg_metrics[m]["n_quality_pass"] / max(1, crossqg_metrics[m]["n_total"])
+                 for m in baseline_methods) - 0.05,
+             f"Ours={ours_cm['n_quality_pass']}/{ours_cm['n_total']}"),
+            ("Ours overall accuracy >= each baseline",
+             all(ours_cm["overall_accuracy"] >= b for b in baseline_accs),
+             f"Ours={ours_cm['overall_accuracy']*100:.1f}%"),
+            ("Ours macro accuracy >= each baseline",
+             all(ours_cm["macro_accuracy"] >= b for b in baseline_macro),
+             f"Ours={ours_cm['macro_accuracy']*100:.1f}%"),
+            ("Ours Spearman >= each baseline",
+             spearman_pass,
+             f"Ours={ours_cm['spearman']:.3f} (min margin={min_spearman_margin:+.3f} vs SelfRefine)"
+             if spearman_small_margin else
+             f"Ours={ours_cm['spearman']:.3f}"),
+        ]
 
     lines.append("| Criterion | Status | Value |")
     lines.append("|---|---|---|")
@@ -1044,8 +1741,208 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
             lines.append(f"| {m} | {reason} | {count} |")
     lines.append("")
 
-    # 13. Examples
-    lines.append("## 13. Examples")
+    # ── Story-Matched Diagnostics ──────────────────────────────────
+    if selection_mode == "story_matched" and story_diag:
+        lines.append("## 13. Story-Matched Diagnostics")
+        lines.append("")
+
+        # 13a. Summary
+        lines.append("### 13a. Story Summary")
+        lines.append("")
+        lines.append(f"| Selected stories | {story_diag['n_stories']} |")
+        lines.append(f"| Candidates per story | {meta.get('candidates_per_level_per_story', 1)} × 3 levels |")
+        lines.append("")
+
+        # Verify equal counts: use raw totals per method per story
+        sm = story_diag["story_metrics"]
+        equal_ok = True
+        for sn, metrics in sm.items():
+            # Check using Ours raw counts (any method would work since denominators are identical)
+            easy_n = metrics.get("Ours_Easy_raw", -1)
+            med_n = metrics.get("Ours_Medium_raw", -1)
+            hard_n = metrics.get("Ours_Hard_raw", -1)
+            if easy_n != med_n or med_n != hard_n:
+                equal_ok = False
+                break
+        expected = len(methods) * meta.get("candidates_per_level_per_story", 1)
+        lines.append(f"**Equal Easy/Med/Hard per story:** {'YES' if equal_ok else 'NO — some stories unbalanced'} (expected {expected} per level per story)")
+        lines.append("")
+
+        # 13b. Story-level average accuracy by method
+        lines.append("### 13b. Story-Level Average Accuracy by Method (quality-pass, judge-ok)")
+        lines.append("")
+        lines.append("| Method | Mean story acc | Median story acc | Std | N stories |")
+        lines.append("|---|---:|---:|---:|---:|")
+        for m in methods:
+            accs = [sm[sn].get(f"{m}_accuracy", 0.0) for sn in sm]
+            valid_accs = [a for a in accs if a > 0]
+            mean_acc = sum(accs) / len(accs) if accs else 0.0
+            sorted_accs = sorted(valid_accs)
+            median_acc = sorted_accs[len(sorted_accs)//2] if sorted_accs else 0.0
+            std_acc = (sum((a - mean_acc)**2 for a in accs) / len(accs))**0.5 if accs else 0.0
+            n_valid = len(valid_accs)
+            lines.append(f"| {m} | {mean_acc*100:.1f}% | {median_acc*100:.1f}% | {std_acc*100:.1f}% | {n_valid} |")
+        lines.append("")
+
+        # 13c. Story-level Win/Tie/Loss: Ours vs each baseline
+        lines.append("### 13c. Story-Level Win/Tie/Loss (Ours vs Baseline)")
+        lines.append("")
+        lines.append("| Baseline | Ours Wins | Ties | Ours Losses | N stories |")
+        lines.append("|---|---:|---:|---:|---:|")
+        wtl = story_diag["win_tie_loss"]
+        for bm in baseline_methods:
+            w = wtl.get(bm, {})
+            lines.append(f"| {bm} | {w.get('wins', 0)} | {w.get('ties', 0)} | {w.get('losses', 0)} | {w.get('n_stories', 0)} |")
+        lines.append("")
+
+        # 13d. Story-level Spearman
+        lines.append("### 13d. Story-Level Spearman (stories with all 3 levels valid)")
+        lines.append("")
+        lines.append("| Method | Mean story rho | N valid stories | N skipped |")
+        lines.append("|---|---:|---:|---:|")
+        ss = story_diag["story_spearman"]
+        for m in methods:
+            s = ss.get(m, {})
+            lines.append(f"| {m} | {s.get('mean_rho', 0.0):.3f} | {s.get('n_valid_stories', 0)} | {s.get('n_skipped', 0)} |")
+        lines.append("")
+
+        # 13e. Per-story failure counts by method
+        lines.append("### 13e. Per-Story Failure Counts by Method")
+        lines.append("")
+        lines.append("| Method | Stories with 0 fails | 1 fail | 2 fails | 3 fails |")
+        lines.append("|---|---:|---:|---:|---:|")
+        psf = story_diag["per_story_failures"]
+        for m in methods:
+            fd = psf.get(m, {})
+            f0 = sum(1 for v in fd.values() if v == 0)
+            f1 = sum(1 for v in fd.values() if v == 1)
+            f2 = sum(1 for v in fd.values() if v == 2)
+            f3 = sum(1 for v in fd.values() if v == 3)
+            lines.append(f"| {m} | {f0} | {f1} | {f2} | {f3} |")
+        lines.append("")
+
+    # ── Retry / Budget Diagnostics ────────────────────────────────
+    if retry_diag:
+        lines.append("## 14. Retry & Budget Diagnostics")
+        lines.append("")
+
+        # 14a. Attempts per method
+        lines.append("### 14a. Attempts per Method")
+        lines.append("")
+        lines.append("| Method | Avg attempts | Max attempts | Total |")
+        lines.append("|---|---:|---:|---:|")
+        for m in methods:
+            rd = retry_diag.get(m, {})
+            lines.append(f"| {m} | {rd.get('average_attempts', 0):.2f} | {rd.get('max_attempts', 0)} | {rd.get('n_total', 0)} |")
+        lines.append("")
+
+        # 14b. Attempt distribution
+        lines.append("### 14b. Attempt Distribution by Method")
+        lines.append("")
+        lines.append("| Method | 1 attempt | 2 attempts | 3+ attempts |")
+        lines.append("|---|---:|---:|---:|")
+        for m in methods:
+            rd = retry_diag.get(m, {})
+            dist = rd.get("attempt_distribution", {})
+            a1 = sum(v for k, v in dist.items() if k <= 1)
+            a2 = sum(v for k, v in dist.items() if k == 2)
+            a3 = sum(v for k, v in dist.items() if k >= 3)
+            lines.append(f"| {m} | {a1} | {a2} | {a3} |")
+        lines.append("")
+
+        # 14c. Ours repair prompt usage
+        ours_rd = retry_diag.get("Ours", {})
+        if ours_rd.get("repair_prompt_used", 0) > 0 or ours_rd.get("repair_prompt_used_rate", 0) > 0:
+            lines.append("### 14c. Ours Repair Prompt Usage")
+            lines.append("")
+            lines.append("| Metric | Value |")
+            lines.append("|---|---|")
+            lines.append(f"| Repair prompt used | {ours_rd.get('repair_prompt_used', 0)}/{ours_rd.get('n_total', 0)} ({ours_rd.get('repair_prompt_used_rate', 0)*100:.1f}%) |")
+            lines.append(f"| Repair success | {ours_rd.get('repair_prompt_success', 0)} |")
+            lines.append("")
+
+        # 14d. Ours graph_policy self-check failure rate
+        if ours_rd.get("graph_policy_sc_total", 0) > 0:
+            lines.append("### 14d. Ours Graph Policy Self-Check Failure Rate")
+            lines.append("")
+            sc_fail = ours_rd.get("graph_policy_sc_failure", 0)
+            sc_total = ours_rd.get("graph_policy_sc_total", 0)
+            lines.append(f"| Self-check failures | {sc_fail}/{sc_total} ({sc_fail/sc_total*100:.1f}%) |")
+            lines.append("")
+
+        # 14e. Failure reason distribution
+        lines.append("### 14e. Failure Reason Distribution by Method")
+        lines.append("")
+        lines.append("| Method | Failure reason | Count |")
+        lines.append("|---|---|---:|")
+        for m in methods:
+            rd = retry_diag.get(m, {})
+            for reason, count in sorted(rd.get("failure_reasons", {}).items(), key=lambda x: -x[1])[:10]:
+                lines.append(f"| {m} | {reason} | {count} |")
+        lines.append("")
+
+        # 14f. Top retry reasons (Ours only, from attempt traces)
+        ours_retry = retry_diag.get("Ours", {}).get("retry_reasons", {})
+        if ours_retry:
+            lines.append("### 14f. Ours Retry Reason Distribution (from attempt traces)")
+            lines.append("")
+            lines.append("| Retry reason | Count |")
+            lines.append("|---|---:|")
+            for reason, count in sorted(ours_retry.items(), key=lambda x: -x[1])[:10]:
+                lines.append(f"| {reason} | {count} |")
+            lines.append("")
+
+    # ── Similarity Diagnostics ────────────────────────────────────
+    if similarity_diag:
+        lines.append("## 15. Similarity Diagnostics (diagnostic only, no filtering)")
+        lines.append("")
+
+        # 15a. Per-method question similarity
+        lines.append("### 15a. Per-Method Average Question Lexical Similarity (char 4-gram Jaccard)")
+        lines.append("")
+        hdr = "| Method | " + " | ".join("E-M sim" for _ in range(1)) + " | " + " | ".join("M-H sim" for _ in range(1)) + " | " + " | ".join("E-H sim" for _ in range(1)) + " |"
+        lines.append("| Method | E-M mean | M-H mean | E-H mean | n pairs |")
+        lines.append("|---|---:|---:|---:|---:|")
+
+        for m in methods:
+            sd = similarity_diag.get(m, {})
+            qs = sd.get("question_similarity", {})
+            em = qs.get("Easy-Medium", {}).get("mean", 0)
+            mh = qs.get("Medium-Hard", {}).get("mean", 0)
+            eh = qs.get("Easy-Hard", {}).get("mean", 0)
+            npairs = qs.get("Easy-Medium", {}).get("n", 0)
+            lines.append(f"| {m} | {em:.3f} | {mh:.3f} | {eh:.3f} | {npairs} |")
+        lines.append("")
+
+        # 15b. Evidence sentence overlap
+        lines.append("### 15b. Evidence Sentence Overlap by Method (Jaccard of judge-used evidence)")
+        lines.append("")
+        lines.append("| Method | E-M evidence overlap | M-H evidence overlap | E-H evidence overlap |")
+        lines.append("|---|---:|---:|---:|")
+        for m in methods:
+            sd = similarity_diag.get(m, {})
+            eo = sd.get("evidence_overlap", {})
+            em = eo.get("Easy-Medium", {}).get("mean", 0)
+            mh = eo.get("Medium-Hard", {}).get("mean", 0)
+            eh = eo.get("Easy-Hard", {}).get("mean", 0)
+            lines.append(f"| {m} | {em:.3f} | {mh:.3f} | {eh:.3f} |")
+        lines.append("")
+
+        # 15c. Difficulty collapse counts
+        lines.append("### 15c. Difficulty Collapse Counts by Method")
+        lines.append("")
+        lines.append("| Method | Stories w/ 3 QP | All 3 same pred | Collapse to Medium | Collapse to Easy | Collapse to Hard |")
+        lines.append("|---|---:|---:|---:|---:|---:|")
+        for m in methods:
+            sd = similarity_diag.get(m, {})
+            c = sd.get("collapses", {})
+            lines.append(f"| {m} | {c.get('total_stories', 0)} | {c.get('collapse_all_three', 0)} | "
+                        f"{c.get('collapse_to_medium', 0)} | {c.get('collapse_to_easy', 0)} | "
+                        f"{c.get('collapse_to_hard', 0)} |")
+        lines.append("")
+
+    # 16. Examples
+    lines.append("## 16. Examples")
     lines.append("")
 
     for d in levels:
@@ -1081,7 +1978,14 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
 def main():
     parser = argparse.ArgumentParser(description="FairytaleQA CrossQG Evaluation")
     parser.add_argument("--candidates", required=True, help="Path to candidates.jsonl")
+    parser.add_argument("--selection_mode", choices=["balanced", "story_matched"],
+                        default="balanced",
+                        help="Candidate selection mode: balanced (default) or story_matched")
     parser.add_argument("--target_per_level", type=int, default=150)
+    parser.add_argument("--candidates_per_level_per_story", type=int, default=1,
+                        help="Candidates per level per story in story_matched mode")
+    parser.add_argument("--max_stories", type=int, default=None,
+                        help="Max stories in story_matched mode")
     parser.add_argument("--output_dir", required=True, help="Output directory")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--limit", type=int, default=None,
@@ -1133,6 +2037,11 @@ def main():
         crossqg_metrics = _compute_crossqg_metrics(all_results)
         bootstrap_diag = _compute_bootstrap_diagnostics(all_results, crossqg_metrics)
 
+        # Compute diagnostics
+        story_diag_regen = _compute_story_matched_diagnostics(all_results)
+        retry_diag_regen = _compute_retry_budget_diagnostics(all_results)
+        similarity_diag_regen = _compute_similarity_diagnostics(all_results)
+
         # Reconstruct meta from results
         levels = ["Easy", "Medium", "Hard"]
         n_by_level = {d: 0 for d in levels}
@@ -1143,25 +2052,43 @@ def main():
         # Divide by 4 methods to get per-level candidate count
         n_per_level = {d: n_by_level[d] // len(methods) for d in levels}
 
+        # Detect selection mode from results
+        story_ids = set(r.get("story_group_id") for r in all_results if "story_group_id" in r)
+        regen_mode = "story_matched" if story_ids else "balanced"
+        n_stories_regen = len(set(r.get("story_name", "") for r in all_results))
+
         meta = {
+            "selection_mode": regen_mode,
             "target_per_level": n_per_level.get("Easy", 0),
+            "candidates_per_level_per_story": 1 if regen_mode == "story_matched" else None,
+            "max_stories": n_stories_regen if regen_mode == "story_matched" else None,
             "n_easy": n_per_level.get("Easy", 0),
             "n_medium": n_per_level.get("Medium", 0),
             "n_hard": n_per_level.get("Hard", 0),
             "n_total": sum(n_per_level.values()),
+            "n_stories": n_stories_regen,
         }
 
-        _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag)
+        _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag,
+                      story_diag=story_diag_regen, retry_diag=retry_diag_regen, similarity_diag=similarity_diag_regen)
         print("\nDone!")
         return
 
     methods = ["Direct", "ICL", "SelfRefine", "Ours"]
 
-    # Step 1: Select balanced candidates
-    print("=== Step 1: Selecting balanced candidates ===")
-    selected = _select_balanced_candidates(
-        args.candidates, target_per_level=args.target_per_level, seed=args.seed
-    )
+    # Step 1: Select candidates
+    print(f"=== Step 1: Selecting candidates (mode={args.selection_mode}) ===")
+    if args.selection_mode == "story_matched":
+        selected = _select_story_matched_candidates(
+            args.candidates,
+            candidates_per_level_per_story=args.candidates_per_level_per_story,
+            max_stories=args.max_stories,
+            seed=args.seed,
+        )
+    else:
+        selected = _select_balanced_candidates(
+            args.candidates, target_per_level=args.target_per_level, seed=args.seed
+        )
     print(f"  Total selected: {len(selected)}")
 
     # Save selected candidates
@@ -1173,6 +2100,9 @@ def main():
     n_easy = sum(1 for c in selected if c.get("target_difficulty") == "Easy")
     n_medium = sum(1 for c in selected if c.get("target_difficulty") == "Medium")
     n_hard = sum(1 for c in selected if c.get("target_difficulty") == "Hard")
+    n_stories = len(set(c.get("story_group_id") for c in selected if "story_group_id" in c))
+    if n_stories == 0:
+        n_stories = len(set(c.get("story_name", "") for c in selected))
 
     # Step 2: Extract graphs
     print("\n=== Step 2: Extracting narrative graphs ===")
@@ -1220,6 +2150,8 @@ def main():
                 result["target_difficulty"] = diff
                 result["question"] = cand.get("question", "")
                 result["answer"] = cand.get("answer", "") or cand.get("answer1", "")
+                if "story_group_id" in cand:
+                    result["story_group_id"] = cand["story_group_id"]
 
                 # Judge (skip if generation failed)
                 if result.get("parse_ok") and result.get("generated_question"):
@@ -1252,7 +2184,21 @@ def main():
               f"macro_acc={cm['macro_accuracy']*100:.1f}%, "
               f"spearman={cm['spearman']:.3f}")
 
-    # Step 5: Write judged JSONL
+    # Step 4.5: Compute new diagnostics
+    print("\n=== Step 5: Computing story-matched / retry / similarity diagnostics ===")
+    story_diag = _compute_story_matched_diagnostics(all_results)
+    retry_diag = _compute_retry_budget_diagnostics(all_results)
+    similarity_diag = _compute_similarity_diagnostics(all_results)
+
+    if args.selection_mode == "story_matched":
+        print(f"  Story-matched: {story_diag['n_stories']} stories")
+        for bm, wtl in story_diag["win_tie_loss"].items():
+            print(f"  Ours vs {bm}: {wtl['wins']}W/{wtl['ties']}T/{wtl['losses']}L")
+    for m in methods:
+        print(f"  {m} similarity collapse (all-3-same): "
+              f"{similarity_diag.get(m, {}).get('collapses', {}).get('collapse_all_three', 0)}")
+
+    # Step 6: Write judged JSONL
     judged_path = output_dir / "generations.judged.jsonl"
     judged_full_path = output_dir / "generations.judged.full.jsonl"
     with open(judged_path, "w", encoding="utf-8") as f, \
@@ -1265,20 +2211,26 @@ def main():
             f.write(json.dumps(compact, ensure_ascii=False) + "\n")
             ffull.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    # Step 6: Bootstrap significance
-    print("\n=== Step 5: Computing bootstrap significance ===")
+    # Step 7: Bootstrap significance
+    print("\n=== Step 7: Computing bootstrap significance ===")
     bootstrap_diag = _compute_bootstrap_diagnostics(all_results, crossqg_metrics)
 
-    # Step 7: Build report
-    print("\n=== Step 6: Building report ===")
+    # Step 8: Build report
+    print("\n=== Step 8: Building report ===")
     meta = {
+        "selection_mode": args.selection_mode,
         "target_per_level": args.target_per_level,
+        "candidates_per_level_per_story": args.candidates_per_level_per_story
+            if args.selection_mode == "story_matched" else None,
+        "max_stories": args.max_stories,
         "n_easy": n_easy,
         "n_medium": n_medium,
         "n_hard": n_hard,
         "n_total": len(selected),
+        "n_stories": n_stories,
     }
-    _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag)
+    _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag,
+                  story_diag=story_diag, retry_diag=retry_diag, similarity_diag=similarity_diag)
 
     print("\nDone!")
 

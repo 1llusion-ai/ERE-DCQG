@@ -162,6 +162,73 @@ def classify_answer_focus(nodes, target_answer):
     return "state", role, ntype
 
 
+# ── Difficulty-driven focus override (Stage 2) ─────────────────
+
+DIFFICULTY_FOCUS = {
+    "Easy": {
+        "focus_key": "direct_answer",
+        "label": "direct fact / local information",
+        "strategy": (
+            "Ask about a FACT directly stated in or near the answer sentence. "
+            "Good: 'Where did X happen?', 'Who did X?', 'What did the character see?' "
+            "Good: 'What did X say to Y?', 'How did X react to Y?' "
+            "BAD: 'Why did X do Y?' (causal — NOT Easy) "
+            "BAD: 'What motivated X to do Y?' (motivation — NOT Easy) "
+            "BAD: 'What was the outcome of X?' (outcome/bridge — NOT Easy) "
+            "BAD: 'How did X cause Y?' (causal chain — NOT Easy) "
+            "The question MUST be answerable from ONE sentence — the answer sentence alone. "
+            "No bridge, no cause, no motivation, no explanation, no chain."
+        ),
+        "example_question": "Where did the princess live?",
+    },
+    "Medium": {
+        "focus_key": "relation_question",
+        "label": "single relationship question",
+        "strategy": (
+            "Ask about ONE specific relationship between two pieces of information. "
+            "Good: 'What caused X to happen?' (one cause → one effect) "
+            "Good: 'What was the result of X?' (one event → one outcome) "
+            "Good: 'What enabled X to do Y?' (one enabler → one action) "
+            "Good: 'Why was X motivated to do Y?' (one motivation → one action) "
+            "Use EXACTLY ONE relation. The reader needs 2 sentences: the support sentence and the answer sentence. "
+            "Do NOT ask questions that require tracing a 3+ step chain."
+        ),
+        "example_question": "What caused the knight to volunteer first?",
+    },
+    "Hard": {
+        "focus_key": "chain_explanation",
+        "label": "multi-step chain explanation",
+        "strategy": (
+            "Ask about MOTIVATION, CAUSE, or EXPLANATION that requires tracing the FULL chain. "
+            "Good: 'Why did [character] ultimately [do X]?' (requires anchor→motive→action) "
+            "Good: 'What larger goal was [character] pursuing by [doing X]?' (requires context→goal→action) "
+            "Good: 'What chain of events led to [outcome]?' (requires trigger→development→result) "
+            "BAD: 'What did [character] do?' (answerable from answer sentence alone — NOT Hard) "
+            "BAD: 'Who did X?' (direct fact, not chain-dependent — NOT Hard) "
+            "BAD: 'Where did X happen?' (single-sentence lookup — NOT Hard) "
+            "The question MUST be UNANSWERABLE from the answer sentence alone. "
+            "If you remove any bridge sentence, the answer becomes ambiguous or wrong. "
+            "The reader MUST trace through ALL evidence sentences to answer correctly."
+        ),
+        "example_question": "Why did the huntsman return with a boar's heart instead of the princess's?",
+    },
+}
+
+
+def _get_difficulty_focus(difficulty, graph_sub=None):
+    """Return the difficulty-forced focus override.
+
+    Returns (focus_key, focus_dict) where focus_key overrides the node-classified
+    focus and focus_dict contains strategy/label for prompt construction.
+    """
+    df = DIFFICULTY_FOCUS.get(difficulty)
+    if df:
+        return df["focus_key"], df
+    # Fallback: Hard defaults
+    df = DIFFICULTY_FOCUS["Hard"]
+    return df["focus_key"], df
+
+
 # ── Graph-structured difficulty policy ─────────────────────────
 
 RELATION_PRIORITY = {
@@ -693,21 +760,24 @@ def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
         last_target = prompt_edges[-1].get("target", "")
         edge_chain += f" -> {last_target}"
 
-    # Classify answer role and determine question focus
-    focus_key, answer_role, answer_node_type = classify_answer_focus(nodes, target_answer)
-    focus = ANSWER_FOCUS_TEMPLATES[focus_key]
+    # ── Difficulty-driven focus override (Stage 2) ──
+    # The classified node-role focus is overridden by difficulty policy.
+    # Easy always asks direct-fact questions; Hard always asks chain-explanation questions.
+    df_key, df_focus = _get_difficulty_focus(difficulty, graph_substructure)
 
-    # Build answer focus guide
+    # Also keep the node-classified focus for diagnostics
+    node_focus_key, answer_role, answer_node_type = classify_answer_focus(nodes, target_answer)
+
+    # Build difficulty-driven question focus guide
     focus_guide = f"""
-ANSWER ROLE: The target answer "{target_answer}" has role={answer_role}, node_type={answer_node_type}.
-QUESTION FOCUS: {focus['label']}
-FOCUS STRATEGY: {focus['strategy']}"""
+QUESTION FOCUS ({difficulty}): {df_focus['label']}
+FOCUS STRATEGY: {df_focus['strategy']}"""
 
     # Relation-aware wording for selected edges
     relation_guidance = ""
     if gp_chain:
         wording_parts = []
-        for rel in dict.fromkeys(gp_chain):  # unique, ordered
+        for rel in dict.fromkeys(gp_chain):
             if rel in RELATION_WORDING:
                 wording_parts.append(f"  {rel}: {RELATION_WORDING[rel]}")
         if wording_parts:
@@ -720,21 +790,37 @@ Policy reason: {gp_reason}
 Selected evidence roles: {', '.join(gp_roles) if gp_roles else 'none'}
 Selected relation chain: {' → '.join(gp_chain) if gp_chain else 'none'}"""
 
-    # Difficulty-specific guidance
+    # ── Tight difficulty-specific guidance (Stage 2) ──
     difficulty_guidance = ""
+    forbidden = ""
+
     if difficulty == "Easy":
         difficulty_guidance = """
-EASY REQUIREMENTS:
-- Use ONLY the answer node. The question must be answerable from one sentence.
-- Do NOT mention bridge events. Do NOT ask motivation or causal-chain questions.
-- Focus: direct fact, local action/state, local description."""
+EASY QUESTION REQUIREMENTS:
+- Ask about a DIRECTLY STATED FACT: who, what, where, when, how (state/description).
+- The question MUST be answerable from ONE sentence — the answer sentence alone.
+- Show ONLY the answer sentence in context; the reader finds the answer in it."""
+        forbidden = """
+FORBIDDEN for Easy:
+- Do NOT ask "Why..." or "What motivated..." or "What caused..." (causal/motivation questions).
+- Do NOT ask about outcomes, consequences, larger purposes, or chains of events.
+- Do NOT require the reader to connect multiple sentences.
+- If your question starts with "Why", it is WRONG for Easy. Restart.
+- Good starters: "Who...", "What...", "Where...", "How did X react to...", "What did X say...\""""
+
     elif difficulty == "Medium":
         difficulty_guidance = """
-MEDIUM REQUIREMENTS:
-- Use the answer node + one supporting node.
-- Use relation-aware phrasing for one bridge relation only.
-- Do NOT require full chain reasoning.
-- Focus: local cause, local consequence, simple state/action explanation."""
+MEDIUM QUESTION REQUIREMENTS:
+- Ask about ONE specific relationship between TWO pieces of information.
+- The reader needs EXACTLY 2 sentences: the support sentence AND the answer sentence.
+- Use the relation type to guide your wording (see RELATION GUIDANCE above).
+- One cause → one effect. One motivation → one action. One event → one result."""
+        forbidden = """
+CONSTRAINT for Medium:
+- Do NOT ask questions that require tracing a 3+ step chain.
+- Do NOT ask questions answerable from a single sentence (that would be Easy).
+- One relation only — no full chain traversal."""
+
     elif difficulty == "Hard":
         bridge_sents = [f"S{n['sentence_id']}" for n in prompt_nodes if n.get("evidence_role") in ("bridge", "answer_bridge")]
         anchor_sents = [f"S{n['sentence_id']}" for n in prompt_nodes if n.get("evidence_role") == "anchor"]
@@ -742,65 +828,69 @@ MEDIUM REQUIREMENTS:
         total_sents = len(anchor_sents) + len(bridge_sents) + len(answer_sents)
 
         difficulty_guidance = f"""
-HARD REQUIREMENTS:
-- Use the full reasoning chain (anchor → bridge → answer).
-- The question must require reading ALL {total_sents} sentences: {anchor_sents} + {bridge_sents} + {answer_sents}.
-- Prefer causal/motivation/explanation framing.
-- The question must NOT be answerable from the answer sentence alone.
-- If any sentence is removed, the reader cannot fully answer the question.
-- CRITICAL: Match the question focus to the answer role. Do NOT ask a local/immediate question if the answer is about a larger purpose or final outcome."""
+HARD QUESTION REQUIREMENTS:
+- Ask about MOTIVATION, CAUSE, or EXPLANATION that requires the FULL chain.
+- The reader MUST trace through ALL {total_sents} evidence sentences: {anchor_sents} + {bridge_sents} + {answer_sents}.
+- The question MUST be UNANSWERABLE from the answer sentence alone.
+- If any bridge sentence is removed, the answer becomes ambiguous or wrong.
+- Good: 'Why did [character] do [action], given [context]?'
+- Good: 'What led [character] to [outcome] after [initial event]?'"""
+        forbidden = """
+FORBIDDEN for Hard:
+- Do NOT ask direct fact questions ('Who did X?', 'What did X do?', 'Where is X?').
+- Do NOT ask questions answerable from ONE sentence. Those are Easy questions.
+- Do NOT ask local/immediate questions. Ask about the larger chain, motivation, or explanation.
+- If you can answer the question by reading only the answer sentence, it FAILS Hard.
+- Good starters: 'Why...', 'What motivated...', 'What led to...', 'How did X come to...'"""
 
-    # Forbidden patterns based on focus
-    forbidden = ""
-    if focus_key == "motivation":
-        forbidden = '\nFORBIDDEN: Do NOT ask "Why did [character] do [specific action]?" — this is too local. Ask about the LARGER PURPOSE.'
-    elif focus_key == "outcome":
-        forbidden = '\nFORBIDDEN: Do NOT ask "What happened next?" — this is too local. Ask about the ULTIMATE RESULT.'
-    elif focus_key == "state":
-        forbidden = '\nFORBIDDEN: Do NOT ask "Why did [character] feel X?" as if the feeling is a cause. Ask HOW the character came to be in that state.'
-    elif focus_key == "count":
-        forbidden = '\nFORBIDDEN: Do NOT ask "Why did this happen?" — the answer is a COUNT, not a reason. Ask about frequency or pattern.'
+    # ── Build the final prompt ──
+    prompt_lines = [
+        f"Generate a reading-comprehension question guided by the narrative evidence graph.",
+        "",
+        f"Story:",
+        f"{ctx}",
+        "",
+        f"Target answer: \"{target_answer}\"",
+        "",
+        f"Difficulty: {difficulty}",
+        f"{diff_def}",
+        "",
+        f"Selected Evidence Subgraph:",
+        f"{graph_str}",
+        f"{policy_section}",
+        "",
+        f"Evidence roles:",
+        f"{roles_str}",
+        "",
+        f"Reasoning chain: {edge_chain}",
+        f"Reasoning operation: {reasoning_operation}",
+        f"Necessity type: {necessity_type}",
+        f"{relation_guidance}",
+        f"{focus_guide}",
+        f"{difficulty_guidance}",
+        f"{forbidden}",
+        "",
+        f"Requirements:",
+        f"1. Answerable from the story alone.",
+        f"2. Natural answer must be: \"{target_answer}\"",
+        f"3. Do NOT mention \"{target_answer}\" in the question.",
+        f"4. Start with a question word, end with \"?\".",
+        f"5. Follow the QUESTION FOCUS and {difficulty} REQUIREMENTS above EXACTLY.",
+        f"6. Output exactly one JSON object.",
+        "",
+        f"Output: {{\"question\": \"...\", \"answer\": \"{target_answer}\", \"reasoning_type\": \"direct|chain|cross_sentence\"}}",
+    ]
 
-    return f"""Generate a reading-comprehension question guided by the narrative evidence graph.
-
-Story:
-{ctx}
-
-Target answer: "{target_answer}"
-
-Difficulty: {difficulty}
-{diff_def}
-
-Selected Evidence Subgraph:
-{graph_str}
-{policy_section}
-
-Evidence roles:
-{roles_str}
-
-Reasoning chain: {edge_chain}
-Reasoning operation: {reasoning_operation}
-Necessity type: {necessity_type}
-{relation_guidance}
-{focus_guide}{difficulty_guidance}{forbidden}
-
-Requirements:
-1. Answerable from the story alone.
-2. Natural answer must be: "{target_answer}"
-3. Do NOT mention "{target_answer}" in the question.
-4. Start with a question word, end with "?".
-5. Match the question focus to the answer role (see ANSWER ROLE and QUESTION FOCUS above).
-6. Output exactly one JSON object.
-
-Output: {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
+    return "\n".join(prompt_lines)
 
 
 def build_repair_prompt(story_section, target_answer, difficulty, focus_key,
                         required_evidence_sentences, graph_substructure=None):
     """Compact repair prompt for degenerate/parse failures. No graph dump.
 
-    Uses selected subgraph nodes' sentence IDs when available, so repair
-    attempts preserve the same graph_policy as the full prompt.
+    Stage 2: difficulty-aware. Easy repair bans bridge/cause/motivation.
+    Hard repair bans direct answer-sentence wording.
+    Uses selected subgraph nodes' sentence IDs when available.
     """
     # Use selected subgraph sentence IDs if available
     if graph_substructure and graph_substructure.get("selected_nodes"):
@@ -812,10 +902,34 @@ def build_repair_prompt(story_section, target_answer, difficulty, focus_key,
 
     ctx = _format_story_context(story_section, sentence_ids=repair_sids or required_evidence_sentences)
     diff_def = difficulty_instruction(difficulty)
-    focus = ANSWER_FOCUS_TEMPLATES[focus_key]
+
+    # Use difficulty-forced focus for repair constraints
+    df_key, df_focus = _get_difficulty_focus(difficulty, graph_substructure)
 
     gp = graph_substructure.get("graph_policy", "") if graph_substructure else ""
-    gp_hint = f"\nGraph policy: {gp}" if gp else ""
+
+    # Difficulty-specific repair constraints
+    difficulty_constraint = ""
+    if difficulty == "Easy":
+        difficulty_constraint = """
+EASY REPAIR RULES:
+- The question MUST be answerable from ONE sentence only.
+- Do NOT ask "Why...", "What motivated...", "What caused...", "What was the outcome of...".
+- Only ask direct-fact questions: Who, What, Where, When, How (state/description).
+- If your question starts with "Why", it is WRONG. Restart."""
+    elif difficulty == "Medium":
+        difficulty_constraint = """
+MEDIUM REPAIR RULES:
+- The question must require EXACTLY 2 sentences to answer.
+- Ask about ONE relationship (cause, result, motivation) between two pieces of information.
+- Do NOT ask single-sentence lookup questions (Easy) or full-chain questions (Hard)."""
+    elif difficulty == "Hard":
+        difficulty_constraint = """
+HARD REPAIR RULES:
+- The question MUST be unanswerable from the answer sentence alone.
+- Ask about MOTIVATION, CAUSE, or EXPLANATION spanning multiple sentences.
+- Do NOT ask direct-fact questions ('Who did X?', 'What did X do?').
+- Good: 'Why...', 'What motivated...', 'What led to...', 'How did X come to...'."""
 
     return f"""Generate ONE reading-comprehension question.
 
@@ -824,7 +938,9 @@ Story (evidence sentences only):
 
 Target answer: "{target_answer}"
 Difficulty: {difficulty} — {diff_def}
-Question focus: {focus['label']}{gp_hint}
+Question focus ({difficulty}): {df_focus['label']}
+Graph policy: {gp}
+{difficulty_constraint}
 
 Rules:
 1. Question must be answerable from the story above.
@@ -833,7 +949,8 @@ Rules:
 4. Start with a question word, end with "?".
 5. Question must be 6-35 words, grammatically correct.
 6. No repeated words or filler tokens.
-7. Output exactly one JSON object, nothing else.
+7. Follow the {difficulty} REPAIR RULES above EXACTLY.
+8. Output exactly one JSON object, nothing else.
 
 Output: {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
 
@@ -1099,10 +1216,17 @@ def _self_check_ours(question, story_section, target_answer, focus_key=None,
     ctx = _format_story_context(story_section)
 
     focus_check = ""
-    if focus_key and focus_key in ANSWER_FOCUS_TEMPLATES:
+    # Check difficulty-forced focus templates first, then legacy ANSWER_FOCUS_TEMPLATES
+    focus_label = None
+    for diff_name, diff_info in DIFFICULTY_FOCUS.items():
+        if diff_info["focus_key"] == focus_key:
+            focus_label = diff_info["label"]
+            break
+    if focus_label is None and focus_key and focus_key in ANSWER_FOCUS_TEMPLATES:
         focus_label = ANSWER_FOCUS_TEMPLATES[focus_key]["label"]
+    if focus_label:
         focus_check = f"""
-3. Does the QUESTION FOCUS match "{focus_label}"? For example, if the answer is about a larger purpose, the question should ask about the larger purpose, not an immediate/local cause."""
+3. Does the QUESTION FOCUS match "{focus_label}"? The question must follow this focus type."""
 
     # Difficulty-aware sentence count check
     if difficulty == "Easy":
@@ -1184,8 +1308,11 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
     # Select graph substructure once (difficulty-controlled)
     graph_sub = select_graph_substructure(nodes, edges, difficulty, target_answer)
 
-    # Classify answer focus once
-    focus_key, answer_role, answer_node_type = classify_answer_focus(nodes, target_answer)
+    # Classify answer focus (node-level; kept for diagnostics)
+    node_focus_key, answer_role, answer_node_type = classify_answer_focus(nodes, target_answer)
+
+    # Difficulty-forced focus override (Stage 2)
+    df_key, df_focus = _get_difficulty_focus(difficulty, graph_sub)
 
     # Common fields for all return dicts
     gp_fields = {
@@ -1212,7 +1339,7 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
             "degenerate output", "empty", "parse failure"))
         if use_repair:
             prompt = build_repair_prompt(
-                story_section, target_answer, difficulty, focus_key,
+                story_section, target_answer, difficulty, df_key,
                 required_evidence_sentences, graph_substructure=graph_sub,
             )
             temp = 0.1
@@ -1272,7 +1399,7 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         if ok:
             # Self-check: verify answer match, sentence count, focus, and graph policy
             sc_ok, sc_reason, focus_match, policy_compliance = _self_check_ours(
-                question, story_section, target_answer, focus_key,
+                question, story_section, target_answer, df_key,
                 difficulty=difficulty, graph_policy=graph_sub["graph_policy"],
             )
             best_focus_match = focus_match
@@ -1289,7 +1416,8 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
                     "self_check_pass": True,
                     "answer_role": answer_role,
                     "answer_node_type": answer_node_type,
-                    "question_focus": focus_key,
+                    "question_focus": df_key,
+                    "node_question_focus": node_focus_key,
                     "focus_match": focus_match,
                     "graph_policy_compliance": policy_compliance,
                     "attempts_trace": attempts_trace,
@@ -1313,7 +1441,8 @@ def generate_ours(story_section, target_answer, difficulty, nodes, edges,
         "generation_error": reason,
         "answer_role": answer_role,
         "answer_node_type": answer_node_type,
-        "question_focus": focus_key,
+        "question_focus": df_key,
+        "node_question_focus": node_focus_key,
         "focus_match": best_focus_match,
         "graph_policy_compliance": best_policy_compliance,
         "attempts_trace": attempts_trace,

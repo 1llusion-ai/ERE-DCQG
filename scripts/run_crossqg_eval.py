@@ -1059,11 +1059,203 @@ def _compute_similarity_diagnostics(all_results):
 
 
 # ---------------------------------------------------------------------------
+# Stage 2 diagnostics (focus, difficulty realization)
+# ---------------------------------------------------------------------------
+
+def _compute_stage2_diagnostics(all_results):
+    """Compute Stage 2 focus and difficulty realization diagnostics.
+
+    Returns dict with:
+      - focus_distribution: focus type counts by target difficulty (Ours)
+      - easy_asa_by_focus: Easy answer_sentence_alone=yes rate by focus type (Ours)
+      - hard_asa_by_focus: Hard answer_sentence_alone=no rate by focus type (Ours)
+      - policy_compliance_by_focus: graph_policy_compliance=yes rate by focus type (Ours)
+      - repair_by_difficulty: repair_used / repair_success by target difficulty (Ours)
+      - top_easy_failures: top 10 Easy failures with classified failure reason
+      - top_hard_failures: top 10 Hard failures with classified failure reason
+    """
+    levels = ["Easy", "Medium", "Hard"]
+    ours = [r for r in all_results if r.get("method") == "Ours"]
+    ours_qp = [r for r in ours if r.get("quality_pass")]
+
+    # Focus distribution by target difficulty (all Ours, quality-pass only)
+    focus_dist = {}
+    for level in levels:
+        focus_dist[level] = {}
+        lr = [r for r in ours_qp if r.get("target_difficulty") == level]
+        for r in lr:
+            f = r.get("question_focus", "unknown")
+            focus_dist[level][f] = focus_dist[level].get(f, 0) + 1
+
+    # Also count node-level focus (pre-override) for comparison
+    node_focus_dist = {}
+    for level in levels:
+        node_focus_dist[level] = {}
+        lr = [r for r in ours_qp if r.get("target_difficulty") == level]
+        for r in lr:
+            f = r.get("node_question_focus", "unknown")
+            node_focus_dist[level][f] = node_focus_dist[level].get(f, 0) + 1
+
+    # Easy answer_sentence_alone=yes by focus type (Ours, quality-pass)
+    easy_asa_by_focus = {}
+    easy_qp = [r for r in ours_qp if r.get("target_difficulty") == "Easy"]
+    for r in easy_qp:
+        f = r.get("question_focus", "unknown")
+        dj = r.get("difficulty_judge", {})
+        asa = dj.get("answer_sentence_alone_sufficient", "?")
+        if f not in easy_asa_by_focus:
+            easy_asa_by_focus[f] = {"total": 0, "asa_yes": 0}
+        easy_asa_by_focus[f]["total"] += 1
+        if asa == "yes":
+            easy_asa_by_focus[f]["asa_yes"] += 1
+
+    # Hard answer_sentence_alone=no by focus type (Ours, quality-pass)
+    hard_asa_by_focus = {}
+    hard_qp = [r for r in ours_qp if r.get("target_difficulty") == "Hard"]
+    for r in hard_qp:
+        f = r.get("question_focus", "unknown")
+        dj = r.get("difficulty_judge", {})
+        asa = dj.get("answer_sentence_alone_sufficient", "?")
+        if f not in hard_asa_by_focus:
+            hard_asa_by_focus[f] = {"total": 0, "asa_no": 0}
+        hard_asa_by_focus[f]["total"] += 1
+        if asa == "no":
+            hard_asa_by_focus[f]["asa_no"] += 1
+
+    # Graph policy compliance by focus type (Ours, quality-pass)
+    policy_by_focus = {}
+    for r in ours_qp:
+        f = r.get("question_focus", "unknown")
+        gpc = r.get("graph_policy_compliance", "unknown")
+        if f not in policy_by_focus:
+            policy_by_focus[f] = {"total": 0, "gpc_yes": 0}
+        policy_by_focus[f]["total"] += 1
+        if gpc == "yes":
+            policy_by_focus[f]["gpc_yes"] += 1
+
+    # Repair usage by target difficulty (Ours)
+    repair_by_difficulty = {}
+    for level in levels:
+        lr = [r for r in ours if r.get("target_difficulty") == level]
+        n_total = len(lr)
+        n_repair = sum(1 for r in lr if r.get("repair_attempted"))
+        n_repair_ok = sum(1 for r in lr if r.get("repair_success"))
+        repair_by_difficulty[level] = {
+            "total": n_total,
+            "repair_used": n_repair,
+            "repair_success": n_repair_ok,
+        }
+
+    # Top 10 Easy failures: Ours, quality-pass, target=Easy, predicted != Easy
+    easy_failures = []
+    for r in ours_qp:
+        if r.get("target_difficulty") != "Easy":
+            continue
+        pred = r.get("predicted_difficulty", "?")
+        if pred == "Easy":
+            continue
+        # Classify failure reason
+        fr = _classify_failure_reason(r)
+        easy_failures.append({
+            "story": r.get("story_name", "?"),
+            "question": r.get("generated_question", "?"),
+            "answer": r.get("answer", "?"),
+            "predicted": pred,
+            "focus": r.get("question_focus", "?"),
+            "node_focus": r.get("node_question_focus", "?"),
+            "asa": r.get("difficulty_judge", {}).get("answer_sentence_alone_sufficient", "?"),
+            "failure_reason": fr,
+        })
+    easy_failures.sort(key=lambda x: x["failure_reason"])
+    easy_failures = easy_failures[:10]
+
+    # Top 10 Hard failures: Ours, quality-pass, target=Hard, predicted != Hard
+    hard_failures = []
+    for r in ours_qp:
+        if r.get("target_difficulty") != "Hard":
+            continue
+        pred = r.get("predicted_difficulty", "?")
+        if pred == "Hard":
+            continue
+        fr = _classify_failure_reason(r)
+        hard_failures.append({
+            "story": r.get("story_name", "?"),
+            "question": r.get("generated_question", "?"),
+            "answer": r.get("answer", "?"),
+            "predicted": pred,
+            "focus": r.get("question_focus", "?"),
+            "node_focus": r.get("node_question_focus", "?"),
+            "asa": r.get("difficulty_judge", {}).get("answer_sentence_alone_sufficient", "?"),
+            "failure_reason": fr,
+        })
+    hard_failures.sort(key=lambda x: x["failure_reason"])
+    hard_failures = hard_failures[:10]
+
+    return {
+        "focus_distribution": focus_dist,
+        "node_focus_distribution": node_focus_dist,
+        "easy_asa_by_focus": easy_asa_by_focus,
+        "hard_asa_by_focus": hard_asa_by_focus,
+        "policy_compliance_by_focus": policy_by_focus,
+        "repair_by_difficulty": repair_by_difficulty,
+        "top_easy_failures": easy_failures,
+        "top_hard_failures": hard_failures,
+    }
+
+
+def _classify_failure_reason(result):
+    """Classify why an Ours question failed to match target difficulty.
+
+    Returns one of:
+      focus_mismatch, answer_local_wording, graph_extraction, malformed, judge_error, unknown
+    """
+    q = result.get("generated_question", "") or ""
+    target = result.get("target_difficulty", "?")
+    dj = result.get("difficulty_judge", {})
+    asa = dj.get("answer_sentence_alone_sufficient", "?")
+    bridge = dj.get("bridge_required", "?")
+    gpc = result.get("graph_policy_compliance", "?")
+    focus = result.get("question_focus", "?")
+
+    q_lower = q.lower()
+
+    if target == "Easy":
+        # Easy failure: predicted Medium or Hard
+        # Check if question wording is causal/motivation (focus mismatch)
+        causal_starters = ["why ", "what motivated", "what caused", "what led to",
+                          "how did", "what was the outcome", "what was the result"]
+        if any(q_lower.startswith(cs) for cs in causal_starters):
+            return "focus_mismatch_causal_wording"
+        if asa == "no":
+            return "multi_sentence_required"
+        if bridge == "yes":
+            return "bridge_detected"
+        if gpc != "yes":
+            return "graph_policy_noncompliant"
+        return "answer_local_wording"
+
+    elif target == "Hard":
+        # Hard failure: predicted Easy or Medium
+        if asa == "yes":
+            return "answer_sentence_alone_yes"
+        direct_starters = ["who ", "what ", "where ", "when "]
+        if any(q_lower.startswith(ds) for ds in direct_starters):
+            return "focus_mismatch_direct_wording"
+        if gpc != "yes":
+            return "graph_policy_noncompliant"
+        if focus not in ("chain_explanation",):
+            return "focus_mismatch_wrong_focus_type"
+        return "chain_not_realized"
+
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
 # Report generation
 # ---------------------------------------------------------------------------
 
 def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=None, bootstrap_diag=None,
-                  story_diag=None, retry_diag=None, similarity_diag=None):
+                  story_diag=None, retry_diag=None, similarity_diag=None, stage2_diag=None):
     """Write the CrossQG evaluation report."""
     report_path = output_dir / "CROSSQG_EVAL_REPORT.md"
     meta = meta or {}
@@ -1941,8 +2133,126 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
                         f"{c.get('collapse_to_hard', 0)} |")
         lines.append("")
 
-    # 16. Examples
-    lines.append("## 16. Examples")
+    # ── Stage 2 Diagnostics ────────────────────────────────────────
+    if stage2_diag:
+        lines.append("## 16. Stage 2 Focus & Difficulty Realization Diagnostics (Ours)")
+        lines.append("")
+
+        # 16a. Focus distribution by target difficulty
+        lines.append("### 16a. Focus Distribution by Target Difficulty (Ours, quality-pass)")
+        lines.append("")
+        focus_dist = stage2_diag.get("focus_distribution", {})
+        all_focus_types = set()
+        for level in levels:
+            all_focus_types.update(focus_dist.get(level, {}).keys())
+        sorted_foci = sorted(all_focus_types)
+        if sorted_foci:
+            hdr = "| Focus | " + " | ".join(f"{d} (n)" for d in levels) + " |"
+            lines.append(hdr)
+            lines.append("|---|" + "|".join("---:" for _ in levels) + "|")
+            for f in sorted_foci:
+                row = f"| {f} | " + " | ".join(str(focus_dist.get(d, {}).get(f, 0)) for d in levels) + " |"
+                lines.append(row)
+            lines.append("")
+
+        # 16b. Node-level focus distribution (pre-override, for comparison)
+        node_focus_dist = stage2_diag.get("node_focus_distribution", {})
+        all_node_foci = set()
+        for level in levels:
+            all_node_foci.update(node_focus_dist.get(level, {}).keys())
+        sorted_nf = sorted(all_node_foci)
+        if sorted_nf:
+            lines.append("### 16b. Node-Level Focus Distribution (pre-override, for comparison)")
+            lines.append("")
+            hdr = "| Node Focus | " + " | ".join(f"{d} (n)" for d in levels) + " |"
+            lines.append(hdr)
+            lines.append("|---|" + "|".join("---:" for _ in levels) + "|")
+            for f in sorted_nf:
+                row = f"| {f} | " + " | ".join(str(node_focus_dist.get(d, {}).get(f, 0)) for d in levels) + " |"
+                lines.append(row)
+            lines.append("")
+
+        # 16c. Easy answer_sentence_alone=yes by focus type
+        easy_asa = stage2_diag.get("easy_asa_by_focus", {})
+        if easy_asa:
+            lines.append("### 16c. Easy answer_sentence_alone=yes by Focus Type (Ours, quality-pass, target=Easy)")
+            lines.append("")
+            lines.append("| Focus | Total | ASA=yes | Rate |")
+            lines.append("|---|---:|---:|---:|")
+            for f in sorted(easy_asa.keys()):
+                d = easy_asa[f]
+                rate = f"{100*d['asa_yes']/d['total']:.1f}%" if d["total"] else "N/A"
+                lines.append(f"| {f} | {d['total']} | {d['asa_yes']} | {rate} |")
+            lines.append("")
+
+        # 16d. Hard answer_sentence_alone=no by focus type
+        hard_asa = stage2_diag.get("hard_asa_by_focus", {})
+        if hard_asa:
+            lines.append("### 16d. Hard answer_sentence_alone=no by Focus Type (Ours, quality-pass, target=Hard)")
+            lines.append("")
+            lines.append("| Focus | Total | ASA=no | Rate |")
+            lines.append("|---|---:|---:|---:|")
+            for f in sorted(hard_asa.keys()):
+                d = hard_asa[f]
+                rate = f"{100*d['asa_no']/d['total']:.1f}%" if d["total"] else "N/A"
+                lines.append(f"| {f} | {d['total']} | {d['asa_no']} | {rate} |")
+            lines.append("")
+
+        # 16e. Graph policy compliance by focus type
+        policy_focus = stage2_diag.get("policy_compliance_by_focus", {})
+        if policy_focus:
+            lines.append("### 16e. Graph Policy Compliance by Focus Type (Ours, quality-pass)")
+            lines.append("")
+            lines.append("| Focus | Total | GPC=yes | Rate |")
+            lines.append("|---|---:|---:|---:|")
+            for f in sorted(policy_focus.keys()):
+                d = policy_focus[f]
+                rate = f"{100*d['gpc_yes']/d['total']:.1f}%" if d["total"] else "N/A"
+                lines.append(f"| {f} | {d['total']} | {d['gpc_yes']} | {rate} |")
+            lines.append("")
+
+        # 16f. Repair usage by target difficulty
+        repair_diff = stage2_diag.get("repair_by_difficulty", {})
+        if repair_diff:
+            lines.append("### 16f. Repair Usage by Target Difficulty (Ours)")
+            lines.append("")
+            lines.append("| Difficulty | Total | Repair Used | Repair Success | Repair Rate |")
+            lines.append("|---|---:|---:|---:|---:|")
+            for level in levels:
+                d = repair_diff.get(level, {})
+                total = d.get("total", 0)
+                used = d.get("repair_used", 0)
+                succ = d.get("repair_success", 0)
+                rate = f"{100*used/total:.1f}%" if total else "N/A"
+                lines.append(f"| {level} | {total} | {used} | {succ} | {rate} |")
+            lines.append("")
+
+        # 16g. Top 10 Easy failures
+        easy_fails = stage2_diag.get("top_easy_failures", [])
+        if easy_fails:
+            lines.append("### 16g. Top 10 Easy Failures (Ours, quality-pass, predicted != Easy)")
+            lines.append("")
+            lines.append("| # | Story | Question | Answer | Pred | Focus | ASA | Failure Reason |")
+            lines.append("|---|---|---|---|---|---|---|---|")
+            for i, f in enumerate(easy_fails, 1):
+                lines.append(f"| {i} | {f['story'][:30]} | {f['question'][:60]} | {f['answer'][:30]} | "
+                           f"{f['predicted']} | {f['focus']} | {f['asa']} | {f['failure_reason']} |")
+            lines.append("")
+
+        # 16h. Top 10 Hard failures
+        hard_fails = stage2_diag.get("top_hard_failures", [])
+        if hard_fails:
+            lines.append("### 16h. Top 10 Hard Failures (Ours, quality-pass, predicted != Hard)")
+            lines.append("")
+            lines.append("| # | Story | Question | Answer | Pred | Focus | ASA | Failure Reason |")
+            lines.append("|---|---|---|---|---|---|---|---|")
+            for i, f in enumerate(hard_fails, 1):
+                lines.append(f"| {i} | {f['story'][:30]} | {f['question'][:60]} | {f['answer'][:30]} | "
+                           f"{f['predicted']} | {f['focus']} | {f['asa']} | {f['failure_reason']} |")
+            lines.append("")
+
+    # 17. Examples
+    lines.append("## 17. Examples")
     lines.append("")
 
     for d in levels:
@@ -2041,6 +2351,7 @@ def main():
         story_diag_regen = _compute_story_matched_diagnostics(all_results)
         retry_diag_regen = _compute_retry_budget_diagnostics(all_results)
         similarity_diag_regen = _compute_similarity_diagnostics(all_results)
+        stage2_diag_regen = _compute_stage2_diagnostics(all_results)
 
         # Reconstruct meta from results
         levels = ["Easy", "Medium", "Hard"]
@@ -2070,7 +2381,8 @@ def main():
         }
 
         _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag,
-                      story_diag=story_diag_regen, retry_diag=retry_diag_regen, similarity_diag=similarity_diag_regen)
+                      story_diag=story_diag_regen, retry_diag=retry_diag_regen, similarity_diag=similarity_diag_regen,
+                      stage2_diag=stage2_diag_regen)
         print("\nDone!")
         return
 
@@ -2189,6 +2501,7 @@ def main():
     story_diag = _compute_story_matched_diagnostics(all_results)
     retry_diag = _compute_retry_budget_diagnostics(all_results)
     similarity_diag = _compute_similarity_diagnostics(all_results)
+    stage2_diag = _compute_stage2_diagnostics(all_results)
 
     if args.selection_mode == "story_matched":
         print(f"  Story-matched: {story_diag['n_stories']} stories")
@@ -2230,7 +2543,8 @@ def main():
         "n_stories": n_stories,
     }
     _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag,
-                  story_diag=story_diag, retry_diag=retry_diag, similarity_diag=similarity_diag)
+                  story_diag=story_diag, retry_diag=retry_diag, similarity_diag=similarity_diag,
+                  stage2_diag=stage2_diag)
 
     print("\nDone!")
 

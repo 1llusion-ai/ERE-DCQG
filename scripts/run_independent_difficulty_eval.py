@@ -20,6 +20,7 @@ from pathlib import Path
 from dcqg.utils.jsonl import read_jsonl, write_jsonl
 from dcqg.utils.config import get_api_config
 from dcqg.utils.api_client import call_openai_compatible
+from dcqg.difficulty.definitions import difficulty_definitions_block
 
 
 INPUT_DIR = "outputs/runs/baseline_alignment_pilot"
@@ -161,44 +162,41 @@ def build_difficulty_prompt(item):
 ## Expected answer
 "{answer}"
 
+## Difficulty Definitions
+
+{difficulty_definitions_block()}
+
 ## Task
-Evaluate the REASONING DIFFICULTY of this question.
+
+Evaluate the REASONING DIFFICULTY of this question, following the difficulty definitions above.
 
 Think from the solver's perspective: the solver does NOT know the expected answer. They must:
 1. Understand what the question is asking
 2. Identify which information in the context is relevant
-3. Connect the relevant pieces to arrive at the answer
+3. Connect the relevant evidence to arrive at the answer
 
-The key question is: HOW MANY distinct pieces of information must the solver connect to answer correctly?
+Determine:
+- Is the answer directly stated in the context, or must it be inferred?
+- How many sentences are necessary evidence for the answer?
+- What type of reasoning connects the evidence to the answer?
 
 Reply as a single JSON object with exactly these fields:
 {{
   "predicted_difficulty": "Easy",
-  "required_steps": "1",
-  "single_sentence_answerable": "yes",
+  "answer_directly_found": "yes",
+  "num_required_sentences": 1,
+  "reasoning_type": "direct",
   "answerable": "yes",
-  "final_event_consistent": "yes",
   "reason": "short explanation"
 }}
 
 Guidelines:
-- predicted_difficulty: Easy, Medium, or Hard
-- required_steps: "1", "2", or "3+"
-- single_sentence_answerable: can the answer be found in a single sentence? "yes", "partial", or "no"
-- answerable: is the question answerable from the context? "yes", "partial", or "no"
-- final_event_consistent: does the question ask about the final event in the path? "yes", "partial", or "no"
-
-Difficulty definitions:
-- Easy (1 step): The solver can answer by finding ONE fact in ONE sentence. Example: "When did X happen?" → find the date in one sentence.
-- Medium (2 steps): The solver must connect TWO pieces of information. Example: "What happened after X?" → find X, then find what followed.
-- Hard (3+ steps): The solver must connect THREE OR MORE pieces of information from different sentences. The question describes a situation or chain, and the solver must trace through multiple events to identify the answer. Example: "What consequence did the series of military actions that began with X ultimately produce?" → find X, find intermediate actions, find the final consequence.
-
-For Hard questions, the solver typically needs to:
-- Identify what event the question refers to (may not use the exact trigger word)
-- Trace through 2+ intermediate events
-- Arrive at the answer that is the end of the chain
-
-Note: A question can be Hard even if the answer text appears in one sentence, IF the solver needs to understand the chain of events to know that sentence is the answer."""
+- predicted_difficulty: Easy, Medium, or Hard (per the definitions above)
+- answer_directly_found: "yes" if the answer or a close paraphrase is directly stated in the context, "no" if it must be inferred
+- num_required_sentences: number of context sentences that are necessary evidence for the answer (1, 2, 3, ...)
+- reasoning_type: "direct" (answer directly stated, no inference), "simple_inference" (one inference step from a single sentence), "simple_synthesis" (combining multiple directly stated facts), or "complex_multi_step" (multi-step reasoning, causal/temporal chaining, or implicit reasoning across multiple sentences)
+- answerable: can the question be answered from this context? "yes", "partial", or "no"
+- reason: one sentence explanation"""
     return prompt
 
 
@@ -214,7 +212,7 @@ Question: "{question}"
 Answer: "{answer}"
 
 Rate difficulty as JSON:
-{{"predicted_difficulty":"Easy|Medium|Hard","required_steps":"1|2|3+","single_sentence_answerable":"yes|partial|no","answerable":"yes|partial|no","final_event_consistent":"yes|partial|no","reason":"brief"}}"""
+{{"predicted_difficulty":"Easy|Medium|Hard","answer_directly_found":"yes|no","num_required_sentences":1,"reasoning_type":"direct|simple_inference|simple_synthesis|complex_multi_step","answerable":"yes|partial|no","reason":"brief"}}"""
     return prompt
 
 
@@ -309,12 +307,34 @@ def call_judge(prompt, model_config):
         return None, f"{type(exc).__name__}: {exc}"
 
 
+def _add_legacy_difficulty_fields(parsed: dict) -> dict:
+    """Compute legacy fields from canonical fields for backward compatibility."""
+    num = parsed.get("num_required_sentences", 1)
+    try:
+        num = int(num)
+    except (ValueError, TypeError):
+        num = 1
+
+    if num <= 1:
+        parsed["required_steps"] = "1"
+        parsed["single_sentence_answerable"] = "yes"
+    elif num == 2:
+        parsed["required_steps"] = "2"
+        parsed["single_sentence_answerable"] = "partial"
+    else:
+        parsed["required_steps"] = "3+"
+        parsed["single_sentence_answerable"] = "no"
+    parsed.setdefault("final_event_consistent", "partial")
+    return parsed
+
+
 def difficulty_judge(item, model_config):
     """Run difficulty-only judge on one item. Returns dict with judge fields."""
     global parse_error_count, retry_count
 
-    expected_keys = {"predicted_difficulty", "required_steps", "single_sentence_answerable",
-                     "answerable", "final_event_consistent", "reason"}
+    expected_keys = {"predicted_difficulty", "answer_directly_found",
+                     "num_required_sentences", "reasoning_type",
+                     "answerable", "reason"}
 
     prompt = build_difficulty_prompt(item)
     result = {
@@ -328,11 +348,11 @@ def difficulty_judge(item, model_config):
     if err:
         result["difficulty_judge_raw"] = err
         result["difficulty_judge_status"] = "api_error"
-        result["difficulty_judge"] = {
-            "predicted_difficulty": "Medium", "required_steps": "2",
-            "single_sentence_answerable": "partial", "answerable": "partial",
-            "final_event_consistent": "partial", "reason": "api_error"
-        }
+        result["difficulty_judge"] = _add_legacy_difficulty_fields({
+            "predicted_difficulty": "Medium", "answer_directly_found": "no",
+            "num_required_sentences": 2, "reasoning_type": "simple_inference",
+            "answerable": "partial", "reason": "api_error"
+        })
         return result
 
     result["difficulty_judge_raw"] = resp or ""
@@ -347,11 +367,11 @@ def difficulty_judge(item, model_config):
         if err2:
             result["difficulty_judge_raw"] = resp2 or err2
             result["difficulty_judge_status"] = "api_error"
-            result["difficulty_judge"] = {
-                "predicted_difficulty": "Medium", "required_steps": "2",
-                "single_sentence_answerable": "partial", "answerable": "partial",
-                "final_event_consistent": "partial", "reason": "api_error_retry"
-            }
+            result["difficulty_judge"] = _add_legacy_difficulty_fields({
+                "predicted_difficulty": "Medium", "answer_directly_found": "no",
+                "num_required_sentences": 2, "reasoning_type": "simple_inference",
+                "answerable": "partial", "reason": "api_error_retry"
+            })
             return result
 
         result["difficulty_judge_raw"] = resp2 or ""
@@ -360,28 +380,37 @@ def difficulty_judge(item, model_config):
     if not parsed:
         parse_error_count += 1
         result["difficulty_judge_status"] = "parse_error"
-        result["difficulty_judge"] = {
-            "predicted_difficulty": "Medium", "required_steps": "2",
-            "single_sentence_answerable": "partial", "answerable": "partial",
-            "final_event_consistent": "partial", "reason": "parse_error"
-        }
+        result["difficulty_judge"] = _add_legacy_difficulty_fields({
+            "predicted_difficulty": "Medium", "answer_directly_found": "no",
+            "num_required_sentences": 2, "reasoning_type": "simple_inference",
+            "answerable": "partial", "reason": "parse_error"
+        })
         return result
 
     # Normalize
     pred = parsed.get("predicted_difficulty", "Medium")
     if pred not in ("Easy", "Medium", "Hard"):
         pred = "Medium"
-    steps = str(parsed.get("required_steps", "2"))
-    if steps not in ("1", "2", "3+"):
-        steps = "2"
-    for key in ("single_sentence_answerable", "answerable", "final_event_consistent"):
-        val = parsed.get(key, "partial")
-        if val not in ("yes", "partial", "no"):
-            parsed[key] = "partial"
+    adf = parsed.get("answer_directly_found", "no")
+    if adf not in ("yes", "no"):
+        adf = "no"
+    rt = parsed.get("reasoning_type", "simple_inference")
+    if rt not in ("direct", "simple_inference", "simple_synthesis", "complex_multi_step"):
+        rt = "simple_inference"
+    ans = parsed.get("answerable", "partial")
+    if ans not in ("yes", "partial", "no"):
+        ans = "partial"
+    try:
+        num_sents = int(parsed.get("num_required_sentences", 2))
+    except (ValueError, TypeError):
+        num_sents = 2
 
     parsed["predicted_difficulty"] = pred
-    parsed["required_steps"] = steps
-    result["difficulty_judge"] = parsed
+    parsed["answer_directly_found"] = adf
+    parsed["num_required_sentences"] = num_sents
+    parsed["reasoning_type"] = rt
+    parsed["answerable"] = ans
+    result["difficulty_judge"] = _add_legacy_difficulty_fields(parsed)
     return result
 
 
@@ -521,15 +550,30 @@ def compute_stats(items, label=""):
     pred_nums = [DIFF_MAP.get(p, 2) for p in predicted]
     spearman = compute_spearman(target_nums, pred_nums)
 
-    # Step consistency
-    step_map = {"Easy": "1", "Medium": "2", "Hard": "3+"}
-    step_consistent = 0
-    for x in ok_items:
-        tgt = x.get("difficulty", "")
-        steps = x["difficulty_judge"].get("required_steps", "")
-        if step_map.get(tgt) == steps:
-            step_consistent += 1
-    step_cons = step_consistent / len(ok_items) if ok_items else 0
+    # Definition consistency: does the judge's canonical fields match the
+    # expected pattern for each difficulty level (per canonical definitions)?
+    #   Easy   = answer_directly_found=="yes" AND num_required_sentences==1
+    #   Medium = (answer_directly_found=="no" AND num_required_sentences==1)
+    #         OR (answer_directly_found=="yes" AND num_required_sentences>=2)
+    #   Hard   = answer_directly_found=="no" AND num_required_sentences>=2
+    def _definition_consistent(tgt_diff, judge):
+        adf = judge.get("answer_directly_found", "")
+        try:
+            ns = int(judge.get("num_required_sentences", 0))
+        except (ValueError, TypeError):
+            ns = 0
+        if tgt_diff == "Easy":
+            return adf == "yes" and ns == 1
+        elif tgt_diff == "Medium":
+            return (adf == "no" and ns == 1) or (adf == "yes" and ns >= 2)
+        elif tgt_diff == "Hard":
+            return adf == "no" and ns >= 2
+        return False
+
+    def_consistent = sum(1 for x in ok_items
+                         if _definition_consistent(x.get("difficulty", ""),
+                                                   x["difficulty_judge"]))
+    def_cons = def_consistent / len(ok_items) if ok_items else 0
 
     # Path dependency distribution
     dep_counts = {"none": 0, "partial": 0, "strong": 0}
@@ -562,13 +606,12 @@ def compute_stats(items, label=""):
         d_targets = [diff] * len(dx)
         d_predicted = [x["difficulty_judge"].get("predicted_difficulty", "Medium") for x in dx]
         d_acc = sum(1 for t, p in zip(d_targets, d_predicted) if t == p) / len(dx)
-        d_steps = [x["difficulty_judge"].get("required_steps", "2") for x in dx]
-        d_step_ok = sum(1 for x in dx if step_map.get(diff) == x["difficulty_judge"].get("required_steps", ""))
+        d_def_ok = sum(1 for x in dx if _definition_consistent(diff, x["difficulty_judge"]))
         d_dep_strong = sum(1 for x in dx if x["path_dependency_judge"].get("path_dependency") == "strong")
         per_diff[diff] = {
             "count": len(dx),
             "accuracy": round(d_acc, 3),
-            "step_consistency": round(d_step_ok / len(dx), 3) if dx else 0,
+            "definition_consistency": round(d_def_ok / len(dx), 3) if dx else 0,
             "pred_distribution": {d: sum(1 for p in d_predicted if p == d) for d in ["Easy", "Medium", "Hard"]},
             "pathdep_strong": d_dep_strong,
             "avg_steps": round(sum(DIFF_MAP.get(p, 2) for p in d_predicted) / len(dx), 2) if dx else 0,
@@ -585,7 +628,7 @@ def compute_stats(items, label=""):
         "path_parse_errors": path_parse_errors,
         "diff_accuracy": round(diff_acc, 3),
         "spearman": spearman,
-        "step_consistency": round(step_cons, 3),
+        "definition_consistency": round(def_cons, 3),
         "pathdep_strong": dep_counts.get("strong", 0),
         "pathdep_strong_pct": round(dep_counts.get("strong", 0) / len(ok_items) * 100, 1) if ok_items else 0,
         "pathdep_strong_partial": dep_counts.get("strong", 0) + dep_counts.get("partial", 0),
@@ -668,7 +711,7 @@ def generate_report(all_stats, balanced_stats, all_judged, balanced_judged,
     _fmt_row("Path Parse Errors", "path_parse_errors", lambda s: str(s["path_parse_errors"]))
     _fmt_row("Diff Accuracy", "diff_accuracy", lambda s: f"{s['diff_accuracy']:.1%}")
     _fmt_row("Spearman rho", "spearman", lambda s: str(s["spearman"]))
-    _fmt_row("Step Consistency", "step_consistency", lambda s: f"{s['step_consistency']:.1%}")
+    _fmt_row("Definition Consistency", "definition_consistency", lambda s: f"{s['definition_consistency']:.1%}")
     _fmt_row("PathDep Strong", "pathdep_strong",
              lambda s: f"{s['pathdep_strong']}/{s['judge_ok']} ({s['pathdep_strong_pct']:.0f}%)")
     _fmt_row("PathDep Strong+Partial", "pathdep_strong_partial",
@@ -700,7 +743,7 @@ def generate_report(all_stats, balanced_stats, all_judged, balanced_judged,
             lines.append(
                 f"| {s['label']} | {diff} | {pd['count']} | "
                 f"{dist.get('Easy', 0)} | {dist.get('Medium', 0)} | {dist.get('Hard', 0)} | "
-                f"{pd.get('accuracy', 0):.0%} | {pd.get('step_consistency', 0):.0%} | "
+                f"{pd.get('accuracy', 0):.0%} | {pd.get('definition_consistency', 0):.0%} | "
                 f"{pd.get('pathdep_strong', 0)} |"
             )
 
@@ -726,7 +769,7 @@ def generate_report(all_stats, balanced_stats, all_judged, balanced_judged,
     _fmt_row_b("N balanced", lambda s: str(s["total"]))
     _fmt_row_b("Diff Accuracy", lambda s: f"{s['diff_accuracy']:.1%}")
     _fmt_row_b("Spearman rho", lambda s: str(s["spearman"]))
-    _fmt_row_b("Step Consistency", lambda s: f"{s['step_consistency']:.1%}")
+    _fmt_row_b("Definition Consistency", lambda s: f"{s['definition_consistency']:.1%}")
     _fmt_row_b("PathDep Strong",
                lambda s: f"{s['pathdep_strong']}/{s['judge_ok']} ({s['pathdep_strong_pct']:.0f}%)")
     _fmt_row_b("Answerable", lambda s: f"{s['answerable_rate']:.1%}")
@@ -812,6 +855,9 @@ def generate_audit_sample(items, model_name, output_dir, seed=SEED):
             pj = item.get("path_dependency_judge", {})
             pred = dj.get("predicted_difficulty", "?")
             steps = dj.get("required_steps", "?")
+            adf = dj.get("answer_directly_found", "?")
+            ns = dj.get("num_required_sentences", "?")
+            rt = dj.get("reasoning_type", "?")
             dep = pj.get("path_dependency", "?")
             prior_needed = pj.get("num_required_prior_events", "?")
             question = item.get("generated_question", "")[:200]
@@ -823,7 +869,7 @@ def generate_audit_sample(items, model_name, output_dir, seed=SEED):
 
             lines.append(f"### [{diff} -> {pred}] doc_id={doc_id}\n")
             lines.append(f"- **Target difficulty:** {diff}")
-            lines.append(f"- **Predicted difficulty:** {pred} | **Steps:** {steps}")
+            lines.append(f"- **Predicted difficulty:** {pred} | **Answer directly found:** {adf} | **N required sents:** {ns} | **Reasoning:** {rt}")
             lines.append(f"- **Path dependency:** {dep} | **Prior needed:** {prior_needed}")
             lines.append(f"- **Question:** {question}")
             lines.append(f"- **Answer:** {answer}")

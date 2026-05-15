@@ -1,8 +1,8 @@
 # Round 3 Refinement (Final)
 
-## Problem Anchor (Unchanged)
+## Problem Anchor (Revised Definition)
 
-- **Bottom-line problem:** How to generate reading comprehension questions whose answering difficulty (Easy/Medium/Hard) is reliably controllable, where "difficulty" is defined by the minimum evidence sentences a reader must consult — not by surface features or graph hop count alone.
+- **Bottom-line problem:** How to generate reading comprehension questions whose answering difficulty (Easy/Medium/Hard) is reliably controllable, where "difficulty" is defined by a two-dimensional combination of answer explicitness and necessary evidence scope — not by surface features or graph hop count alone.
 - **Must-solve bottleneck:** No mechanism verifies evidence necessity during generation; evaluation relies on unreliable LLM judges.
 - **Non-goals:** General-purpose QG, SOTA, new LLM, multilingual.
 - **Constraints:** Single-GPU, 4-6 weeks, CCF C, <$100 API.
@@ -61,6 +61,19 @@
 
 > Our approach follows the "LLM-as-annotator → train specialized small model" paradigm that has proven effective across NLP evaluation tasks (e.g., automatic essay scoring, factuality checking). We extend this pattern with counterfactual verification and multi-task training to produce evidence-grounded labels, not just surface-level annotations.
 
+### 5. Difficulty definition revised to evidence scope + answer explicitness (IMPORTANT)
+
+- **Issue found:** The previous definition was too close to pure evidence-sentence count, which made single-sentence implicit reasoning collapse into Easy and made Medium/Hard unnecessarily scarce.
+- **Action:** Replace the sentence-count-only mapping with a two-dimensional definition:
+
+| Difficulty | Definition |
+| ---------- | ---------- |
+| **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
+| **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
+| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
+
+- **Impact:** Aligns the method more naturally with FairytaleQA's explicit/implicit distinction and CrossQG-style difficulty control while keeping evidence necessity auditable.
+
 ---
 
 ## Final Revised Proposal
@@ -69,7 +82,7 @@
 
 ## Problem Anchor
 
-- **Bottom-line problem:** How to generate reading comprehension questions whose answering difficulty (Easy/Medium/Hard) is reliably controllable, where "difficulty" is defined by the minimum evidence sentences a reader must consult — not by surface features or graph hop count alone.
+- **Bottom-line problem:** How to generate reading comprehension questions whose answering difficulty (Easy/Medium/Hard) is reliably controllable, where "difficulty" is defined by a two-dimensional combination of answer explicitness and necessary evidence scope — not by surface features or graph hop count alone.
 - **Must-solve bottleneck:** No mechanism verifies evidence necessity during generation; evaluation relies on unreliable LLM judges.
 - **Non-goals:** General-purpose QG, SOTA, new LLM, multilingual.
 - **Constraints:** Single-GPU, 4-6 weeks, CCF C, <$100 API.
@@ -87,7 +100,7 @@
 
 ### Why Evidence Necessity Captures Difficulty (Theoretical Grounding)
 
-The connection between evidence sentence count and question difficulty is grounded in established reading comprehension theory:
+The connection between evidence-inference load and question difficulty is grounded in established reading comprehension theory:
 
 - **Kintsch's Construction-Integration model (1988, 1998):** Comprehension requires building a textbase from propositions and integrating them into a situation model. Difficulty increases when the reader must integrate propositions from multiple text segments, especially when inference bridges gaps between segments.
 
@@ -95,9 +108,15 @@ The connection between evidence sentence count and question difficulty is ground
 
 - **Information Integration Theory (Anderson, 1981):** Cognitive difficulty increases with the number of information sources that must be integrated.
 
-- **FairytaleQA design rationale (Xu et al., 2022):** The dataset distinguishes explicit from implicit questions. Implicit questions are empirically harder because they require integrating information across sentences — exactly the evidence-necessity construct.
+- **FairytaleQA design rationale (Xu et al., 2022):** The dataset distinguishes explicit from implicit questions. Implicit questions are empirically harder because the answer cannot be directly found in text and must be inferred from evidence.
 
-**Evidence-necessity count operationalizes integration load** — a reader-centric difficulty metric grounded in how many text segments must be connected.
+**Evidence-inference load operationalizes difficulty along two axes** — whether the answer can be directly found in text and whether the reader must rely on one or multiple necessary evidence sentences.
+
+| Difficulty | Definition |
+| ---------- | ---------- |
+| **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
+| **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
+| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
 
 ### Why This Is Timely
 
@@ -122,7 +141,7 @@ A multi-task classifier that jointly predicts question difficulty and identifies
 
 ### Complexity Budget
 
-- **Frozen / reused:** FairytaleQA dataset, Qwen-32B as generator, 4 existing QG methods, existing difficulty definitions
+- **Frozen / reused:** FairytaleQA dataset, Qwen-32B as generator, 4 existing QG methods, revised difficulty definitions
 - **New trainable:** Multi-task DeBERTa-v3-base classifier (difficulty + evidence heads)
 - **New pipeline:** Evidence audit with counterfactual verification (one-time offline)
 - **Excluded:** RL optimization, multi-model ensemble, curriculum learning, graph-aware features, Longformer
@@ -149,9 +168,9 @@ Stage 1: Evidence Audit Pipeline (offline, one-time, ~$30 API)
     → No majority → excluded (~10%)
     ↓
   Label mapping:
-    Easy:   ASA=yes AND |req|=1
-    Medium: |req|=2
-    Hard:   |req|≥3 AND ≥1 counterfactual="no"
+    Easy:   answer directly found + one necessary evidence sentence
+    Medium: single-sentence simple inference OR direct answer requiring multiple necessary evidence sentences
+    Hard:   answer not directly found + multiple necessary evidence sentences + complex/multi-step reasoning
     ↓
   Human validation: 200 samples, 2 annotators, Cohen's κ
   Coverage report: % with valid consistent labels
@@ -172,8 +191,8 @@ Stage 2: Multi-Task Classifier Training (~20 GPU-hours with 5-fold CV)
   
   Loss: L = L_diff(CE, class-weighted) + 0.3 × L_evidence(BCE)
   
-  Data: Easy ~2000 | Medium ~1300 | Hard ~550 (augmented)
-    Augmentation: LLM paraphrasing constrained to same evidence sentences
+  Data: class counts re-estimated after the revised audit definition
+    Augmentation: LLM paraphrasing constrained to same evidence sentences, especially if Hard remains small
     Split: 70/15/15 | Class weights: inverse frequency | 5-fold CV
   
   Recipe: AdamW lr=2e-5 (backbone) / 5e-4 (heads), batch 16, 10 epochs
@@ -237,11 +256,11 @@ Sentence is confirmed necessary if response is "no" or "partial."
 
 | Label | Condition | Theoretical basis |
 |-------|-----------|-------------------|
-| Easy | ASA=yes AND \|req\|=1 | Answer locally extractable (no integration) |
-| Medium | \|req\|=2 | One supporting relation (single integration step) |
-| Hard | \|req\|≥3 AND ≥1 counterfactual="no" | Multi-sentence integration, verified necessity |
+| Easy | Answer directly found AND \|req\|=1 | Single-sentence explicit answer extraction |
+| Medium | Answer not directly found AND \|req\|=1 with simple inference; OR answer directly found AND \|req\|≥2 | Single-sentence implicit reasoning or simple multi-sentence synthesis |
+| Hard | Answer not directly found AND \|req\|≥2 AND complex implicit or multi-step reasoning | Multi-evidence integration plus higher inference demand |
 
-**Expected yield:** ~3500 labeled examples from ~4166 pairs (~85% coverage).
+**Expected yield:** to be re-estimated after re-labeling under the revised two-dimensional definition. Medium should increase because single-sentence implicit reasoning no longer collapses into Easy.
 
 ### QG Methods Compared
 
@@ -279,10 +298,10 @@ All methods: same Qwen-32B API, same difficulty definitions, same K=5, same rera
 | Uto et al. (2023) | IRT | IRT score | No | No | No |
 | KAQG (2025) | Bloom's + IRT | LLM judge | No | No | No |
 | GNET-QG (2025) | Graph structure | Human | No | No | No |
-| **Ours** | **Evidence necessity** | **Trained classifier** | **Yes** | **Yes** | **Yes** |
+| **Ours** | **Evidence-inference necessity** | **Trained classifier** | **Yes** | **Yes** | **Yes** |
 
 **What we uniquely contribute:**
-1. Evidence-necessity as a theoretically grounded difficulty definition (Kintsch, Coh-Metrix)
+1. Evidence-inference necessity as a theoretically grounded difficulty definition (Kintsch, Coh-Metrix, FairytaleQA explicit/implicit distinction)
 2. Multi-task classifier: jointly predicts difficulty AND identifies evidence (interpretable)
 3. Dual-use design: evaluation instrument + generation-time reranker
 4. Counterfactual-verified evidence labels from automated LLM audit (no learner data)

@@ -53,7 +53,12 @@ def _parse_vote(raw):
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
-        return None
+        try:
+            start = raw.index("{")
+            end = raw.rindex("}") + 1
+            data = json.loads(raw[start:end])
+        except (ValueError, json.JSONDecodeError, TypeError, AttributeError):
+            return None
 
     val = data.get("can_still_answer", "").strip().lower()
     if val == "yes":
@@ -82,7 +87,9 @@ def verify_single_sentence(sentences, question, answer, removed_idx,
                 model=model,
                 temperature=0.0,
                 max_tokens=200,
-                json_mode=True,
+                # Some OpenAI-compatible providers/models reject response_format
+                # even when they can follow a JSON-only prompt.
+                json_mode=False,
                 system=system,
                 timeout=90,
             )
@@ -147,6 +154,9 @@ def verify_candidate(candidate, api_url, api_key, model, n_runs=3):
             "dropped_evidence_sentences": [],
             "verification_details": [],
             "verified_num_required": len(required_ids),
+            "verified_answer_directly_found": candidate.get(
+                "answer_directly_found", "no"
+            ),
             "verified_difficulty": candidate.get("evidence_difficulty", "Easy"),
         }
 
@@ -176,8 +186,9 @@ def verify_candidate(candidate, api_url, api_key, model, n_runs=3):
 
     # Build a modified assessment dict for classify_difficulty
     assessment = {
+        "answer_directly_found": candidate.get("answer_directly_found", "no"),
         "answer_sentence_alone_sufficient": (
-            "yes" if len(verified) <= 1 else
+            "yes" if candidate.get("answer_directly_found") == "yes" and len(verified) == 1 else
             candidate.get("answer_sentence_alone_sufficient", "partial")
         ),
         "num_required_sentences": len(verified),
@@ -198,5 +209,6 @@ def verify_candidate(candidate, api_url, api_key, model, n_runs=3):
         "dropped_evidence_sentences": dropped,
         "verification_details": details,
         "verified_num_required": len(verified),
+        "verified_answer_directly_found": assessment["answer_directly_found"],
         "verified_difficulty": verified_difficulty,
     }

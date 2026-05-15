@@ -1,8 +1,16 @@
 """Difficulty assessment: definitions, data, classifier, reranker."""
 
-from .definitions import DIFFICULTY_INSTRUCTIONS, DIFFICULTY_FRAMEWORK, difficulty_instruction
+from .definitions import (
+    DIFFICULTY_DEFINITIONS,
+    difficulty_definition,
+    difficulty_definitions_block,
+)
 
-__all__ = ["DIFFICULTY_INSTRUCTIONS", "DIFFICULTY_FRAMEWORK", "difficulty_instruction"]
+__all__ = [
+    "DIFFICULTY_DEFINITIONS",
+    "difficulty_definition",
+    "difficulty_definitions_block",
+]
 
 
 def get_classifier():

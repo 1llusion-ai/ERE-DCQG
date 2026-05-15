@@ -29,6 +29,7 @@ if _project_root not in sys.path:
 from dcqg.datasets.fairytaleqa_loader import load_fairytaleqa
 from dcqg.path.fairytale_evidence_audit import FairytaleEvidenceAuditor, classify_difficulty
 from dcqg.path.counterfactual_verify import verify_candidate
+from dcqg.path.self_consistency import build_consensus_records
 from dcqg.utils.jsonl import read_jsonl, write_jsonl
 from dcqg.utils.config import get_api_config
 
@@ -174,18 +175,25 @@ def run_stage_a(records, output_dir, n_runs, batch_size, model, resume,
 def run_stage_b(stage_a_paths, output_dir, model, resume):
     """Run counterfactual verification on Stage A results.
 
-    Loads all Stage A runs, takes the union of evidence candidates,
-    and runs counterfactual checks on each.
+    Loads all Stage A runs, keeps only valid majority-consensus candidates,
+    and runs counterfactual checks on those consensus evidence sets.
 
     Returns path to stage_b_verification.jsonl.
     """
     output_path = os.path.join(output_dir, "stage_b_verification.jsonl")
 
-    # Load all Stage A results: use the first run as the base, since
-    # all runs audit the same items in the same order
-    base_candidates = read_jsonl(stage_a_paths[0])
-    print(f"\nStage B: verifying {len(base_candidates)} items "
-          f"from {len(stage_a_paths)} Stage A runs")
+    n_runs = len(stage_a_paths)
+    threshold = max(1, (n_runs // 2) + 1)
+    base_candidates, consensus_summary = build_consensus_records(
+        stage_a_paths, agreement_threshold=threshold
+    )
+    print(f"\nStage B: verifying {len(base_candidates)} consensus items "
+          f"from {len(stage_a_paths)} Stage A runs "
+          f"(threshold={threshold})")
+    print(f"  Consensus difficulty: "
+          f"{consensus_summary.get('difficulty_distribution', {})}")
+    print(f"  Dropped before Stage B: "
+          f"{consensus_summary.get('dropped_count', 0)}")
 
     cfg = get_api_config()
     api_url = cfg["SILICONFLOW_API_URL"]
@@ -494,9 +502,12 @@ def write_summary(output_dir, implicit_path, explicit_path, merged_path,
                         ("merged", merged_path)]:
         if os.path.exists(path):
             items = read_jsonl(path)
-            diff_key = "final_difficulty" if any(
-                "final_difficulty" in it for it in items[:5]
-            ) else "evidence_difficulty"
+            if any("difficulty_label" in it for it in items[:5]):
+                diff_key = "difficulty_label"
+            elif any("final_difficulty" in it for it in items[:5]):
+                diff_key = "final_difficulty"
+            else:
+                diff_key = "evidence_difficulty"
             dists = Counter(it.get(diff_key, "Easy") for it in items)
             summary[f"{label}_count"] = len(items)
             summary[f"{label}_difficulty"] = dict(dists)

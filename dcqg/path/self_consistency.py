@@ -47,31 +47,20 @@ def _majority_vote(values, threshold):
     return None
 
 
-def _intersect_evidence(records_agreeing):
-    """Take intersection of required_evidence_sentences across agreeing records."""
-    if not records_agreeing:
-        return []
-    sets = []
-    for rec in records_agreeing:
-        ids = rec.get("required_evidence_sentences", [])
-        sets.append(set(ids))
-    common = sets[0]
-    for s in sets[1:]:
-        common = common & s
-    return sorted(common)
+def _normalized_difficulty(record):
+    """Recompute difficulty from current evidence fields."""
+    return classify_difficulty(record)
 
 
-def _intersect_bridge(records_agreeing):
+def _vote_sentence_ids(records_agreeing, field, threshold):
+    """Keep sentence ids selected by at least threshold agreeing records."""
     if not records_agreeing:
         return []
-    sets = []
+
+    counts = Counter()
     for rec in records_agreeing:
-        ids = rec.get("bridge_sentence_ids", [])
-        sets.append(set(ids))
-    common = sets[0]
-    for s in sets[1:]:
-        common = common & s
-    return sorted(common)
+        counts.update(set(rec.get(field, [])))
+    return sorted(sid for sid, count in counts.items() if count >= threshold)
 
 
 def _pick_field(records_agreeing, field, default=""):
@@ -90,10 +79,15 @@ def _apply_stage_b(record, stage_b_lookup):
         return record
 
     verified = stage_b_lookup[key]
-    necessary_ids = set()
-    for item in verified.get("sentence_verdicts", []):
-        if item.get("verdict") == "necessary":
-            necessary_ids.add(item["sentence_id"])
+    # Current Stage B writes verified_evidence_sentences / verification_details.
+    # Older drafts used sentence_verdicts; keep a fallback for compatibility.
+    if "verified_evidence_sentences" in verified:
+        necessary_ids = set(verified.get("verified_evidence_sentences", []))
+    else:
+        necessary_ids = set()
+        for item in verified.get("sentence_verdicts", []):
+            if item.get("verdict") == "necessary":
+                necessary_ids.add(item["sentence_id"])
 
     original_evidence = set(record.get("required_evidence_sentences", []))
     filtered_evidence = sorted(original_evidence & necessary_ids)
@@ -104,16 +98,157 @@ def _apply_stage_b(record, stage_b_lookup):
     record["required_evidence_sentences"] = filtered_evidence
     record["bridge_sentence_ids"] = filtered_bridge
     record["num_required_sentences"] = len(filtered_evidence)
+    record["verified_evidence_sentences"] = sorted(necessary_ids)
+    record["dropped_evidence_sentences"] = verified.get(
+        "dropped_evidence_sentences", []
+    )
+    record["verification_details"] = verified.get("verification_details", [])
+    record["verified_num_required"] = verified.get(
+        "verified_num_required", len(filtered_evidence)
+    )
 
     # Reclassify using the same logic as Stage A but with filtered counts
     pseudo_assessment = {
         "num_required_sentences": len(filtered_evidence),
-        "answer_sentence_alone_sufficient": "yes" if len(filtered_evidence) <= 1 else "no",
+        "answer_directly_found": record.get("answer_directly_found", "no"),
+        "answer_sentence_alone_sufficient": (
+            "yes"
+            if record.get("answer_directly_found") == "yes"
+            and len(filtered_evidence) == 1
+            else "no"
+        ),
         "bridge_removal_effect": record.get("bridge_removal_effect", "none"),
         "necessity_type": record.get("necessity_type", "background_context"),
     }
     record["difficulty_label"] = classify_difficulty(pseudo_assessment)
+    record["verified_difficulty"] = verified.get(
+        "verified_difficulty", record["difficulty_label"]
+    )
     return record
+
+
+def build_consensus_records(run_paths, agreement_threshold=2):
+    """Build Stage-A consensus records before Stage-B verification.
+
+    Invalid Stage-A votes are excluded. For valid majority votes, evidence is
+    retained when at least agreement_threshold agreeing runs selected it.
+    """
+    runs = _load_runs(run_paths)
+    all_keys = _collect_all_keys(runs)
+
+    results = []
+    agreement_counts = Counter()
+    dropped = 0
+
+    for key in all_keys:
+        present = [run[key] for run in runs if key in run]
+        if len(present) < agreement_threshold:
+            dropped += 1
+            agreement_counts["too_few_runs"] += 1
+            continue
+
+        valid_pairs = []
+        raw_votes = []
+        for rec in present:
+            difficulty = _normalized_difficulty(rec)
+            raw_votes.append(difficulty)
+            if difficulty != "Invalid":
+                valid_pairs.append((rec, difficulty))
+
+        if len(valid_pairs) < agreement_threshold:
+            dropped += 1
+            agreement_counts["too_few_valid_votes"] += 1
+            continue
+
+        valid_difficulties = [difficulty for _, difficulty in valid_pairs]
+        consensus_difficulty = _majority_vote(
+            valid_difficulties, agreement_threshold
+        )
+        if consensus_difficulty is None:
+            dropped += 1
+            agreement_counts["no_consensus"] += 1
+            continue
+
+        agreeing = [
+            rec for rec, difficulty in valid_pairs
+            if difficulty == consensus_difficulty
+        ]
+        n_agree = len(agreeing)
+        agreement_counts[n_agree] += 1
+
+        evidence_ids = _vote_sentence_ids(
+            agreeing, "required_evidence_sentences", agreement_threshold
+        )
+        bridge_ids = _vote_sentence_ids(
+            agreeing, "bridge_sentence_ids", agreement_threshold
+        )
+        bridge_ids = [sid for sid in bridge_ids if sid in evidence_ids]
+
+        if not evidence_ids:
+            dropped += 1
+            agreement_counts["empty_consensus_evidence"] += 1
+            continue
+
+        base = agreeing[0]
+        answer_directly_found = _pick_field(
+            agreeing,
+            "answer_directly_found",
+            default="yes" if len(evidence_ids) == 1 else "no",
+        )
+        out_record = {
+            "story_name": base["story_name"],
+            "story_section": base.get("story_section", ""),
+            "question": base["question"],
+            "answer": base.get("answer", base.get("answer1", "")),
+            "answer1": base.get("answer1", ""),
+            "answer2": base.get("answer2", ""),
+            "attribute": base.get("attribute", ""),
+            "difficulty_label": consensus_difficulty,
+            "evidence_difficulty": consensus_difficulty,
+            "required_evidence_sentences": evidence_ids,
+            "bridge_sentence_ids": bridge_ids,
+            "num_required_sentences": len(evidence_ids),
+            "answer_directly_found": answer_directly_found,
+            "answer_sentence_alone_sufficient": (
+                "yes"
+                if answer_directly_found == "yes" and len(evidence_ids) == 1
+                else "no"
+            ),
+            "section_evidence_sufficient": "yes",
+            "full_context_needed": "no",
+            "reasoning_operation": _pick_field(agreeing, "reasoning_operation"),
+            "necessity_type": _pick_field(agreeing, "necessity_type"),
+            "bridge_removal_effect": _pick_field(agreeing, "bridge_removal_effect"),
+            "evidence_necessity_reason": _pick_field(
+                agreeing, "evidence_necessity_reason"
+            ),
+            "agreement_count": n_agree,
+            "difficulty_votes": dict(Counter(raw_votes)),
+            "difficulty_agreement": round(n_agree / len(present), 3),
+            "n_audit_runs": len(runs),
+            "source": "implicit",
+        }
+
+        recomputed = classify_difficulty(out_record)
+        if recomputed == "Invalid":
+            dropped += 1
+            agreement_counts["invalid_consensus_record"] += 1
+            continue
+        out_record["difficulty_label"] = recomputed
+        out_record["evidence_difficulty"] = recomputed
+
+        results.append(out_record)
+
+    summary = {
+        "total": len(results),
+        "coverage": len(results) / len(all_keys) if all_keys else 0.0,
+        "difficulty_distribution": dict(
+            Counter(r["difficulty_label"] for r in results)
+        ),
+        "agreement_stats": dict(agreement_counts),
+        "dropped_count": dropped,
+    }
+    return results, summary
 
 
 def aggregate_audit_runs(run_paths, stage_b_path=None, output_path="labels.jsonl",
@@ -130,62 +265,26 @@ def aggregate_audit_runs(run_paths, stage_b_path=None, output_path="labels.jsonl
         summary dict with keys: total, coverage, difficulty_distribution,
         agreement_stats, dropped_count
     """
-    runs = _load_runs(run_paths)
-    all_keys = _collect_all_keys(runs)
-
     stage_b_lookup = {}
     if stage_b_path:
         for rec in read_jsonl(stage_b_path):
             stage_b_lookup[_make_key(rec)] = rec
 
     results = []
-    agreement_counts = Counter()
+    consensus_records, consensus_summary = build_consensus_records(
+        run_paths, agreement_threshold=agreement_threshold
+    )
+    agreement_counts = Counter(consensus_summary.get("agreement_stats", {}))
     dropped = 0
 
-    for key in all_keys:
-        present = [run[key] for run in runs if key in run]
-        if len(present) < agreement_threshold:
-            dropped += 1
-            continue
-
-        difficulties = [rec.get("evidence_difficulty", "Easy") for rec in present]
-        consensus_difficulty = _majority_vote(difficulties, agreement_threshold)
-
-        if consensus_difficulty is None:
-            dropped += 1
-            agreement_counts["no_consensus"] += 1
-            continue
-
-        agreeing = [rec for rec, d in zip(present, difficulties)
-                    if d == consensus_difficulty]
-        n_agree = len(agreeing)
-        agreement_counts[n_agree] += 1
-
-        evidence_ids = _intersect_evidence(agreeing)
-        bridge_ids = _intersect_bridge(agreeing)
-
-        # Use first agreeing record as base for metadata
-        base = agreeing[0]
-        out_record = {
-            "story_name": base["story_name"],
-            "story_section": base.get("story_section", ""),
-            "question": base["question"],
-            "answer1": base.get("answer1", ""),
-            "answer2": base.get("answer2", ""),
-            "attribute": base.get("attribute", ""),
-            "difficulty_label": consensus_difficulty,
-            "required_evidence_sentences": evidence_ids,
-            "bridge_sentence_ids": bridge_ids,
-            "num_required_sentences": len(evidence_ids),
-            "reasoning_operation": _pick_field(agreeing, "reasoning_operation"),
-            "necessity_type": _pick_field(agreeing, "necessity_type"),
-            "bridge_removal_effect": _pick_field(agreeing, "bridge_removal_effect"),
-            "agreement_count": n_agree,
-            "source": "implicit",
-        }
-
+    for out_record in consensus_records:
         if stage_b_lookup:
             out_record = _apply_stage_b(out_record, stage_b_lookup)
+
+        if out_record.get("difficulty_label") == "Invalid":
+            dropped += 1
+            agreement_counts["invalid_after_stage_b"] += 1
+            continue
 
         results.append(out_record)
 
@@ -194,10 +293,10 @@ def aggregate_audit_runs(run_paths, stage_b_path=None, output_path="labels.jsonl
     diff_dist = Counter(r["difficulty_label"] for r in results)
     return {
         "total": len(results),
-        "coverage": len(results) / len(all_keys) if all_keys else 0.0,
+        "coverage": consensus_summary.get("coverage", 0.0),
         "difficulty_distribution": dict(diff_dist),
         "agreement_stats": dict(agreement_counts),
-        "dropped_count": dropped,
+        "dropped_count": consensus_summary.get("dropped_count", 0) + dropped,
     }
 
 
@@ -273,8 +372,14 @@ def merge_label_files(implicit_path, explicit_path, output_path):
 
     Returns summary dict with total count and difficulty distribution.
     """
-    implicit = read_jsonl(implicit_path)
-    explicit = read_jsonl(explicit_path)
+    implicit = [
+        rec for rec in read_jsonl(implicit_path)
+        if rec.get("difficulty_label") != "Invalid"
+    ]
+    explicit = [
+        rec for rec in read_jsonl(explicit_path)
+        if rec.get("difficulty_label") != "Invalid"
+    ]
 
     # Deduplicate: if the same (story_name, question) appears in both,
     # prefer the implicit label (it has auditor-verified evidence).

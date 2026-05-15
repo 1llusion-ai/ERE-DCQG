@@ -888,3 +888,203 @@ Evidence roles: anchor, bridge, answer, context
 - Output directory: `outputs/runs/fairytale_qg_crossqg_eval_20260512_story_matched_v1/`
 
 **Next:** Run full story-matched evaluation (106 stories). Stop after Stage 1 full report. Do not implement Stage 2/3 until results are inspected.
+
+---
+
+## 21. Clean Evidence-Label Pipeline Pilot (2026-05-15)
+
+**Goal:** Rebuild the 100-item FairytaleQA implicit training pilot with cleaner
+Stage A/B/C semantics for the current evidence-necessity proposal.
+
+**Issue found in prior 100-item run:**
+- Stage B was verifying only `stage_a_run_1` evidence, while Stage C later
+  combined all three Stage A runs.
+- Stage C used strict evidence intersection across agreeing runs, which could
+  delete valid evidence when the auditor chose equivalent but non-identical
+  sentence sets.
+- Stage A records with `section_evidence_sufficient=no`,
+  `full_context_needed=yes`, or empty evidence could still carry stale
+  Easy/Medium/Hard labels.
+
+**Fix implemented:**
+- `classify_difficulty()` now returns `Invalid` for full-context-needed,
+  section-insufficient, or zero-evidence assessments.
+- Stage C first builds valid majority-consensus records across Stage A runs,
+  excluding Invalid votes.
+- Consensus evidence uses sentence frequency threshold `>= majority threshold`
+  among agreeing valid runs, instead of strict intersection.
+- Stage B now verifies only these Stage-A consensus candidates, not the first
+  Stage A run.
+- Final label files drop Invalid records after Stage B.
+
+**Pilot command:**
+
+```powershell
+python -m scripts.run_evidence_audit_full --split train --output_dir outputs/runs/pilot_100_full_stagebc_clean_v1 --implicit_limit 100 --explicit_limit 0 --stage_a_runs outputs/runs/pilot_100_full/stage_a_run_1.jsonl outputs/runs/pilot_100_full/stage_a_run_2.jsonl outputs/runs/pilot_100_full/stage_a_run_3.jsonl --batch_size 10 --timeout 300 --model Qwen/Qwen2.5-32B-Instruct
+```
+
+**Result:**
+- Stage B verified 92 consensus candidates; 8 were dropped before Stage B.
+- Stage B had 0 verification errors.
+- Stage B verified difficulty distribution: Easy 48, Medium 16, Hard 2,
+  Invalid 26.
+- Final implicit labels: 66 total = Easy 48, Medium 16, Hard 2.
+- Final merged train dataset: 6445 total = Easy 6427, Medium 16, Hard 2.
+- Output directory: `outputs/runs/pilot_100_full_stagebc_clean_v1/`.
+
+**Interpretation:**
+- This run is cleaner but more conservative than `pilot_100_full_stagebc_fix4`.
+- Samples where two Stage A runs say the section is insufficient or require full
+  context are no longer rescued by one valid run.
+- The retained non-Easy set is small; before scaling, inspect whether Stage B is
+  over-pruning Medium/Hard evidence or whether the first 100 implicit items are
+  genuinely Easy-heavy.
+
+**Prompt snapshot:**
+- No-vote selector / blind verifier / removal verifier prompts were frozen in
+  `refine-logs/NO_VOTE_EVIDENCE_PROMPTS.md` before running the few-shot
+  no-vote pilot.
+
+---
+
+## 22. No-Vote Evidence Pilot with Qwen3 Thinking (2026-05-15)
+
+**Goal:** Test a simplified no-vote evidence-labeling pipeline using the frozen
+prompts in `refine-logs/NO_VOTE_EVIDENCE_PROMPTS.md`.
+
+**Setup:**
+- Model: `Qwen/Qwen3-32B`
+- Selector: `/think`
+- Blind verifier and removal verifier: `/no_think`
+- Selector batch size: 5
+- Input: first 100 FairytaleQA train implicit QA pairs
+- Output: `outputs/runs/pilot_100_no_vote_qwen3_32b_fewshot_think_v1/`
+
+**Command:**
+
+```powershell
+python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/pilot_100_no_vote_qwen3_32b_fewshot_think_v1 --implicit_limit 100 --batch_size 5 --timeout 300 --model Qwen/Qwen3-32B
+```
+
+**Results:**
+- Selector candidates: Easy 46, Medium 29, Hard 6, Invalid 19.
+- Final retained labels after blind verification: 37 total = Easy 30,
+  Medium 6, Hard 1.
+- Invalid after verification: 63.
+- Verification statuses: selector invalid/empty 19, insufficient selected
+  evidence 44, ok 37.
+- API calls: 133 total = selector 21, sufficiency 81, removal 31.
+
+**Initial interpretation:**
+- The no-vote pipeline is much cheaper than the previous Stage A/B/C pipeline
+  and gives cleaner evidence traces.
+- The blind verifier is very strict: 44 selector-valid candidates were dropped
+  because selected evidence alone was judged insufficient.
+- Retained Medium/Hard examples mostly show complete evidence sets, but the
+  final non-Easy count is small. Inspect whether verifier strictness is
+  desirable before scaling.
+
+---
+
+## 23. Random-500 No-Vote Evidence Pilot (2026-05-16)
+
+**Goal:** Check whether the first-100 pilot was too Easy-heavy by running the
+same frozen no-vote prompt setup on a reproducible random sample of 500 train
+implicit QA pairs.
+
+**Code change:**
+- `scripts/run_evidence_no_vote_pilot.py` now supports reproducible sampling
+  with `--sample_mode {first,random}` and `--seed`.
+- Default behavior remains `--sample_mode first`, so older commands keep their
+  original first-N semantics.
+
+**Setup:**
+- Model: `Qwen/Qwen3-32B`
+- Selector: `/think`
+- Blind verifier and removal verifier: `/no_think`
+- Selector batch size: 5
+- Input: 500 random FairytaleQA train implicit QA pairs from 2166 total,
+  `seed=42`
+- Output: `outputs/runs/pilot_500_no_vote_qwen3_32b_fewshot_think_seed42_v1/`
+
+**Command:**
+
+```powershell
+python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/pilot_500_no_vote_qwen3_32b_fewshot_think_seed42_v1 --implicit_limit 500 --sample_mode random --seed 42 --batch_size 5 --timeout 300 --model Qwen/Qwen3-32B
+```
+
+**Results:**
+- Selector candidates: 500 total = Easy 209, Medium 163, Hard 43, Invalid 85.
+- Final retained labels after blind verification: 198 total = Easy 154,
+  Medium 39, Hard 5.
+- Invalid after verification: 302.
+- Verification statuses: ok 198, insufficient selected evidence 217,
+  selector invalid/empty 85.
+- API calls: 704 total = selector 102, sufficiency 415, removal 187.
+
+**Retention diagnostics:**
+- Selector Easy retained as Easy: 103/209.
+- Selector Medium retained: 75/163, but 46 were compressed to Easy and 29
+  remained Medium.
+- Selector Hard retained: 20/43, but only 5 remained Hard, 10 compressed to
+  Medium, and 5 compressed to Easy.
+- Final evidence-size distribution: 154 one-sentence labels, 39 two-sentence
+  labels, 4 three-sentence labels, 1 four-sentence label.
+
+**Trace inspection:**
+- Clean final Hard examples include count aggregation across three distant old
+  women in `east-of-sun-and-west-of-moon` and multi-event causal evidence in
+  `master-girl`.
+- Some final Hard labels still look over-strict after leave-one-out checks.
+  Example: `knos` keeps S0-S3 for "why did great sorrow reign at the king's
+  court?", although S0-S2 arguably already establish the king's debt to the sea
+  troll and his three daughters.
+- Many selector Hard -> Invalid cases are legitimate drops where selected
+  sentences imply context but do not show the target answer under blind
+  evidence-only verification.
+
+**Interpretation:**
+- The first-100 sample was indeed Easy-heavy; random sampling produces far more
+  Medium/Hard selector candidates.
+- The main bottleneck is not only selector ability. The blind verifier plus
+  leave-one-out minimization aggressively compresses or rejects multi-sentence
+  evidence, which keeps labels clean but leaves very few final Hard examples.
+- Before full-scale generation, inspect whether the removal verifier should use
+  a stricter "can still fully justify the exact answer" criterion; otherwise
+  some genuine multi-hop cases may collapse to Easy/Medium or a few final Hard
+  cases may be artifacts of over-strict removal decisions.
+
+---
+
+## 24. Revised Two-Dimensional Difficulty Definition (2026-05-16)
+
+**Goal:** Replace the previous sentence-count-only difficulty definition with a
+definition that better aligns FairytaleQA's explicit/implicit distinction with
+CrossQG-style difficulty control.
+
+**New definition:**
+
+| Difficulty | Definition |
+| ---------- | ---------- |
+| **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
+| **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
+| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
+
+**Rationale:**
+- The previous definition made single-sentence implicit reasoning collapse into
+  Easy, which underused FairytaleQA's explicit/implicit signal.
+- The revised definition has two axes: answer acquisition mode (directly found
+  vs. inferred) and necessary evidence scope (single sentence vs. multiple
+  sentences).
+- This should increase Medium coverage while keeping Hard reserved for cases
+  that require both multi-evidence synthesis and complex/multi-step reasoning.
+
+**Files updated:**
+- `refine-logs/FINAL_PROPOSAL.md` now uses the revised definition in the
+  problem anchor, theoretical grounding, system overview, label mapping, and
+  novelty statement.
+
+**Implementation note:**
+- Runtime prompts and label-mapping code have not yet been changed in this
+  update. Before the next pilot, synchronize selector/verifier prompts and
+  `classify_difficulty()` with the revised definition.

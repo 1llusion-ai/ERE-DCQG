@@ -19,7 +19,7 @@ from dcqg.utils.config import get_api_config
 from dcqg.generation.parser import parse_json_response
 from dcqg.question_filter.grammar import grammar_filter
 from dcqg.difficulty.definitions import (
-    difficulty_instruction,
+    difficulty_definition,
 )
 
 
@@ -149,10 +149,10 @@ def classify_answer_focus(nodes, target_answer):
 DIFFICULTY_FOCUS = {
     "Easy": {
         "focus_key": "direct_answer",
-        "label": "direct fact / local information",
+        "label": "single-sentence explicit answer",
         "strategy": (
-            "Ask about a FACT directly stated in the answer sentence. "
-            "Show ONLY the answer sentence — the question must use it alone. "
+            "Ask about a fact whose answer is directly found in one necessary evidence sentence. "
+            "Use only that necessary sentence; no inference or synthesis should be needed. "
             "ONLY these question forms (FORCED): "
             "Who [did/said/saw X]? "
             "What did X [do/say/see/have]? "
@@ -168,24 +168,23 @@ DIFFICULTY_FOCUS = {
     },
     "Medium": {
         "focus_key": "relation_question",
-        "label": "exactly two evidence sentences",
+        "label": "single-sentence implicit or multi-sentence direct synthesis",
         "strategy": (
-            "Ask about ONE specific relationship between two pieces of information. "
-            "The reader needs EXACTLY 2 sentences to answer — neither alone suffices. "
+            "Ask either for a simple inference from one evidence sentence, or for direct synthesis across multiple evidence sentences. "
+            "The reasoning must stay simple and local. "
             "Good: 'What caused X to happen?' (one cause → one effect) "
             "Good: 'What was the result of X?' (one event → one outcome) "
             "Good: 'What enabled X to do Y?' (one enabler → one action) "
             "Good: 'Why was X motivated to do Y?' (one motivation → one action) "
-            "Use EXACTLY ONE relation across 2 sentences. "
-            "Do NOT ask questions that require tracing a 3+ sentence chain."
+            "Do NOT ask questions that require complex implicit or multi-step reasoning."
         ),
         "example_question": "What caused the knight to volunteer first?",
     },
     "Hard": {
         "focus_key": "chain_explanation",
-        "label": "three or more evidence sentences",
+        "label": "multi-sentence implicit or multi-step reasoning",
         "strategy": (
-            "Ask about multi-step MOTIVATION, CAUSE, EXPLANATION, SUMMARY, COUNTING, or DISAMBIGUATION that requires 3 or more evidence sentences. "
+            "Ask about MOTIVATION, CAUSE, EXPLANATION, SUMMARY, COUNTING, COMPARISON, or DISAMBIGUATION where the answer is not directly found in the text. "
             "Good: 'Why did [character] ultimately [do X]?' (requires anchor→motive→action) "
             "Good: 'What larger goal was [character] pursuing by [doing X]?' (requires context→goal→action) "
             "Good: 'What chain of events led to [outcome]?' (requires trigger→development→result) "
@@ -193,9 +192,8 @@ DIFFICULTY_FOCUS = {
             "BAD: 'What did [character] do?' (answerable from 1 sentence — NOT Hard) "
             "BAD: 'Who did X?' (direct fact, not chain-dependent — NOT Hard) "
             "BAD: 'Where did X happen?' (single-sentence lookup — NOT Hard) "
-            "The question must require 3 or more sentences. "
-            "For causal/motivation/explanation questions, removing bridge evidence should make the answer ambiguous or wrong. "
-            "For count/summary questions, the reader must aggregate multiple separated events."
+            "The question must require multiple necessary evidence sentences and complex implicit or multi-step reasoning. "
+            "Removing bridge evidence should make the answer ambiguous or wrong."
         ),
         "example_question": "Why did the huntsman return with a boar's heart instead of the princess's?",
     },
@@ -637,34 +635,10 @@ def _question_length_ok(question):
 
 # ── Prompt builders ────────────────────────────────────────────
 
-DIFFICULTY_SUPPLEMENTS = {
-    "Easy": (
-        "Supplement: Make the question a one-sentence lookup. Do not ask for a "
-        "cause, motivation, consequence, or summary."
-    ),
-    "Medium": (
-        "Supplement: Make the question require exactly one simple connection "
-        "between the answer sentence and one supporting sentence."
-    ),
-    "Hard": (
-        "Supplement: Make the question require 3+ evidence sentences or "
-        "aggregation over multiple separated story events. Suitable forms "
-        "include multi-step cause, motivation, explanation, repeated-event "
-        "counting, summary synthesis, or disambiguation."
-    ),
-}
-
-
-def difficulty_supplement(difficulty):
-    """Return a short CrossQG-style supplement for the target difficulty."""
-    return DIFFICULTY_SUPPLEMENTS.get(difficulty, DIFFICULTY_SUPPLEMENTS["Hard"])
-
-
 def build_direct_prompt(story_section, target_answer, difficulty):
     """Direct QG: context + target answer + difficulty definition. No graph, no examples."""
     ctx = _format_story_context(story_section)
-    diff_def = difficulty_instruction(difficulty)
-    supplement = difficulty_supplement(difficulty)
+    diff_def = difficulty_definition(difficulty)
 
     return f"""Your task is to generate one question-answer pair according to the following context, target answer, and target difficulty.
 
@@ -685,8 +659,7 @@ Requirements:
 4. The answer must be clear, concrete, and well-justified based on the context.
 5. Do not mention the target answer directly in the question.
 6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-7. {supplement}
-8. Output exactly one JSON object, nothing else.
+7. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -695,8 +668,7 @@ Output Format:
 def build_icl_prompt(story_section, target_answer, difficulty):
     """ICL QG: context + target answer + difficulty definition + examples. No graph."""
     ctx = _format_story_context(story_section)
-    diff_def = difficulty_instruction(difficulty)
-    supplement = difficulty_supplement(difficulty)
+    diff_def = difficulty_definition(difficulty)
     examples = NARRATIVE_ICL_EXAMPLES.get(difficulty, NARRATIVE_ICL_EXAMPLES["Hard"])
 
     return f"""Your task is to generate one question-answer pair according to the following context, target answer, and target difficulty.
@@ -721,8 +693,7 @@ Requirements:
 4. The answer must be clear, concrete, and well-justified based on the context.
 5. Do not mention the target answer directly in the question.
 6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-7. {supplement}
-8. Output exactly one JSON object, nothing else.
+7. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -743,8 +714,7 @@ def build_self_refine_prompt(initial_question, initial_answer, story_section,
     QA JSON; it does not return a separate critique JSON.
     """
     ctx = _format_story_context(story_section)
-    diff_def = difficulty_instruction(difficulty)
-    supplement = difficulty_supplement(difficulty)
+    diff_def = difficulty_definition(difficulty)
     previous_qa = json.dumps(
         {"question": initial_question, "answer": initial_answer},
         ensure_ascii=False,
@@ -774,8 +744,7 @@ Requirements:
 6. The answer must be clear, concrete, and well-justified based on the context.
 7. Do not mention the target answer directly in the question.
 8. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-9. {supplement}
-10. Output exactly one JSON object, nothing else.
+9. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -804,8 +773,7 @@ def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
     # Keep the main textual context identical to the baselines. Difficulty control
     # comes from the selected evidence graph, not from hiding story sentences.
     ctx = _format_story_context(story_section)
-    diff_def = difficulty_instruction(difficulty)
-    supplement = difficulty_supplement(difficulty)
+    diff_def = difficulty_definition(difficulty)
     graph_str = _format_graph_for_prompt(prompt_nodes, prompt_edges)
 
     prompt_lines = [
@@ -828,9 +796,8 @@ def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
         "4. The answer must be clear, concrete, and well-justified based on the context.",
         "5. Do not mention the target answer directly in the question.",
         "6. The question must start with a question word (Who/What/Where/When/Why/How) and end with '?'.",
-        f"7. {supplement}",
-        "8. Use the selected evidence graph as the planning scaffold.",
-        "9. Output exactly one JSON object, nothing else.",
+        "7. Use the selected evidence graph as the planning scaffold.",
+        "8. Output exactly one JSON object, nothing else.",
         "",
         "Selected Evidence Graph:",
         graph_str,
@@ -855,8 +822,7 @@ def build_repair_prompt(story_section, target_answer, difficulty, focus_key,
     # Repair uses the same full context as the initial generation prompt; the
     # selected graph policy is preserved separately below.
     ctx = _format_story_context(story_section)
-    diff_def = difficulty_instruction(difficulty)
-    supplement = difficulty_supplement(difficulty)
+    diff_def = difficulty_definition(difficulty)
     graph_str = _format_graph_for_prompt(prompt_nodes, prompt_edges) if prompt_nodes else "None"
 
     return f"""Your task is to repair one question-answer pair according to the following context, target answer, and target difficulty.
@@ -877,9 +843,8 @@ Requirements:
 3. The question must be answerable using only the context.
 4. Do not mention the target answer directly in the question.
 5. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-6. {supplement}
-7. Use the selected evidence graph as the planning scaffold.
-8. Output exactly one JSON object, nothing else.
+6. Use the selected evidence graph as the planning scaffold.
+7. Output exactly one JSON object, nothing else.
 
 Selected Evidence Graph:
 {graph_str}
@@ -1158,11 +1123,11 @@ def _self_check_ours(question, story_section, target_answer, focus_key=None,
 
     # Difficulty-aware sentence count check
     if difficulty == "Easy":
-        sentence_check = "2. Is the question answerable from one sentence (the answer sentence alone)?"
+        sentence_check = "2. Is the answer directly found in one necessary evidence sentence?"
     elif difficulty == "Medium":
-        sentence_check = "2. Does answering require reading at least 2 sentences (not just 1)?"
+        sentence_check = "2. Is this either one-sentence simple inference, or direct synthesis across multiple necessary evidence sentences?"
     else:  # Hard
-        sentence_check = "2. Does answering require 3+ evidence sentences OR aggregation over multiple separated story events?"
+        sentence_check = "2. Is the answer not directly found, requiring multiple necessary evidence sentences plus complex implicit or multi-step reasoning?"
 
     # Graph policy compliance check
     policy_check = ""
@@ -1215,9 +1180,9 @@ Return ONLY: {{"answer_match": "yes|no", "meets_sentence_req": "yes|no", "focus_
         reasons.append("answer mismatch")
     if not meets_req:
         if difficulty == "Medium":
-            reasons.append("needs only 1 sentence")
+            reasons.append("does not match Medium directness/evidence pattern")
         else:
-            reasons.append("needs only 1-2 sentences")
+            reasons.append("does not match Hard directness/evidence pattern")
     if not focus_ok:
         reasons.append("focus mismatch")
     if not policy_ok:
@@ -1482,12 +1447,14 @@ def difficulty_evidence_judge(question, story_section, target_answer, difficulty
                               required_evidence_sentences=None, bridge_sentence_ids=None):
     """Judge 2: Difficulty and evidence dependency assessment.
 
-    Returns dict with: predicted_difficulty, answer_sentence_alone_sufficient,
-    bridge_required, required_evidence_sentences_used, bridge_removal_effect, reason.
+    Returns dict with: predicted_difficulty, answer_directly_found,
+    answer_sentence_alone_sufficient, bridge_required,
+    required_evidence_sentences_used, bridge_removal_effect, reason.
     """
     if not question:
         return {
             "predicted_difficulty": "Easy", "answer_sentence_alone_sufficient": "yes",
+            "answer_directly_found": "yes",
             "bridge_required": "no", "required_evidence_sentences_used": [],
             "bridge_removal_effect": "none", "reason": "empty question",
         }
@@ -1502,26 +1469,31 @@ Story:
 Question: "{question}"
 Expected answer: "{target_answer}"
 
-TASK: Determine the MINIMUM number of sentences a reader must read to correctly answer this question.
+## Difficulty Definition
 
-Step 1: Find the sentence that directly contains or states the answer. This is the "answer sentence."
-Step 2: Check if the answer sentence ALONE is enough to correctly answer the question.
-- If YES: the question needs 1 sentence.
-- If NO: identify what other sentence(s) are needed. Count them.
-Step 3: For each additional sentence needed, explain WHY it is needed (motivation, context, cause, disambiguation, etc.)
+{difficulty_definition(difficulty)}
 
-Step 4: Assign difficulty based on total sentences needed:
-- 1 sentence = Easy
-- 2 sentences = Medium
-- 3 or more sentences = Hard
+## Task
 
-IMPORTANT: Be precise about counting. If the question asks about motivation or cause, and the motivation is in a different sentence from the action/answer, count BOTH sentences. If there is a chain (A causes B causes C), count all links in the chain.
+Determine the difficulty of this question following the definition above. Use two factors:
+1. Whether the expected answer or a close paraphrase is directly found in the story.
+2. The minimum number of necessary evidence sentences a reader must use.
+
+Step 1: Find the sentence that most directly contains, paraphrases, or implies the expected answer.
+Step 2: Decide answer_directly_found:
+- "yes": the expected answer or a close paraphrase is directly present in the text.
+- "no": the expected answer must be inferred.
+Step 3: Identify the minimum necessary evidence sentences.
+Step 4: For each additional sentence needed, explain WHY it is needed (motivation, context, cause, disambiguation, etc.).
+
+IMPORTANT: Be precise about both directness and evidence count. Apply the difficulty definition exactly as given.
 
 Return a JSON object:
 {{
   "num_sentences_needed": <integer>,
   "answer_sentence_id": <int or null>,
   "other_sentence_ids": [<int>, ...],
+  "answer_directly_found": "yes|no",
   "answer_sentence_alone_sufficient": "yes|partial|no",
   "bridge_required": "yes|no",
   "bridge_removal_effect": "none|harder|ambiguous|unanswerable",
@@ -1534,7 +1506,7 @@ Return a JSON object:
 
     # Short retry on parse failure
     if not parsed or not isinstance(parsed, dict):
-        short_prompt = f"""Count the minimum sentences needed to answer this question in the story.
+        short_prompt = f"""Judge this question difficulty from directness plus evidence scope.
 
 Story:
 {ctx}
@@ -1543,7 +1515,7 @@ Question: "{question}"
 Answer: "{target_answer}"
 
 Return ONLY a JSON object:
-{{"num_sentences_needed": <int>, "predicted_difficulty": "Easy|Medium|Hard", "answer_sentence_alone_sufficient": "yes|no", "bridge_required": "yes|no", "bridge_removal_effect": "none|harder|ambiguous|unanswerable", "reason": "brief"}}"""
+{{"num_sentences_needed": <int>, "answer_directly_found": "yes|no", "predicted_difficulty": "Easy|Medium|Hard", "answer_sentence_alone_sufficient": "yes|no", "bridge_required": "yes|no", "bridge_removal_effect": "none|harder|ambiguous|unanswerable", "reason": "brief"}}"""
         raw2 = _call_judge(short_prompt, temperature=0.0, max_tokens=400)
         parsed = _parse_json(raw2)
         if parsed and isinstance(parsed, dict):
@@ -1553,6 +1525,7 @@ Return ONLY a JSON object:
         return {
             "predicted_difficulty": "judge_error",
             "answer_sentence_alone_sufficient": "judge_error",
+            "answer_directly_found": "judge_error",
             "bridge_required": "judge_error",
             "required_evidence_sentences_used": [],
             "bridge_removal_effect": "judge_error",
@@ -1563,22 +1536,36 @@ Return ONLY a JSON object:
             "difficulty_judge_parse_ok": False,
         }
 
-    # Derive difficulty from num_sentences_needed if available
+    # Derive difficulty from directness + evidence count if available.
     num_needed = parsed.get("num_sentences_needed")
+    direct = parsed.get("answer_directly_found")
     if isinstance(num_needed, (int, float)):
         num_needed = int(num_needed)
-        if num_needed >= 3:
-            parsed["predicted_difficulty"] = "Hard"
-        elif num_needed == 2:
-            parsed["predicted_difficulty"] = "Medium"
-        else:
+        if direct not in ("yes", "no"):
+            direct = (
+                "yes"
+                if parsed.get("answer_sentence_alone_sufficient") == "yes"
+                else "no"
+            )
+            parsed["answer_directly_found"] = direct
+        if num_needed <= 0:
+            parsed["predicted_difficulty"] = "judge_error"
+        elif direct == "yes" and num_needed == 1:
             parsed["predicted_difficulty"] = "Easy"
+        elif direct == "yes" and num_needed >= 2:
+            parsed["predicted_difficulty"] = "Medium"
+        elif direct == "no" and num_needed == 1:
+            parsed["predicted_difficulty"] = "Medium"
+        elif direct == "no" and num_needed >= 2:
+            parsed["predicted_difficulty"] = "Hard"
 
     # Normalize
     if parsed.get("predicted_difficulty") not in ("Easy", "Medium", "Hard"):
         parsed["predicted_difficulty"] = "judge_error"
     if parsed.get("answer_sentence_alone_sufficient") not in ("yes", "partial", "no"):
         parsed["answer_sentence_alone_sufficient"] = "judge_error"
+    if parsed.get("answer_directly_found") not in ("yes", "no"):
+        parsed["answer_directly_found"] = "judge_error"
     if parsed.get("bridge_required") not in ("yes", "partial", "no"):
         parsed["bridge_required"] = "judge_error"
     if parsed.get("bridge_removal_effect") not in ("none", "harder", "ambiguous", "unanswerable"):

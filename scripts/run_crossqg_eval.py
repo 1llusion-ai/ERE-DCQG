@@ -298,10 +298,10 @@ def _select_story_matched_candidates(candidates_path, candidates_per_level_per_s
     candidates_per_level_per_story per level per story, deterministically.
 
     Candidate preference within story:
-      - Easy: prefer answer_sentence_alone_sufficient=yes and num_required_sentences=1
-      - Medium: prefer num_required_sentences=2
-      - Hard: prefer necessity_type in {motivation_bridge, causal_bridge, summary_synthesis}
-        and non-temporal reasoning if available
+      - Easy: prefer answer_directly_found=yes and num_required_sentences=1
+      - Medium: prefer single-sentence implicit or multi-sentence direct synthesis
+      - Hard: prefer answer_directly_found=no with multiple evidence sentences,
+        strong bridge types, and non-temporal reasoning if available
 
     Returns list of candidate dicts tagged with 'target_difficulty' and 'story_group_id'.
     """
@@ -340,22 +340,32 @@ def _select_story_matched_candidates(candidates_path, candidates_per_level_per_s
     # Preference scoring helpers
     def _easy_preference(c):
         score = 0
-        if c.get("answer_sentence_alone_sufficient") == "yes":
+        if c.get("answer_directly_found") == "yes":
             score += 10
+        if c.get("answer_sentence_alone_sufficient") == "yes":
+            score += 5
         if c.get("num_required_sentences", 99) == 1:
             score += 5
         return score
 
     def _medium_preference(c):
         score = 0
-        if c.get("num_required_sentences", 0) == 2:
+        direct = c.get("answer_directly_found")
+        num_req = c.get("num_required_sentences", 0)
+        if direct == "no" and num_req == 1:
             score += 10
-        elif c.get("num_required_sentences", 0) == 3:
+        elif direct == "yes" and num_req >= 2:
+            score += 10
+        elif num_req == 2:
             score += 3
         return score
 
     def _hard_preference(c):
         score = 0
+        if c.get("answer_directly_found") == "no":
+            score += 8
+        if c.get("num_required_sentences", 0) >= 2:
+            score += 5
         nt = c.get("necessity_type", "")
         if nt in ("motivation_bridge", "causal_bridge", "summary_synthesis"):
             score += 10
@@ -2185,7 +2195,7 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
 
     # Confirm no target difficulty in prompts
     # Check for explicit target difficulty leakage (e.g., "target difficulty: Easy")
-    # but NOT for the scale definitions ("1 sentence = Easy") which are part of the rubric
+    # but NOT for scale definitions that name Easy/Medium/Hard as part of the rubric
     has_target_diff = False
     for r in all_results:
         dj = r.get("difficulty_judge", {})

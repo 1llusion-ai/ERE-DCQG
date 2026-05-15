@@ -12,7 +12,7 @@ import time
 from dcqg.utils.api_client import call_openai_compatible
 from dcqg.utils.config import get_api_config
 from dcqg.generation.parser import parse_json_response
-from dcqg.difficulty.definitions import difficulty_instruction
+from dcqg.difficulty.definitions import difficulty_definition
 
 
 # ── Sentence splitting ────────────────────────────────────────────
@@ -38,39 +38,31 @@ def build_answer_grounded_evidence_prompt(story_name, story_section, target_answ
     story_text = "\n".join(f"[S{i}] {s}" for i, s in enumerate(sentences))
     n_sentences = len(sentences)
 
-    # Difficulty-specific guidance. This uses the same natural-language
-    # evidence-necessity policy shown to generation methods, without graph terms.
+    # Difficulty-specific operational guidance. The canonical difficulty
+    # definition is injected separately; this block gives planning instructions.
     diff_guidance = {
         "Easy": (
             "Plan for an EASY question:\n"
-            "- Use the Easy definition: one sentence alone should be sufficient.\n"
-            "- Identify exactly 1 sentence that directly states or trivially paraphrases the answer.\n"
-            "- The answer sentence alone should be sufficient (no other sentences needed).\n"
-            "- No bridge sentences.\n"
-            "- Set answer_sentence_alone_sufficient=yes.\n"
-            "- Set bridge_required=no.\n"
-            "- If the answer truly requires >1 sentence, set target_difficulty_feasible=partial or no."
+            "- Identify exactly 1 sentence that directly states or closely paraphrases the answer.\n"
+            "- Set answer_directly_found=yes and answer_sentence_alone_sufficient=yes.\n"
+            "- No bridge sentences; set bridge_required=no.\n"
+            "- If the answer must be inferred or requires multiple sentences, set target_difficulty_feasible=partial or no."
         ),
         "Medium": (
             "Plan for a MEDIUM question:\n"
-            "- Use the Medium definition: two evidence sentences or one simple reasoning step.\n"
-            "- Identify exactly 2 sentences when possible: one answer sentence + one support sentence.\n"
-            "- The two sentences should have one simple support relation (reference, nearby context, simple cause, motivation, action, state, or outcome).\n"
-            "- Do NOT plan a full multi-hop chain.\n"
-            "- Set answer_sentence_alone_sufficient=no or partial.\n"
-            "- Set bridge_required=no or yes depending on whether the support sentence bridges context.\n"
-            "- If only 1 sentence is truly needed, set target_difficulty_feasible=partial.\n"
-            "- If 3+ sentences are needed, set target_difficulty_feasible=partial."
+            "- Follow either Case 1 (inferred answer, 1 necessary sentence, simple inference) or Case 2 (direct answer, multiple necessary sentences, simple synthesis).\n"
+            "- Do NOT plan complex implicit or multi-step reasoning.\n"
+            "- Set bridge_required based on whether a support sentence connects context to the answer.\n"
+            "- If the answer is direct and one-sentence only, set target_difficulty_feasible=partial.\n"
+            "- If the answer is inferred from multiple sentences, set target_difficulty_feasible=partial or no."
         ),
         "Hard": (
             "Plan for a HARD question:\n"
-            "- Use the Hard definition: 3+ evidence sentences OR aggregation over multiple separated events.\n"
-            "- Identify 3 or more required evidence sentences whenever possible.\n"
-            "- Include anchor sentence(s) + bridge/support sentence(s) + answer sentence where the task is causal, motivational, explanatory, or disambiguating.\n"
-            "- Repeated-event counting and summary synthesis can be Hard even when bridge_required=no, if multiple separated events must be combined.\n"
-            "- Set answer_sentence_alone_sufficient=no or partial unless this is a count/summary aggregation whose answer is short but requires multiple events.\n"
-            "- Set bridge_required=yes for causal/motivation/explanation/disambiguation chains; bridge_required may be no for repeated-event counting or summary synthesis.\n"
-            "- If only 1-2 sentences are truly needed, set target_difficulty_feasible=no or partial.\n"
+            "- Identify at least 2 required evidence sentences, preferably 3+ when the story supports it.\n"
+            "- The plan must require complex implicit reasoning or multi-step reasoning across sentences.\n"
+            "- Suitable forms include aggregation, comparison, temporal/causal chaining, separated-event resolution, or tracking multiple entities.\n"
+            "- Set answer_sentence_alone_sufficient=no or partial.\n"
+            "- If the answer is directly found, or only one sentence is needed, set target_difficulty_feasible=no or partial.\n"
             "- Prefer causal_chain, motivation_chain, summary_synthesis, repeated_event_count, or disambiguation as reasoning_operation."
         ),
     }.get(target_difficulty, "")
@@ -101,7 +93,7 @@ difficulty whose answer is the target answer.
 ## Target Difficulty: {target_difficulty}
 
 Difficulty Definition:
-{difficulty_instruction(target_difficulty)}
+{difficulty_definition(target_difficulty)}
 
 {diff_guidance}
 
@@ -112,40 +104,44 @@ Return a JSON object with these fields:
 1. **answer_sentence_id** (int): The sentence index [S?] that most directly contains
    or implies the target answer. This sentence MUST be in required_evidence_sentences.
 
-2. **required_evidence_sentences** (list[int]): All sentence indices a reader MUST
+2. **answer_directly_found** (str): "yes" or "no".
+   - "yes": the target answer, or a close paraphrase, is directly found in the text
+   - "no": the target answer must be inferred
+
+3. **required_evidence_sentences** (list[int]): All sentence indices a reader MUST
    read to correctly answer the question. Sorted ascending. Minimum length 1.
 
-3. **anchor_sentence_ids** (list[int]): Sentences that establish context, setting,
+4. **anchor_sentence_ids** (list[int]): Sentences that establish context, setting,
    characters, or situation. The "starting point" sentences. Can overlap with
    required_evidence_sentences but NOT with answer_sentence_id.
 
-4. **bridge_sentence_ids** (list[int]): Sentences that connect anchor context to
+5. **bridge_sentence_ids** (list[int]): Sentences that connect anchor context to
    the answer. Must NOT include answer_sentence_id. Empty for Easy.
 
-5. **answer_sentence_alone_sufficient** (str): "yes", "partial", or "no".
+6. **answer_sentence_alone_sufficient** (str): "yes", "partial", or "no".
    - "yes": reading ONLY the answer sentence is enough
    - "partial": the answer sentence gives hints but one other sentence helps
    - "no": the answer sentence alone is ambiguous
 
-6. **bridge_required** (str): "yes" or "no".
+7. **bridge_required** (str): "yes" or "no".
    - "yes": reader must cross at least one bridge sentence to connect context to answer
    - "no": no bridging needed
 
-7. **reasoning_operation** (str): The type of reasoning needed.
+8. **reasoning_operation** (str): The type of reasoning needed.
    Choose from: explicit_lookup, local_inference, causal_chain, motivation_chain,
    summary_synthesis, disambiguation
 
-8. **necessity_type** (str): Why are the extra sentences needed?
+9. **necessity_type** (str): Why are the extra sentences needed?
    Choose from: answer_local, one_relation, causal_bridge, motivation_bridge,
    summary_synthesis, disambiguation, weak_or_invalid
 
-9. **evidence_plan_valid** (str): "yes" or "no".
+10. **evidence_plan_valid** (str): "yes" or "no".
    - "yes": the plan is coherent and matches the target difficulty
    - "no": the evidence does not support the requested difficulty
 
-10. **evidence_plan_reason** (str): One sentence explaining the plan.
+11. **evidence_plan_reason** (str): One sentence explaining the plan.
 
-11. **target_difficulty_feasible** (str): "yes", "partial", or "no".
+12. **target_difficulty_feasible** (str): "yes", "partial", or "no".
     - "yes": the story section has good evidence for this difficulty
     - "partial": evidence exists but is suboptimal for this difficulty
     - "no": the story section cannot support a question at this difficulty
@@ -156,7 +152,7 @@ Return a JSON object with these fields:
 - answer_sentence_id MUST be in required_evidence_sentences.
 - bridge_sentence_ids must NOT overlap answer_sentence_id.
 - anchor_sentence_ids can overlap required_evidence_sentences but NOT answer_sentence_id.
-- The number of required_evidence_sentences must match the difficulty target.
+- The directness and number of required_evidence_sentences must match the difficulty target.
 - Do NOT fabricate sentences — only use indices that exist in the story above.
 - Return ONLY the JSON object, no other text."""
 
@@ -216,7 +212,7 @@ def validate_evidence_plan(plan, n_sentences, target_difficulty):
     required_fields = [
         "answer_sentence_id", "required_evidence_sentences",
         "anchor_sentence_ids", "bridge_sentence_ids",
-        "answer_sentence_alone_sufficient", "bridge_required",
+        "answer_directly_found", "answer_sentence_alone_sufficient", "bridge_required",
         "reasoning_operation", "necessity_type",
         "evidence_plan_valid", "evidence_plan_reason",
         "target_difficulty_feasible",
@@ -303,23 +299,38 @@ def validate_evidence_plan(plan, n_sentences, target_difficulty):
 
     # Difficulty consistency checks
     num_req = plan["num_required_sentences"]
+    direct = plan.get("answer_directly_found", "")
     asa = plan.get("answer_sentence_alone_sufficient", "")
     br = plan.get("bridge_required", "")
     feasible = plan.get("target_difficulty_feasible", "")
+    if direct not in ("yes", "no"):
+        direct = "yes" if asa == "yes" else "no"
+        plan["answer_directly_found"] = direct
+        contradictions.append("answer_directly_found missing or invalid, inferred from ASA")
 
     if target_difficulty == "Easy":
-        if num_req > 1:
-            contradictions.append(f"Easy with num_req={num_req} > 1")
+        if num_req != 1:
+            contradictions.append(f"Easy with num_req={num_req} (expected 1)")
+        if direct != "yes":
+            contradictions.append(f"Easy with answer_directly_found={direct} (expected yes)")
         if asa != "yes" and asa not in ("?", None):
             contradictions.append(f"Easy with ASA={asa} (expected yes)")
 
     elif target_difficulty == "Medium":
-        if num_req > 3:
-            contradictions.append(f"Medium with num_req={num_req} > 3")
+        medium_ok = (
+            (direct == "no" and num_req == 1)
+            or (direct == "yes" and num_req >= 2)
+        )
+        if not medium_ok:
+            contradictions.append(
+                f"Medium with answer_directly_found={direct}, num_req={num_req}"
+            )
 
     elif target_difficulty == "Hard":
-        if num_req < 3:
-            contradictions.append(f"Hard with num_req={num_req} < 3")
+        if direct != "no":
+            contradictions.append(f"Hard with answer_directly_found={direct} (expected no)")
+        if num_req < 2:
+            contradictions.append(f"Hard with num_req={num_req} < 2")
         if br != "yes":
             # summary_synthesis and count aggregation may not need a bridge
             ro = plan.get("reasoning_operation", "")

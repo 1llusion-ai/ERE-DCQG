@@ -86,34 +86,40 @@ Example of ANSWER IDENTIFICATION (Hard):
 
 For each QA pair, provide:
 
-1. answer_sentence_alone_sufficient:
+1. answer_directly_found:
+   Can the target answer, or a close paraphrase of it, be directly found in
+   the provided text?
+   - "yes": the answer text is explicitly present or directly paraphrased
+   - "no": the answer must be inferred
+
+2. answer_sentence_alone_sufficient:
    Is the most likely answer sentence alone enough to answer the question?
    - "yes": the sentence directly states the answer
    - "partial": the sentence gives a hint but needs one other sentence
    - "no": the sentence alone is ambiguous or insufficient
 
-2. section_evidence_sufficient:
+3. section_evidence_sufficient:
    Is the entire story section enough to answer the question?
    - "yes": the section fully contains the answer
    - "partial": the section helps but some inference is needed
    - "no": the question requires information beyond this section
 
-3. full_context_needed:
+4. full_context_needed:
    Does answering require the full story context (beyond the section)?
    - "yes": must read beyond the section
    - "partial": section is mostly sufficient
    - "no": section is fully sufficient
 
-4. required_evidence_sentences:
+5. required_evidence_sentences:
    List of sentence indices [S0, S1, ...] that are REQUIRED to answer.
 
-5. bridge_sentence_ids:
+6. bridge_sentence_ids:
    Sentence indices that connect context to the answer. Empty if none.
 
-6. num_required_sentences:
+7. num_required_sentences:
    How many sentences are required (len of required_evidence_sentences).
 
-7. reasoning_operation:
+8. reasoning_operation:
    What kind of reasoning is needed?
    - "explicit_lookup": answer is directly stated
    - "temporal_order": answer depends on event sequence
@@ -124,14 +130,14 @@ For each QA pair, provide:
    - "summary_inference": answer requires summarizing multiple facts
    - "contrast": answer requires comparing/contrasting
 
-8. bridge_removal_effect:
+9. bridge_removal_effect:
    If bridge sentences are removed:
    - "none": answer still findable
    - "harder": answer harder but possible
    - "ambiguous": answer becomes ambiguous
    - "unanswerable": answer cannot be determined
 
-9. necessity_type:
+10. necessity_type:
    Why are extra sentences needed?
    - "background_context": extra sentences provide background only
    - "answer_identification": extra sentences needed to find the answer
@@ -141,7 +147,7 @@ For each QA pair, provide:
    - "motivation_bridge": extra sentences explain character motivation
    - "summary_synthesis": answer requires synthesizing multiple facts
 
-10. evidence_necessity_reason:
+11. evidence_necessity_reason:
     One sentence explaining why.
 
 ## QA Pairs to assess
@@ -154,6 +160,7 @@ Return a JSON object with key "assessments" containing a list, one entry per
 QA pair.  Each entry MUST include ALL fields:
 {{
   "qa_id": 1,
+  "answer_directly_found": "no",
   "answer_sentence_alone_sufficient": "no",
   "section_evidence_sufficient": "yes",
   "full_context_needed": "no",
@@ -172,8 +179,9 @@ Important:
 - required_evidence_sentences must ONLY contain valid sentence indices from
   the story section shown above (0-based).
 - Do NOT mark Hard merely because background context helps understand.
-- If the answer is directly stated in one sentence, set
-  answer_sentence_alone_sufficient=yes even if other sentences provide context.
+- If the answer is directly stated in one sentence, set answer_directly_found=yes.
+- If the answer must be inferred, set answer_directly_found=no even when only
+  one evidence sentence is needed.
 
 Return ONLY the JSON object, no other text."""
 
@@ -205,6 +213,7 @@ def _parse_assessments(resp, num_qa):
 
 # Valid values
 _VALID_ABILITY = {"yes", "partial", "no"}
+_VALID_DIRECT = {"yes", "no"}
 _VALID_REMOVAL = {"none", "harder", "ambiguous", "unanswerable"}
 _VALID_NEC_TYPE = {
     "background_context", "answer_identification", "disambiguation",
@@ -248,6 +257,11 @@ def _validate_assessment(a, num_sentences):
     for key in ("answer_sentence_alone_sufficient", "section_evidence_sufficient", "full_context_needed"):
         if a.get(key) not in _VALID_ABILITY:
             a[key] = "partial"
+    if a.get("answer_directly_found") not in _VALID_DIRECT:
+        # Backward-compatible fallback for older prompt outputs.
+        a["answer_directly_found"] = (
+            "yes" if a.get("answer_sentence_alone_sufficient") == "yes" else "no"
+        )
     if a.get("bridge_removal_effect") not in _VALID_REMOVAL:
         a["bridge_removal_effect"] = "harder"
     if a.get("necessity_type") not in _VALID_NEC_TYPE:
@@ -257,19 +271,23 @@ def _validate_assessment(a, num_sentences):
     if not isinstance(a.get("evidence_necessity_reason"), str):
         a["evidence_necessity_reason"] = ""
 
-    # Fix contradictions
+    # Fix contradictions without changing the evidence set. Under the current
+    # definition, a single evidence sentence can still require inference.
     num_req = a["num_required_sentences"]
-    suff = a["answer_sentence_alone_sufficient"]
 
-    # Contradiction: sufficiency=yes but has multiple required sentences
-    if suff == "yes" and num_req > 1:
+    # Contradiction: answer sentence alone is sufficient but multiple required
+    # sentences are listed. Keep the evidence set and correct the diagnostic.
+    if a["answer_sentence_alone_sufficient"] == "yes" and num_req > 1:
         contradictions += 1
-        a["required_evidence_sentences"] = req_ids[:1] if req_ids else []
-        a["bridge_sentence_ids"] = []
-        a["num_required_sentences"] = len(a["required_evidence_sentences"])
+        a["answer_sentence_alone_sufficient"] = "no"
 
-    # Contradiction: num_required=1 but sufficiency != yes
-    if a["num_required_sentences"] == 1 and a["answer_sentence_alone_sufficient"] != "yes":
+    # If one direct evidence sentence is enough, the answer sentence alone is
+    # sufficient. This does not apply to single-sentence implicit reasoning.
+    if (
+        num_req == 1
+        and a["answer_directly_found"] == "yes"
+        and a["answer_sentence_alone_sufficient"] != "yes"
+    ):
         contradictions += 1
         a["answer_sentence_alone_sufficient"] = "yes"
 
@@ -279,24 +297,44 @@ def _validate_assessment(a, num_sentences):
 def classify_difficulty(assessment):
     """Classify Easy/Medium/Hard from the evidence assessment.
 
-    Definitions (aligned with FINAL_PROPOSAL.md):
-      Easy:   answer_sentence_alone_sufficient=yes AND num_required_sentences=1
-      Medium: num_required_sentences=2
-      Hard:   num_required_sentences>=3
+    Labels are consistent with the canonical definitions in
+    dcqg.difficulty.definitions.DIFFICULTY_DEFINITIONS.
     """
-    suff = assessment.get("answer_sentence_alone_sufficient", "yes")
-    num_req = assessment.get("num_required_sentences", 1)
+    if assessment.get("section_evidence_sufficient") == "no":
+        return "Invalid"
+    if assessment.get("full_context_needed") == "yes":
+        return "Invalid"
 
-    # Easy: exactly 1 required sentence AND that sentence alone suffices
-    if suff == "yes" and num_req == 1:
+    direct = assessment.get("answer_directly_found")
+    if direct not in ("yes", "no"):
+        direct = (
+            "yes"
+            if assessment.get("answer_sentence_alone_sufficient") == "yes"
+            else "no"
+        )
+    num_req = assessment.get("num_required_sentences", 1)
+    if not isinstance(num_req, (int, float)):
+        return "Invalid"
+    num_req = int(num_req)
+
+    # No required evidence is not a valid training label.  This can happen when
+    # counterfactual verification removes all Stage A evidence candidates.
+    if num_req <= 0:
+        return "Invalid"
+
+    if direct == "yes" and num_req == 1:
         return "Easy"
 
-    # Hard: 3 or more required sentences
-    if num_req >= 3:
+    if direct == "yes" and num_req >= 2:
+        return "Medium"
+
+    if direct == "no" and num_req == 1:
+        return "Medium"
+
+    if direct == "no" and num_req >= 2:
         return "Hard"
 
-    # Medium: exactly 2 required sentences (or num_req=1 but ASA=no)
-    return "Medium"
+    return "Invalid"
 
 
 class FairytaleEvidenceAuditor:
@@ -347,6 +385,7 @@ class FairytaleEvidenceAuditor:
             if assessments and i < len(assessments):
                 a, n_contra = _validate_assessment(assessments[i], num_sents)
                 candidate.update({
+                    "answer_directly_found": a["answer_directly_found"],
                     "answer_sentence_alone_sufficient": a["answer_sentence_alone_sufficient"],
                     "section_evidence_sufficient": a["section_evidence_sufficient"],
                     "full_context_needed": a["full_context_needed"],
@@ -363,6 +402,7 @@ class FairytaleEvidenceAuditor:
                 })
             else:
                 candidate.update({
+                    "answer_directly_found": "no",
                     "answer_sentence_alone_sufficient": "partial",
                     "section_evidence_sufficient": "partial",
                     "full_context_needed": "partial",

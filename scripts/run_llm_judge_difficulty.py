@@ -27,6 +27,7 @@ if _project_root not in sys.path:
 from dcqg.utils.jsonl import read_jsonl, write_jsonl
 from dcqg.utils.config import get_api_config
 from dcqg.utils.api_client import call_openai_compatible
+from dcqg.difficulty.definitions import difficulty_definitions_block
 
 VALID_DIFFICULTIES = {"Easy", "Medium", "Hard"}
 
@@ -85,13 +86,14 @@ def build_difficulty_prompt(item: dict) -> str:
 ## Answer
 {answer}
 
-## Task
-Classify the difficulty of this question into exactly one of: Easy, Medium, or Hard.
+## Difficulty Definitions
 
-Definitions:
-- Easy: The answer can be found directly in a single sentence with minimal reasoning.
-- Medium: Answering requires connecting two pieces of information or moderate inference.
-- Hard: Answering requires synthesising three or more pieces of information, multi-step reasoning, or understanding implicit causal chains.
+{difficulty_definitions_block()}
+
+## Task
+
+Classify the difficulty of this question into exactly one of: Easy, Medium, or Hard,
+following the difficulty definitions above.
 
 Reply as a JSON object with exactly these fields:
 {{"difficulty": "Easy|Medium|Hard", "reasoning": "one sentence explanation"}}"""

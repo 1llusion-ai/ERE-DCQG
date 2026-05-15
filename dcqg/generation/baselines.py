@@ -23,6 +23,7 @@ from dcqg.utils.text import fuzzy_match, text_similarity
 from dcqg.question_filter.grammar import grammar_filter
 from dcqg.evaluation.solver import Solver, Judge
 from dcqg.evaluation.judge import llm_judge_v2, quality_judge
+from dcqg.difficulty.definitions import difficulty_definition
 
 
 # ── Fixed sample management ──────────────────────────────────
@@ -59,13 +60,7 @@ def load_or_create_sample(results_file, output_path, n_per_level=100, seed=42):
     return items
 
 
-# ── Difficulty definitions and ICL examples ───────────────────
-
-DIFFICULTY_DEFINITIONS = {
-    "Easy": "Easy: the question can be answered from exactly one sentence. That sentence alone is sufficient — no other sentence is needed.",
-    "Medium": "Medium: the question requires exactly two evidence sentences. Neither sentence alone is sufficient; both must be combined to answer.",
-    "Hard": "Hard: the question requires three or more evidence sentences. The reader must synthesize information across multiple sentences to determine the answer.",
-}
+# ── ICL examples ───────────────────────────────────────────────
 
 ICL_EXAMPLES = {
     "Easy": """Example 1:
@@ -196,7 +191,7 @@ Target answer:
 "{gold_trigger}"
 
 Difficulty Definition:
-{DIFFICULTY_DEFINITIONS[diff]}
+{difficulty_definition(diff)}
 
 Requirements:
 1. The question must be answerable using only the context.
@@ -226,7 +221,7 @@ Target answer:
 "{gold_trigger}"
 
 Difficulty Definition:
-{DIFFICULTY_DEFINITIONS[diff]}
+{difficulty_definition(diff)}
 
 Requirements:
 1. The question must be answerable using only the context.

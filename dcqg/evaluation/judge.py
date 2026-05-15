@@ -16,6 +16,7 @@ from dcqg.utils.api_client import call_api, call_openai_compatible
 from dcqg.utils.text import normalize, fuzzy_match, detect_loop
 from dcqg.utils.config import get_api_config
 from dcqg.question_filter.grammar import grammar_filter
+from dcqg.difficulty.definitions import difficulty_definitions_block
 
 
 # ── Solver ──────────────────────────────────────────────────
@@ -383,47 +384,42 @@ def _build_difficulty_prompt(item):
 ## Expected answer
 "{answer}"
 
+## Difficulty Definitions
+
+{difficulty_definitions_block()}
+
 ## Task
-Evaluate the REASONING DIFFICULTY of this question from the solver's perspective.
+
+Evaluate the REASONING DIFFICULTY of this question from the solver's perspective,
+following the difficulty definitions above.
 
 The solver does NOT know the answer. They must:
 1. Understand what the question asks
 2. Find relevant information across the context
-3. Trace through a chain of events/facts to reach the answer
+3. Connect the relevant evidence to reach the answer
 
-The key question: HOW MANY sequential reasoning steps must the solver make?
+Determine:
+- Is the answer directly stated in the context, or must it be inferred?
+- How many sentences are necessary evidence for the answer?
+- What type of reasoning connects the evidence to the answer?
 
 Reply as a single JSON object:
 {{
   "predicted_difficulty": "Easy",
-  "required_steps": "1",
-  "single_sentence_answerable": "yes",
+  "answer_directly_found": "yes",
+  "num_required_sentences": 1,
+  "reasoning_type": "direct",
   "answerable": "yes",
-  "final_event_consistent": "yes",
   "reason": "short explanation"
 }}
 
 Guidelines:
-- predicted_difficulty: Easy, Medium, or Hard
-- required_steps: "1", "2", or "3+"
-- single_sentence_answerable: can the answer be found in a single sentence? "yes", "partial", or "no"
-- answerable: is the question answerable from the context? "yes", "partial", or "no"
-- final_event_consistent: does the question ask about the final event in the path? "yes", "partial", or "no"
-
-Difficulty definitions (focus on REASONING STEPS, not just information count):
-
-- Easy (1 step): The solver reads ONE sentence and extracts the answer directly. No chain reasoning.
-  Example: "What did the army do?" → read the sentence about the army.
-
-- Medium (2 steps): The solver connects 2 pieces of information from 2 different sentences. Simple A→B link.
-  Example: "What happened after X?" → find X in sentence 1, find result in sentence 2.
-
-- Hard (3+ steps): The solver must trace a CHAIN of 3+ events/facts where each step depends on the previous.
-  The solver cannot shortcut by reading just the first and last sentences — they must follow the intermediate steps.
-  Example: "What was the ultimate consequence after X?" where the chain is X→Y→Z→answer.
-  The solver must: find X → discover Y → discover Z → find the answer. This is 3+ reasoning steps.
-
-CRITICAL: A question asking "What was the consequence after X?" is Hard if the chain from X to the answer involves 3+ intermediate events that the solver must discover. Do NOT rate it Easy just because the answer appears in one sentence — the solver must TRACE the chain to find that sentence."""
+- predicted_difficulty: Easy, Medium, or Hard (per the definitions above)
+- answer_directly_found: "yes" if the answer or a close paraphrase is directly stated in the context, "no" if it must be inferred
+- num_required_sentences: number of context sentences that are necessary evidence for the answer (1, 2, 3, ...)
+- reasoning_type: "direct" (answer directly stated, no inference), "simple_inference" (one inference step from a single sentence), "simple_synthesis" (combining multiple directly stated facts), or "complex_multi_step" (multi-step reasoning, causal/temporal chaining, or implicit reasoning across multiple sentences)
+- answerable: can the question be answered from this context? "yes", "partial", or "no"
+- reason: one sentence explanation"""
 
 
 def _build_difficulty_prompt_short(item):
@@ -438,7 +434,7 @@ Question: "{question}"
 Answer: "{answer}"
 
 Rate difficulty as JSON:
-{{"predicted_difficulty":"Easy|Medium|Hard","required_steps":"1|2|3+","single_sentence_answerable":"yes|partial|no","answerable":"yes|partial|no","final_event_consistent":"yes|partial|no","reason":"brief"}}"""
+{{"predicted_difficulty":"Easy|Medium|Hard","answer_directly_found":"yes|no","num_required_sentences":1,"reasoning_type":"direct|simple_inference|simple_synthesis|complex_multi_step","answerable":"yes|partial|no","reason":"brief"}}"""
 
 
 def _build_path_dependency_prompt(item):
@@ -516,12 +512,34 @@ Does this question require prior events to answer? JSON:
 {{"path_dependency":"none|partial|strong","covered_prior_events":[],"num_required_prior_events":0,"can_answer_without_path":"yes|partial|no","reason":"brief"}}"""
 
 
+def _add_legacy_difficulty_fields(parsed: dict) -> dict:
+    """Compute legacy fields from canonical fields for backward compatibility."""
+    num = parsed.get("num_required_sentences", 1)
+    try:
+        num = int(num)
+    except (ValueError, TypeError):
+        num = 1
+
+    if num <= 1:
+        parsed["required_steps"] = "1"
+        parsed["single_sentence_answerable"] = "yes"
+    elif num == 2:
+        parsed["required_steps"] = "2"
+        parsed["single_sentence_answerable"] = "partial"
+    else:
+        parsed["required_steps"] = "3+"
+        parsed["single_sentence_answerable"] = "no"
+    parsed.setdefault("final_event_consistent", "partial")
+    return parsed
+
+
 def independent_difficulty_judge(item, model_config):
     """Run independent difficulty judge. Does NOT see target difficulty.
     Returns dict with difficulty_judge fields merged into item.
     """
-    expected_keys = {"predicted_difficulty", "required_steps", "single_sentence_answerable",
-                     "answerable", "final_event_consistent", "reason"}
+    expected_keys = {"predicted_difficulty", "answer_directly_found",
+                     "num_required_sentences", "reasoning_type",
+                     "answerable", "reason"}
 
     prompt = _build_difficulty_prompt(item)
     result = {
@@ -535,11 +553,11 @@ def independent_difficulty_judge(item, model_config):
     if err:
         result["difficulty_judge_raw"] = err
         result["difficulty_judge_status"] = "api_error"
-        result["difficulty_judge"] = {
-            "predicted_difficulty": "Medium", "required_steps": "2",
-            "single_sentence_answerable": "partial", "answerable": "partial",
-            "final_event_consistent": "partial", "reason": "api_error"
-        }
+        result["difficulty_judge"] = _add_legacy_difficulty_fields({
+            "predicted_difficulty": "Medium", "answer_directly_found": "no",
+            "num_required_sentences": 2, "reasoning_type": "simple_inference",
+            "answerable": "partial", "reason": "api_error"
+        })
         return result
 
     result["difficulty_judge_raw"] = resp or ""
@@ -552,38 +570,47 @@ def independent_difficulty_judge(item, model_config):
         if err2:
             result["difficulty_judge_raw"] = resp2 or err2
             result["difficulty_judge_status"] = "api_error"
-            result["difficulty_judge"] = {
-                "predicted_difficulty": "Medium", "required_steps": "2",
-                "single_sentence_answerable": "partial", "answerable": "partial",
-                "final_event_consistent": "partial", "reason": "api_error_retry"
-            }
+            result["difficulty_judge"] = _add_legacy_difficulty_fields({
+                "predicted_difficulty": "Medium", "answer_directly_found": "no",
+                "num_required_sentences": 2, "reasoning_type": "simple_inference",
+                "answerable": "partial", "reason": "api_error_retry"
+            })
             return result
         result["difficulty_judge_raw"] = resp2 or ""
         parsed = _parse_judge_json(resp2, expected_keys)
 
     if not parsed:
         result["difficulty_judge_status"] = "parse_error"
-        result["difficulty_judge"] = {
-            "predicted_difficulty": "Medium", "required_steps": "2",
-            "single_sentence_answerable": "partial", "answerable": "partial",
-            "final_event_consistent": "partial", "reason": "parse_error"
-        }
+        result["difficulty_judge"] = _add_legacy_difficulty_fields({
+            "predicted_difficulty": "Medium", "answer_directly_found": "no",
+            "num_required_sentences": 2, "reasoning_type": "simple_inference",
+            "answerable": "partial", "reason": "parse_error"
+        })
         return result
 
     pred = parsed.get("predicted_difficulty", "Medium")
     if pred not in ("Easy", "Medium", "Hard"):
         pred = "Medium"
-    steps = str(parsed.get("required_steps", "2"))
-    if steps not in ("1", "2", "3+"):
-        steps = "2"
-    for key in ("single_sentence_answerable", "answerable", "final_event_consistent"):
-        val = parsed.get(key, "partial")
-        if val not in ("yes", "partial", "no"):
-            parsed[key] = "partial"
+    adf = parsed.get("answer_directly_found", "no")
+    if adf not in ("yes", "no"):
+        adf = "no"
+    rt = parsed.get("reasoning_type", "simple_inference")
+    if rt not in ("direct", "simple_inference", "simple_synthesis", "complex_multi_step"):
+        rt = "simple_inference"
+    ans = parsed.get("answerable", "partial")
+    if ans not in ("yes", "partial", "no"):
+        ans = "partial"
+    try:
+        num_sents = int(parsed.get("num_required_sentences", 2))
+    except (ValueError, TypeError):
+        num_sents = 2
 
     parsed["predicted_difficulty"] = pred
-    parsed["required_steps"] = steps
-    result["difficulty_judge"] = parsed
+    parsed["answer_directly_found"] = adf
+    parsed["num_required_sentences"] = num_sents
+    parsed["reasoning_type"] = rt
+    parsed["answerable"] = ans
+    result["difficulty_judge"] = _add_legacy_difficulty_fields(parsed)
     return result
 
 
@@ -685,42 +712,42 @@ def _build_blind_difficulty_prompt(item):
 ## Expected answer
 "{answer}"
 
+## Difficulty Definitions
+
+{difficulty_definitions_block()}
+
 ## Task
-Evaluate the REASONING DIFFICULTY of this question from the solver's perspective.
+
+Evaluate the REASONING DIFFICULTY of this question from the solver's perspective,
+following the difficulty definitions above.
 
 The solver does NOT know the answer. They must:
 1. Understand what the question asks
 2. Find relevant information across the context
-3. Trace through a chain of events/facts to reach the answer
+3. Connect the relevant evidence to reach the answer
 
-The key question: HOW MANY sequential reasoning steps must the solver make to answer this question, given ONLY the context above?
+Determine:
+- Is the answer directly stated in the context, or must it be inferred?
+- How many sentences are necessary evidence for the answer?
+- What type of reasoning connects the evidence to the answer?
 
 Reply as a single JSON object:
 {{
   "predicted_difficulty": "Easy",
-  "required_steps": "1",
-  "single_sentence_answerable": "yes",
+  "answer_directly_found": "yes",
+  "num_required_sentences": 1,
+  "reasoning_type": "direct",
   "answerable": "yes",
-  "final_event_consistent": "yes",
   "reason": "short explanation"
 }}
 
 Guidelines:
-- predicted_difficulty: Easy, Medium, or Hard
-- required_steps: "1", "2", or "3+"
-- single_sentence_answerable: can the answer be found in a single sentence? "yes", "partial", or "no"
-- answerable: is the question answerable from the context? "yes", "partial", or "no"
-- final_event_consistent: does the question ask for the expected answer? "yes", "partial", or "no"
-
-Difficulty definitions — judge ONLY from what the question and context require:
-
-- Easy (1 step): The solver reads ONE sentence and extracts the answer directly. No chain reasoning.
-  Example: "What did the army do?" → read the sentence about the army.
-
-- Medium (2 steps): The solver connects 2 pieces of information from 2 different sentences. Simple A→B link.
-  Example: "What happened after X?" → find X in sentence 1, find result in sentence 2.
-
-- Hard (3+ steps): The question and context REQUIRE the solver to trace a CHAIN of 3+ events/facts where each step depends on the previous. The solver cannot answer correctly without following the full intermediate chain."""
+- predicted_difficulty: Easy, Medium, or Hard (per the definitions above)
+- answer_directly_found: "yes" if the answer or a close paraphrase is directly stated in the context, "no" if it must be inferred
+- num_required_sentences: number of context sentences that are necessary evidence for the answer (1, 2, 3, ...)
+- reasoning_type: "direct" (answer directly stated, no inference), "simple_inference" (one inference step from a single sentence), "simple_synthesis" (combining multiple directly stated facts), or "complex_multi_step" (multi-step reasoning, causal/temporal chaining, or implicit reasoning across multiple sentences)
+- answerable: can the question be answered from this context? "yes", "partial", or "no"
+- reason: one sentence explanation"""
 
 
 def _build_blind_difficulty_prompt_short(item):
@@ -734,8 +761,8 @@ def _build_blind_difficulty_prompt_short(item):
 Question: "{question}"
 Answer: "{answer}"
 
-Rate difficulty as JSON (final_event_consistent = does the question ask for the expected answer?):
-{{"predicted_difficulty":"Easy|Medium|Hard","required_steps":"1|2|3+","single_sentence_answerable":"yes|partial|no","answerable":"yes|partial|no","final_event_consistent":"yes|partial|no","reason":"brief"}}"""
+Rate difficulty as JSON:
+{{"predicted_difficulty":"Easy|Medium|Hard","answer_directly_found":"yes|no","num_required_sentences":1,"reasoning_type":"direct|simple_inference|simple_synthesis|complex_multi_step","answerable":"yes|partial|no","reason":"brief"}}"""
 
 
 def blind_difficulty_judge(item, model_config):
@@ -743,8 +770,9 @@ def blind_difficulty_judge(item, model_config):
     Does NOT see event path, target difficulty, strategy, or method.
     Returns dict with blind_ fields merged into item.
     """
-    expected_keys = {"predicted_difficulty", "required_steps", "single_sentence_answerable",
-                     "answerable", "final_event_consistent", "reason"}
+    expected_keys = {"predicted_difficulty", "answer_directly_found",
+                     "num_required_sentences", "reasoning_type",
+                     "answerable", "reason"}
 
     prompt = _build_blind_difficulty_prompt(item)
     # Audit: does the blind context contain the gold answer sentence?
@@ -769,11 +797,11 @@ def blind_difficulty_judge(item, model_config):
     if err:
         result["blind_difficulty_judge_raw"] = err
         result["blind_difficulty_judge_status"] = "api_error"
-        result["blind_difficulty_judge"] = {
-            "predicted_difficulty": "Medium", "required_steps": "2",
-            "single_sentence_answerable": "partial", "answerable": "partial",
-            "final_event_consistent": "partial", "reason": "api_error"
-        }
+        result["blind_difficulty_judge"] = _add_legacy_difficulty_fields({
+            "predicted_difficulty": "Medium", "answer_directly_found": "no",
+            "num_required_sentences": 2, "reasoning_type": "simple_inference",
+            "answerable": "partial", "reason": "api_error"
+        })
         return result
 
     result["blind_difficulty_judge_raw"] = resp or ""
@@ -786,38 +814,47 @@ def blind_difficulty_judge(item, model_config):
         if err2:
             result["blind_difficulty_judge_raw"] = resp2 or err2
             result["blind_difficulty_judge_status"] = "api_error"
-            result["blind_difficulty_judge"] = {
-                "predicted_difficulty": "Medium", "required_steps": "2",
-                "single_sentence_answerable": "partial", "answerable": "partial",
-                "final_event_consistent": "partial", "reason": "api_error_retry"
-            }
+            result["blind_difficulty_judge"] = _add_legacy_difficulty_fields({
+                "predicted_difficulty": "Medium", "answer_directly_found": "no",
+                "num_required_sentences": 2, "reasoning_type": "simple_inference",
+                "answerable": "partial", "reason": "api_error_retry"
+            })
             return result
         result["blind_difficulty_judge_raw"] = resp2 or ""
         parsed = _parse_judge_json(resp2, expected_keys)
 
     if not parsed:
         result["blind_difficulty_judge_status"] = "parse_error"
-        result["blind_difficulty_judge"] = {
-            "predicted_difficulty": "Medium", "required_steps": "2",
-            "single_sentence_answerable": "partial", "answerable": "partial",
-            "final_event_consistent": "partial", "reason": "parse_error"
-        }
+        result["blind_difficulty_judge"] = _add_legacy_difficulty_fields({
+            "predicted_difficulty": "Medium", "answer_directly_found": "no",
+            "num_required_sentences": 2, "reasoning_type": "simple_inference",
+            "answerable": "partial", "reason": "parse_error"
+        })
         return result
 
     pred = parsed.get("predicted_difficulty", "Medium")
     if pred not in ("Easy", "Medium", "Hard"):
         pred = "Medium"
-    steps = str(parsed.get("required_steps", "2"))
-    if steps not in ("1", "2", "3+"):
-        steps = "2"
-    for key in ("single_sentence_answerable", "answerable", "final_event_consistent"):
-        val = parsed.get(key, "partial")
-        if val not in ("yes", "partial", "no"):
-            parsed[key] = "partial"
+    adf = parsed.get("answer_directly_found", "no")
+    if adf not in ("yes", "no"):
+        adf = "no"
+    rt = parsed.get("reasoning_type", "simple_inference")
+    if rt not in ("direct", "simple_inference", "simple_synthesis", "complex_multi_step"):
+        rt = "simple_inference"
+    ans = parsed.get("answerable", "partial")
+    if ans not in ("yes", "partial", "no"):
+        ans = "partial"
+    try:
+        num_sents = int(parsed.get("num_required_sentences", 2))
+    except (ValueError, TypeError):
+        num_sents = 2
 
     parsed["predicted_difficulty"] = pred
-    parsed["required_steps"] = steps
-    result["blind_difficulty_judge"] = parsed
+    parsed["answer_directly_found"] = adf
+    parsed["num_required_sentences"] = num_sents
+    parsed["reasoning_type"] = rt
+    parsed["answerable"] = ans
+    result["blind_difficulty_judge"] = _add_legacy_difficulty_fields(parsed)
     return result
 
 

@@ -404,6 +404,219 @@ def _select_story_matched_candidates(candidates_path, candidates_per_level_per_s
     return selected
 
 
+def _select_story_matched_suitable_candidates(candidates_path, candidates_per_level_per_story=1,
+                                               max_stories=None, seed=42):
+    """Select story-matched candidates from the suitability-filtered pool.
+
+    Applies candidate suitability audit BEFORE story-matched selection.
+    Same logic as _select_story_matched_candidates but operates on the
+    suitable subset only.
+    """
+    from scripts.audit_fairytale_candidate_suitability import (
+        assess_candidate_suitability,
+        select_story_matched_suitable,
+    )
+
+    print("  Applying suitability filter...")
+    all_candidates = []
+    with open(candidates_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            diff = rec.get("evidence_difficulty", "")
+            if diff not in ("Easy", "Medium", "Hard"):
+                continue
+            all_candidates.append(rec)
+
+    # Assess suitability
+    suitable_pool = []
+    reject_reasons = {}
+    for c in all_candidates:
+        result = assess_candidate_suitability(c)
+        c.update(result)
+        if c.get("suitable"):
+            suitable_pool.append(c)
+        else:
+            rr = c.get("reject_reason", "unknown")
+            reject_reasons[rr] = reject_reasons.get(rr, 0) + 1
+
+    print(f"  Suitable pool: {len(suitable_pool)}/{len(all_candidates)} "
+          f"({100*len(suitable_pool)/len(all_candidates):.1f}%)")
+    for rr, cnt in sorted(reject_reasons.items(), key=lambda x: -x[1])[:5]:
+        print(f"    Rejected: {cnt} ({rr})")
+
+    # Story-matched selection from suitable pool
+    selected, n_eligible = select_story_matched_suitable(
+        suitable_pool,
+        per_level_per_story=candidates_per_level_per_story,
+        max_stories=max_stories,
+        seed=seed,
+    )
+
+    by_diff = {"Easy": 0, "Medium": 0, "Hard": 0}
+    for c in selected:
+        by_diff[c["target_difficulty"]] += 1
+    print(f"  Selected: {len(selected)} candidates ({by_diff['Easy']}E/{by_diff['Medium']}M/{by_diff['Hard']}H) "
+          f"from {n_eligible} eligible stories "
+          f"(suitable, {candidates_per_level_per_story} per level per story)")
+
+    return selected
+
+
+def _select_story_matched_calibrated_candidates(calibrated_path, candidates_path,
+                                                 candidates_per_level_per_story=1,
+                                                 max_stories=None, seed=42,
+                                                 min_stories_threshold=70):
+    """Select story-matched candidates from the calibrated pool only.
+
+    Loads calibrated.jsonl, keeps only calibrated=True candidates, then applies
+    story-matched selection with same preferences as _select_story_matched_candidates.
+
+    If n_eligible < min_stories_threshold, prints bottleneck analysis and returns
+    (None, n_eligible, bottleneck_info) — caller should exit without running QG.
+    """
+    import random
+    rng = random.Random(seed)
+
+    if not os.path.exists(calibrated_path):
+        print(f"  ERROR: Calibrated file not found: {calibrated_path}")
+        print(f"  Run calibration audit first:")
+        print(f"    python -m scripts.audit_fairytale_target_calibration "
+              f"--candidates {candidates_path} --output_dir <dir>")
+        return None, 0, {"error": "calibrated file not found"}
+
+    calibrated = []
+    with open(calibrated_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            if rec.get("calibrated") and rec.get("evidence_difficulty") in ("Easy", "Medium", "Hard"):
+                calibrated.append(rec)
+
+    print(f"  Calibrated pool: {len(calibrated)} candidates")
+
+    story_levels = {}
+    for rec in calibrated:
+        sn = rec.get("story_name", "")
+        diff = rec.get("evidence_difficulty", "")
+        if sn not in story_levels:
+            story_levels[sn] = {"Easy": [], "Medium": [], "Hard": []}
+        story_levels[sn][diff].append(rec)
+
+    eligible = {
+        sn: levels for sn, levels in story_levels.items()
+        if len(levels["Easy"]) >= 1 and len(levels["Medium"]) >= 1 and len(levels["Hard"]) >= 1
+    }
+    eligible_names = sorted(eligible.keys())
+    n_eligible = len(eligible_names)
+    print(f"  Stories with calibrated Easy+Medium+Hard: {n_eligible}")
+
+    if n_eligible < min_stories_threshold:
+        print(f"\n  *** CALIBRATED POOL TOO SMALL: {n_eligible} stories < "
+              f"{min_stories_threshold} threshold ***\n")
+        print(f"  Bottleneck analysis:")
+        all_stories = set(rec.get("story_name", "") for rec in calibrated)
+        print(f"    Total stories in calibrated pool: {len(all_stories)}")
+        for diff in ("Easy", "Medium", "Hard"):
+            stories_with = set(
+                rec.get("story_name", "")
+                for rec in calibrated
+                if rec.get("evidence_difficulty") == diff
+            )
+            print(f"    Stories with calibrated {diff}: {len(stories_with)}/{len(all_stories)}")
+        # Per-story missing detail
+        per_story = {}
+        for rec in calibrated:
+            sn = rec.get("story_name", "")
+            per_story.setdefault(sn, set()).add(rec.get("evidence_difficulty", ""))
+        missing_diffs = {}
+        for sn in set(rec.get("story_name", "") for rec in calibrated):
+            have = per_story.get(sn, set())
+            miss = {"Easy", "Medium", "Hard"} - have
+            if miss:
+                missing_diffs[sn] = miss
+        if missing_diffs:
+            print(f"    Stories missing difficulty levels ({len(missing_diffs)}):")
+            for sn, miss in sorted(missing_diffs.items(), key=lambda x: -len(x[1]))[:15]:
+                print(f"      {sn}: missing {', '.join(sorted(miss))}")
+        print(f"\n  CANNOT proceed with QG. Run calibration audit to increase pool, "
+              f"or lower threshold.")
+        return None, n_eligible, {
+            "n_eligible": n_eligible,
+            "total_stories": len(set(rec.get("story_name", "") for rec in calibrated)),
+            "missing_diffs": missing_diffs,
+        }
+
+    if max_stories and max_stories < n_eligible:
+        rng.shuffle(eligible_names)
+        eligible_names = sorted(eligible_names[:max_stories])
+        print(f"  Limited to {len(eligible_names)} stories (max_stories={max_stories})")
+
+    # Same preference scoring as _select_story_matched_candidates
+    def _easy_preference(c):
+        score = 0
+        if c.get("answer_sentence_alone_sufficient") == "yes":
+            score += 10
+        if c.get("num_required_sentences", 99) == 1:
+            score += 5
+        return score
+
+    def _medium_preference(c):
+        score = 0
+        if c.get("num_required_sentences", 0) == 2:
+            score += 10
+        elif c.get("num_required_sentences", 0) == 3:
+            score += 3
+        return score
+
+    def _hard_preference(c):
+        score = 0
+        nt = c.get("necessity_type", "")
+        if nt in ("motivation_bridge", "causal_bridge", "summary_synthesis"):
+            score += 10
+        elif nt in ("disambiguation", "answer_identification"):
+            score += 7
+        elif nt in ("temporal_bridge",):
+            score += 3
+        ro = c.get("reasoning_operation", "")
+        if ro and ro not in ("temporal_order", "explicit_lookup"):
+            score += 5
+        if c.get("bridge_removal_effect") in ("ambiguous", "unanswerable"):
+            score += 3
+        return score
+
+    selected = []
+    for idx, sn in enumerate(eligible_names):
+        levels = eligible[sn]
+        for diff, preference_fn in [
+            ("Easy", _easy_preference),
+            ("Medium", _medium_preference),
+            ("Hard", _hard_preference),
+        ]:
+            pool = levels[diff]
+            scored = [(preference_fn(c), i, c) for i, c in enumerate(pool)]
+            scored.sort(key=lambda x: (-x[0], x[1]))
+            chosen = [c for _, _, c in scored[:candidates_per_level_per_story]]
+            for c in chosen:
+                c_out = dict(c)
+                c_out["target_difficulty"] = diff
+                c_out["story_group_id"] = idx
+                selected.append(c_out)
+
+    by_diff = {"Easy": 0, "Medium": 0, "Hard": 0}
+    for c in selected:
+        by_diff[c["target_difficulty"]] += 1
+    print(f"  Selected: {len(selected)} candidates ({by_diff['Easy']}E/{by_diff['Medium']}M/{by_diff['Hard']}H) "
+          f"from {n_eligible} stories "
+          f"({candidates_per_level_per_story} per level per story)")
+
+    return selected, n_eligible, None
+
+
 # ---------------------------------------------------------------------------
 # Graph extraction
 # ---------------------------------------------------------------------------
@@ -1250,6 +1463,97 @@ def _classify_failure_reason(result):
     return "unknown"
 
 
+def _compute_stage31_diagnostics(all_results):
+    """Compute Stage 3.1 Easy prompt hardening diagnostics.
+
+    Returns dict with:
+      - easy_forbidden_total, easy_forbidden_violations, easy_forbidden_examples
+      - easy_degenerate_total, easy_degenerate_count, easy_degenerate_examples
+      - easy_judge_overcount_examples
+      - easy_q_introduced_context_examples
+    """
+    ours = [r for r in all_results if r.get("method") == "Ours"]
+    ours_easy = [r for r in ours if r.get("target_difficulty") == "Easy"]
+    ours_easy_qp = [r for r in ours_easy if r.get("quality_pass")]
+
+    # Forbidden-frame violations
+    fbv_total = len(ours_easy)
+    fbv_examples = []
+    for r in ours_easy:
+        if r.get("easy_forbidden_violation"):
+            frames = r.get("easy_forbidden_frames", [])
+            fbv_examples.append({
+                "story": r.get("story_name", "?"),
+                "question": r.get("generated_question", "?"),
+                "frames": frames,
+                "qp": r.get("quality_pass", False),
+                "pred": r.get("predicted_difficulty", "?"),
+            })
+    fbv_examples.sort(key=lambda x: len(x["frames"]), reverse=True)
+
+    # Degenerate output
+    deg_examples = []
+    for r in ours_easy:
+        err = r.get("generation_error", "")
+        parse_ok = r.get("parse_ok", False)
+        if not parse_ok or "degenerate" in err.lower() or "parse failure" in err.lower():
+            deg_examples.append({
+                "story": r.get("story_name", "?"),
+                "error": err or "parse failure",
+            })
+
+    # Judge overcount: QP-passing Easy, predicted Medium/Hard, with clearly single-sentence wording
+    jo_examples = []
+    for r in ours_easy_qp:
+        pred = r.get("predicted_difficulty", "?")
+        if pred in ("Easy", "?"):
+            continue
+        q = r.get("generated_question", "") or ""
+        q_lower = q.lower()
+        # Check if question uses only simple wording (no causal/inferential framing)
+        simple_starters = q_lower.startswith("what ") or q_lower.startswith("who ") or \
+                          q_lower.startswith("where ") or q_lower.startswith("how many ")
+        has_forbidden = r.get("easy_forbidden_violation", False)
+        if simple_starters and not has_forbidden:
+            ans = r.get("answer", "")
+            jo_examples.append({
+                "story": r.get("story_name", "?"),
+                "question": q,
+                "answer": ans[:60],
+                "pred": pred,
+                "reason": f"Clear single-sentence question, judged {pred}",
+            })
+
+    # Question-introduced-context: QP-passing Easy, has forbidden frames or introduced context
+    qic_examples = []
+    for r in ours_easy_qp:
+        pred = r.get("predicted_difficulty", "?")
+        if pred == "Easy":
+            continue
+        has_forbidden = r.get("easy_forbidden_violation", False)
+        if has_forbidden:
+            q = r.get("generated_question", "") or ""
+            frames = r.get("easy_forbidden_frames", [])
+            qic_examples.append({
+                "story": r.get("story_name", "?"),
+                "question": q,
+                "answer": (r.get("answer", "") or "")[:60],
+                "pred": pred,
+                "context_wording": ", ".join(frames),
+            })
+
+    return {
+        "easy_forbidden_total": fbv_total,
+        "easy_forbidden_violations": len(fbv_examples),
+        "easy_forbidden_examples": fbv_examples,
+        "easy_degenerate_total": len(ours_easy),
+        "easy_degenerate_count": len(deg_examples),
+        "easy_degenerate_examples": deg_examples,
+        "easy_judge_overcount_examples": jo_examples,
+        "easy_q_introduced_context_examples": qic_examples,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Report generation
 # ---------------------------------------------------------------------------
@@ -1290,7 +1594,7 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
         f"| Total generations | {len(all_results)} |",
     ]
 
-    if selection_mode == "story_matched":
+    if selection_mode in ("story_matched", "story_matched_suitable", "story_matched_calibrated"):
         lines.append(f"| Candidates per level per story | {meta.get('candidates_per_level_per_story', 'N/A')} |")
         lines.append(f"| Max stories | {meta.get('max_stories', 'N/A')} |")
 
@@ -1705,7 +2009,7 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
     spearman_pass = all(ours_cm["spearman"] >= b for b in baseline_spearman)
     spearman_small_margin = spearman_pass and min_spearman_margin < 0.05
 
-    if selection_mode == "story_matched":
+    if selection_mode in ("story_matched", "story_matched_suitable", "story_matched_calibrated"):
         # Story-matched criteria
         n_stories_val = meta.get("n_stories", 0)
         story_count_pass = n_stories_val >= 100
@@ -1934,7 +2238,7 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
     lines.append("")
 
     # ── Story-Matched Diagnostics ──────────────────────────────────
-    if selection_mode == "story_matched" and story_diag:
+    if selection_mode in ("story_matched", "story_matched_suitable", "story_matched_calibrated") and story_diag:
         lines.append("## 13. Story-Matched Diagnostics")
         lines.append("")
 
@@ -2251,6 +2555,69 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
                            f"{f['predicted']} | {f['focus']} | {f['asa']} | {f['failure_reason']} |")
             lines.append("")
 
+    # 16i. Stage 3.1 Easy hardening diagnostics
+    stage31 = meta.get("stage31_diag") if meta else None
+    if stage31:
+        lines.append("### 16i. Stage 3.1 Easy Prompt Hardening Diagnostics (Ours)")
+        lines.append("")
+
+        # Forbidden-frame violations
+        fbv_total = stage31.get("easy_forbidden_total", 0)
+        fbv_count = stage31.get("easy_forbidden_violations", 0)
+        lines.append(f"**Easy forbidden-frame violations:** {fbv_count}/{fbv_total} "
+                     f"({100*fbv_count/fbv_total:.1f}%)" if fbv_total else "N/A")
+        lines.append("")
+
+        # Individual violations
+        fbv_list = stage31.get("easy_forbidden_examples", [])
+        if fbv_list:
+            lines.append("| Story | Question | Violated Frames | QP | Pred |")
+            lines.append("|---|---|---|---|---|")
+            for f in fbv_list[:10]:
+                lines.append(f"| {f['story'][:25]} | {f['question'][:60]} | {', '.join(f['frames'])} | "
+                           f"{'Y' if f.get('qp') else 'N'} | {f.get('pred', '?')} |")
+            lines.append("")
+
+        # Degenerate count
+        deg_total = stage31.get("easy_degenerate_total", 0)
+        deg_count = stage31.get("easy_degenerate_count", 0)
+        lines.append(f"**Easy degenerate output:** {deg_count}/{deg_total} "
+                     f"({100*deg_count/deg_total:.1f}%)" if deg_total else "N/A")
+        lines.append("")
+
+        # Degenerate examples
+        deg_list = stage31.get("easy_degenerate_examples", [])
+        if deg_list:
+            lines.append("| Story | Error |")
+            lines.append("|---|---|")
+            for d in deg_list[:10]:
+                lines.append(f"| {d['story'][:25]} | {d['error'][:80]} |")
+            lines.append("")
+
+        # Judge overcount examples
+        jo_list = stage31.get("easy_judge_overcount_examples", [])
+        if jo_list:
+            lines.append("**Easy judge-overcount examples (QP-pass, predicted Medium/Hard, clear single-sentence question):**")
+            lines.append("")
+            lines.append("| Story | Question | Answer | Pred | Why Likely Overcount |")
+            lines.append("|---|---|---|---|---|")
+            for j in jo_list[:10]:
+                lines.append(f"| {j['story'][:25]} | {j['question'][:60]} | {j['answer'][:30]} | "
+                           f"{j['pred']} | {j['reason']} |")
+            lines.append("")
+
+        # Question-introduced-context examples
+        qic_list = stage31.get("easy_q_introduced_context_examples", [])
+        if qic_list:
+            lines.append("**Easy question-introduced-context examples (QP-pass, wording added context):**")
+            lines.append("")
+            lines.append("| Story | Question | Answer | Pred | Context Wording |")
+            lines.append("|---|---|---|---|---|")
+            for qc in qic_list[:10]:
+                lines.append(f"| {qc['story'][:25]} | {qc['question'][:60]} | {qc['answer'][:30]} | "
+                           f"{qc['pred']} | {qc['context_wording']} |")
+            lines.append("")
+
     # 17. Examples
     lines.append("## 17. Examples")
     lines.append("")
@@ -2288,14 +2655,17 @@ def _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=No
 def main():
     parser = argparse.ArgumentParser(description="FairytaleQA CrossQG Evaluation")
     parser.add_argument("--candidates", required=True, help="Path to candidates.jsonl")
-    parser.add_argument("--selection_mode", choices=["balanced", "story_matched"],
+    parser.add_argument("--selection_mode", choices=["balanced", "story_matched", "story_matched_suitable", "story_matched_calibrated"],
                         default="balanced",
-                        help="Candidate selection mode: balanced (default) or story_matched")
+                        help="Candidate selection mode: balanced (default), story_matched, or story_matched_suitable")
     parser.add_argument("--target_per_level", type=int, default=150)
     parser.add_argument("--candidates_per_level_per_story", type=int, default=1,
                         help="Candidates per level per story in story_matched mode")
     parser.add_argument("--max_stories", type=int, default=None,
                         help="Max stories in story_matched mode")
+    parser.add_argument("--calibrated_dir", default=None,
+                        help="Directory containing candidates.calibrated.jsonl "
+                             "(required for story_matched_calibrated mode)")
     parser.add_argument("--output_dir", required=True, help="Output directory")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--limit", type=int, default=None,
@@ -2352,6 +2722,7 @@ def main():
         retry_diag_regen = _compute_retry_budget_diagnostics(all_results)
         similarity_diag_regen = _compute_similarity_diagnostics(all_results)
         stage2_diag_regen = _compute_stage2_diagnostics(all_results)
+        stage31_diag_regen = _compute_stage31_diagnostics(all_results)
 
         # Reconstruct meta from results
         levels = ["Easy", "Medium", "Hard"]
@@ -2380,6 +2751,7 @@ def main():
             "n_stories": n_stories_regen,
         }
 
+        meta["stage31_diag"] = stage31_diag_regen
         _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag,
                       story_diag=story_diag_regen, retry_diag=retry_diag_regen, similarity_diag=similarity_diag_regen,
                       stage2_diag=stage2_diag_regen)
@@ -2390,7 +2762,31 @@ def main():
 
     # Step 1: Select candidates
     print(f"=== Step 1: Selecting candidates (mode={args.selection_mode}) ===")
-    if args.selection_mode == "story_matched":
+    if args.selection_mode == "story_matched_suitable":
+        selected = _select_story_matched_suitable_candidates(
+            args.candidates,
+            candidates_per_level_per_story=args.candidates_per_level_per_story,
+            max_stories=args.max_stories,
+            seed=args.seed,
+        )
+    elif args.selection_mode == "story_matched_calibrated":
+        if not args.calibrated_dir:
+            print("  ERROR: --calibrated_dir required for story_matched_calibrated mode")
+            print("  Usage: python -m scripts.run_crossqg_eval --selection_mode story_matched_calibrated "
+                  "--calibrated_dir outputs/runs/fairytale_target_calibration_20260513/ ...")
+            sys.exit(1)
+        calibrated_path = os.path.join(args.calibrated_dir, "candidates.calibrated.jsonl")
+        selected, n_cal_stories, bottleneck = _select_story_matched_calibrated_candidates(
+            calibrated_path, args.candidates,
+            candidates_per_level_per_story=args.candidates_per_level_per_story,
+            max_stories=args.max_stories,
+            seed=args.seed,
+        )
+        if selected is None:
+            print(f"\n  Calibrated pool too small ({n_cal_stories} stories). "
+                  f"Cannot proceed with QG evaluation.")
+            sys.exit(1)
+    elif args.selection_mode == "story_matched":
         selected = _select_story_matched_candidates(
             args.candidates,
             candidates_per_level_per_story=args.candidates_per_level_per_story,
@@ -2502,8 +2898,9 @@ def main():
     retry_diag = _compute_retry_budget_diagnostics(all_results)
     similarity_diag = _compute_similarity_diagnostics(all_results)
     stage2_diag = _compute_stage2_diagnostics(all_results)
+    stage31_diag = _compute_stage31_diagnostics(all_results)
 
-    if args.selection_mode == "story_matched":
+    if args.selection_mode in ("story_matched", "story_matched_suitable", "story_matched_calibrated"):
         print(f"  Story-matched: {story_diag['n_stories']} stories")
         for bm, wtl in story_diag["win_tie_loss"].items():
             print(f"  Ours vs {bm}: {wtl['wins']}W/{wtl['ties']}T/{wtl['losses']}L")
@@ -2534,13 +2931,14 @@ def main():
         "selection_mode": args.selection_mode,
         "target_per_level": args.target_per_level,
         "candidates_per_level_per_story": args.candidates_per_level_per_story
-            if args.selection_mode == "story_matched" else None,
+            if args.selection_mode in ("story_matched", "story_matched_suitable", "story_matched_calibrated") else None,
         "max_stories": args.max_stories,
         "n_easy": n_easy,
         "n_medium": n_medium,
         "n_hard": n_hard,
         "n_total": len(selected),
         "n_stories": n_stories,
+        "stage31_diag": stage31_diag,
     }
     _build_report(all_results, crossqg_metrics, graph_stats, output_dir, meta=meta, bootstrap_diag=bootstrap_diag,
                   story_diag=story_diag, retry_diag=retry_diag, similarity_diag=similarity_diag,

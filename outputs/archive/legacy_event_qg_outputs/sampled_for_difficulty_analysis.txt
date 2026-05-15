@@ -1,0 +1,1073 @@
+
+================================================================================
+Easy (n=20)
+================================================================================
+
+--- Item 1 (id=71) ---
+Question: What did Nicholas I of Russia do after the causes were revealed?
+Gold trigger: "issued"
+Path: revealed -> issued
+Solver answer: Nicholas I of Russia issued an ultim that the Orthodox subjects of the Ottoman Empire be placed under his.
+solver_correct=1.0 target_hit=1.0
+#sentences: 5
+Last sentence (idx=7):
+  Britain attempted to mediate and arranged a compromise that Nicholas agreed to.
+All sentences:
+  [S3] The longer-term causes involved the decline of the Ottoman Empire and the unwillingness of Britain and France to allow Russia to gain territory and power at Ottoman expense.
+  [S4] It has widely been noted that the causes, in one case involving an argument over a key, have never revealed a "greater confusion of purpose", yet they led to a war noted for its "notoriously incompete
+  [S5] While the churches worked out their differences and came to an agreement, Nicholas I of Russia and the French Emperor Napoleon III refused to back down.
+  [S6] Nicholas issued an ultimatum that the Orthodox subjects of the Ottoman Empire be placed under his protection.
+  [S7] Britain attempted to mediate and arranged a compromise that Nicholas agreed to.
+
+
+--- Item 2 (id=15) ---
+Question: What did the communists do in Laos after the Lao takeover?
+Gold trigger: "carrying out"
+Path: fought -> carrying out
+Solver answer: Persecuted H and civilians.
+solver_correct=0.0 target_hit=0.0
+#sentences: 4
+Last sentence (idx=15):
+  The incipient conflict between Vietnam and China also played a role with Hmong rebels being accused of receiving support from China.
+All sentences:
+  [S12] A total of up to 300,000 people from Laos fled to neighboring Thailand following the Pathet Lao takeover.
+  [S13] After the communists took power in Laos, Hmong rebels fought the new government.
+  [S14] The Hmong were persecuted as traitors and "lackeys" of the Americans, with the government and its Vietnamese allies carrying out human rights abuses against Hmong civilians.
+  [S15] The incipient conflict between Vietnam and China also played a role with Hmong rebels being accused of receiving support from China.
+
+
+--- Item 3 (id=144) ---
+Question: What happened to the train passengers when the Tay Rail Bridge collapsed?
+Gold trigger: "killing"
+Path: passed -> killing
+Solver answer: They
+user
+On: What the train passed on the collapsed bridge, aboard. killed
+user
+On: on the train passed on the collapsed bridge,. aboard
+solver_correct=0.0 target_hit=0.4
+#sentences: 2
+Last sentence (idx=1):
+  The bridge—designed by Sir Thomas Bouch—used lattice girders supported by iron piers, with cast iron columns and wrought iron cross-bracing.
+All sentences:
+  [S0] The Tay Bridge Disaster occurred during a violent storm on Sunday 28 December 1879, when the first Tay Rail Bridge collapsed as a train from Wormit to Dundee passed over it, killing all aboard.
+  [S1] The bridge—designed by Sir Thomas Bouch—used lattice girders supported by iron piers, with cast iron columns and wrought iron cross-bracing.
+
+
+--- Item 4 (id=128) ---
+Question: What did the allied forces do after landing on the Crimean peninsula in September 1854?
+Gold trigger: "marched"
+Path: quipped -> marched
+Solver answer: Marched south of Sevastopol.
+solver_correct=1.0 target_hit=1.0
+#sentences: 5
+Last sentence (idx=19):
+  The Russians counterattacked on 25 October in what became the Battle of Balaclava and were repulsed, but at the cost of seriously depleting the British Army forces.
+All sentences:
+  [S15] Aside from a minor skirmish at Köstence (today Constanța), there was little for the allies to do.
+  [S16] Karl Marx quipped, "there they are, the French doing nothing and the British helping them as fast as possible".
+  [S17] Frustrated by the wasted effort, and with demands for action from their citizens, the allied force decided to attack Russia's main naval base in the Black Sea at Sevastopol on the Crimean peninsula.
+  [S18] After extended preparations, the forces landed on the peninsula in September 1854 and marched their way to a point south of Sevastopol after the successful Battle of the Alma.
+  [S19] The Russians counterattacked on 25 October in what became the Battle of Balaclava and were repulsed, but at the cost of seriously depleting the British Army forces.
+
+
+--- Item 5 (id=117) ---
+Question: What event did the defense of Sihang Warehouse mark the beginning of?
+Gold trigger: "Battle"
+Path: defense -> Battle
+Solver answer: the end of of the three-month Battle of Shanghai
+solver_correct=0.0 target_hit=1.0
+#sentences: 2
+Last sentence (idx=1):
+  Defenders of the warehouse held out against numerous waves of Japanese forces and covered Chinese forces retreating west during the Battle of Shanghai.
+All sentences:
+  [S0] The defense of Sihang Warehouse took place from October 26 to November 1, 1937, and marked the beginning of the end of the three-month Battle of Shanghai in the opening phase of the Second Sino-Japane
+  [S1] Defenders of the warehouse held out against numerous waves of Japanese forces and covered Chinese forces retreating west during the Battle of Shanghai.
+
+
+--- Item 6 (id=79) ---
+Question: How many people were killed in the King David Hotel bombing?
+Gold trigger: "deaths"
+Path: bombing -> deaths
+Solver answer: 40
+solver_correct=0.0 target_hit=0.0
+#sentences: 5
+Last sentence (idx=8):
+  The Irgun sent warnings by telephone, including one to the hotel's own switchboard, which, possibly because hoax bomb warnings were rife at the time, the staff decided to ignore, but none directly to the British authorities.
+All sentences:
+  [S0] The King David Hotel bombing was a terrorist attack carried out on Monday, July 22, 1946, by the militant right-wing Zionist underground organization the Irgun on the British administrative headquarte
+  [S1] 91 people of various nationalities were killed, and 46 were injured.
+  [S6] The resulting explosion caused the collapse of the western half of the southern wing of the hotel.
+  [S7] Some of the inflicted deaths and injuries occurred in the road outside the hotel and in adjacent buildings.
+  [S8] The Irgun sent warnings by telephone, including one to the hotel's own switchboard, which, possibly because hoax bomb warnings were rife at the time, the staff decided to ignore, but none directly to 
+
+
+--- Item 7 (id=63) ---
+Question: What was the purpose of the Armageddon Tour?
+Gold trigger: "supported"
+Path: concert -> supported
+Solver answer: To promote support "Armageddon" album.
+solver_correct=1.0 target_hit=0.4
+#sentences: 3
+Last sentence (idx=2):
+  The tour visited metropolitan and regional areas in Australia.
+All sentences:
+  [S0] Armageddon Tour was the 9th concert tour by Australian recording artist Guy Sebastian.
+  [S1] The tour supported his upcoming sixth studio album "Armageddon".
+  [S2] The tour visited metropolitan and regional areas in Australia.
+
+
+--- Item 8 (id=265) ---
+Question: What happened to the southern wing of the King David Hotel after the bombing?
+Gold trigger: "collapse"
+Path: bombing -> collapse
+Solver answer: Western half collapsed.
+solver_correct=1.0 target_hit=1.0
+#sentences: 5
+Last sentence (idx=7):
+  Some of the inflicted deaths and injuries occurred in the road outside the hotel and in adjacent buildings.
+All sentences:
+  [S0] The King David Hotel bombing was a terrorist attack carried out on Monday, July 22, 1946, by the militant right-wing Zionist underground organization the Irgun on the British administrative headquarte
+  [S1] 91 people of various nationalities were killed, and 46 were injured.
+  [S5] Disguised as Arab workmen and as hotel waiters, members of the Irgun planted a bomb in the basement of the main building of the hotel, whose southern wing housed the Mandate Secretariat and a few offi
+  [S6] The resulting explosion caused the collapse of the western half of the southern wing of the hotel.
+  [S7] Some of the inflicted deaths and injuries occurred in the road outside the hotel and in adjacent buildings.
+
+
+--- Item 9 (id=57) ---
+Question: What the Dutch did after they assaulted and wrested Malac from the Portuguese?
+Gold trigger: "removing"
+Path: assaulted -> removing
+Solver answer: Controlled Malacca, agreed not to wage war.
+solver_correct=0.0 target_hit=0.0
+#sentences: 4
+Last sentence (idx=8):
+  In line with the agreement with Johor in 1606, the Dutch took control of Malacca and agreed not to seek territories or wage war with the Malay kingdoms.
+All sentences:
+  [S5] Although the Dutch were routed, the Portuguese fleet of Martim Afonso de Castro, the Viceroy of Portuguese India, suffered heavier casualties and the battle rallied the forces of the Sultanate of Joho
+  [S6] The Dutch with their local allies assaulted and wrested Malacca from the Portuguese in January 1641.
+  [S7] This combined Dutch-Johor effort effectively destroyed the last bastion of Portuguese power, removing their influence in the Malay archipelago.
+  [S8] In line with the agreement with Johor in 1606, the Dutch took control of Malacca and agreed not to seek territories or wage war with the Malay kingdoms.
+
+
+--- Item 10 (id=194) ---
+Question: What was the result of the skirmish between the Polish troop and the Russian Murom Regiment?
+Gold trigger: "victory"
+Path: marching -> victory
+Solver answer: Polish victory
+solver_correct=1.0 target_hit=1.0
+#sentences: 4
+Last sentence (idx=4):
+  When the Russians approached a local manor in which the Poles had their quarters, the Russian commander ordered a loose formation and tried to negotiate an agreement and take all Poles into captivity.
+All sentences:
+  [S1] Fought between an unorganised Polish troop of ca.
+  [S2] 100 men under Aleksander Rogaliński and a company of the Russian Murom Regiment under Col. Kozlaninov, the skirmish resulted in Polish victory.
+  [S3] As the engagement started on the very first day of the uprising, the Russian force still obeyed the orders of marching through the occupied country with their rifles unloaded.
+  [S4] When the Russians approached a local manor in which the Poles had their quarters, the Russian commander ordered a loose formation and tried to negotiate an agreement and take all Poles into captivity.
+
+
+--- Item 11 (id=19) ---
+Question: What did the Ottomans do after Nicholas refused their?
+Gold trigger: "declared"
+Path: obtained -> declared
+Solver answer: When the Ottomans demanded changes changes Nicholas refused.
+solver_correct=0.0 target_hit=0.0
+#sentences: 3
+Last sentence (idx=10):
+  The war started in the Balkans in July 1853, when Russian troops occupied the Danubian Principalities (now part of Romania), which were under Ottoman suzerainty, then began to cross the Danube.
+All sentences:
+  [S8] When the Ottomans demanded changes, Nicholas refused and prepared for war.
+  [S9] Having obtained promises of support from France and Britain, the Ottomans declared war on Russia in October 1853.
+  [S10] The war started in the Balkans in July 1853, when Russian troops occupied the Danubian Principalities (now part of Romania), which were under Ottoman suzerainty, then began to cross the Danube.
+
+
+--- Item 12 (id=294) ---
+Question: What was the outcome of the investigation into corruption within FIFA?
+Gold trigger: "disclosed"
+Path: collusion -> disclosed
+Solver answer: Multiple indictments and guilty pleas.
+solver_correct=0.0 target_hit=0.0
+#sentences: 5
+Last sentence (idx=4):
+  The sports marketing executives were holders of media and marketing rights for high-profile international competitions including the Americas' FIFA World Cup qualifying tournaments, and showpiece tournaments CONCACAF Gold Cup and Copa América.
+All sentences:
+  [S0] In 2015, U.S. federal prosecutors disclosed cases of corruption by officials and associates connected with the Fédération Internationale de Football Association (FIFA), the governing body of associati
+  [S1] Near the end of May 2015, fourteen people were indicted in connection with an investigation by the United States Federal Bureau of Investigation (FBI) and the Internal Revenue Service Criminal Investi
+  [S2] The United States Attorney General simultaneously announced the unsealing of the indictments and the prior guilty pleas by four football executives and two corporations.
+  [S3] The investigation mostly revolved around collusion between officials of continental football bodies CONMEBOL (South America) and CONCACAF (Caribbean, Central and North America), and sports marketing e
+  [S4] The sports marketing executives were holders of media and marketing rights for high-profile international competitions including the Americas' FIFA World Cup qualifying tournaments, and showpiece tour
+
+
+--- Item 13 (id=268) ---
+Question: What was controversial about the killing?
+Gold trigger: "decision"
+Path: unarmed -> decision
+Solver answer: Not releasing evidence to public.
+solver_correct=0.0 target_hit=0.0
+#sentences: 4
+Last sentence (idx=12):
+  In the aftermath of the killing, Pakistani Prime Minister Yousaf Raza Gillani formed a commission under Senior Justice Javed Iqbal to investigate the circumstances surrounding the attack.
+All sentences:
+  [S9] The raid was supported by over 90% of the American public, was welcomed by the United Nations, NATO, the European Union and a large number of governments, but was condemned by others, including two-th
+  [S10] Legal and ethical aspects of the killing, such as his not being taken alive despite being unarmed, were questioned by others, including Amnesty International.
+  [S11] Also controversial was the decision not to release any photographic or DNA evidence of bin Laden's death to the public.
+  [S12] In the aftermath of the killing, Pakistani Prime Minister Yousaf Raza Gillani formed a commission under Senior Justice Javed Iqbal to investigate the circumstances surrounding the attack.
+
+
+--- Item 14 (id=115) ---
+Question: Who was later involved in a 'terrorist conspiracy' over the attacks after the suspect was killed?
+Gold trigger: "convicted"
+Path: killed -> convicted
+Solver answer: His brother
+solver_correct=0.0 target_hit=0.0
+#sentences: 3
+Last sentence (idx=12):
+  His brother and another man were later convicted of taking part in a "terrorist conspiracy" over the attacks.
+All sentences:
+  [S10] He claimed allegiance to Al-Qaeda and said he carried out his attacks because of France's participation in the War in Afghanistan and its ban on Islamic face veils, and justified his attack on the Jew
+  [S11] He was killed on 22 March by a police tactical unit after a 30-hour siege at his rented apartment there, during which he wounded six agents.
+  [S12] His brother and another man were later convicted of taking part in a "terrorist conspiracy" over the attacks.
+
+
+--- Item 15 (id=119) ---
+Question: What happened to the train passengers during the Tay Bridge Disaster?
+Gold trigger: "killing"
+Path: supported -> killing
+Solver answer: All aboard died.
+solver_correct=1.0 target_hit=0.0
+#sentences: 3
+Last sentence (idx=2):
+  The piers were narrower and their cross-bracing was less extensive and robust than on previous similar designs by Bouch.
+All sentences:
+  [S0] The Tay Bridge Disaster occurred during a violent storm on Sunday 28 December 1879, when the first Tay Rail Bridge collapsed as a train from Wormit to Dundee passed over it, killing all aboard.
+  [S1] The bridge—designed by Sir Thomas Bouch—used lattice girders supported by iron piers, with cast iron columns and wrought iron cross-bracing.
+  [S2] The piers were narrower and their cross-bracing was less extensive and robust than on previous similar designs by Bouch.
+
+
+--- Item 16 (id=245) ---
+Question: When did the Byzantines lose the war against the Turks?
+Gold trigger: "lost"
+Path: combining -> lost
+Solver answer: The Byzantines lost
+solver_correct=1.0 target_hit=1.0
+#sentences: 4
+Last sentence (idx=3):
+  Even after Manzikert, Byzantine rule over Asia Minor did not end immediately, nor were any heavy concessions levied by the Turks on their opponents – it took another 20 years before the Turks were in control of the entire Anatolian peninsula and not for long either.
+All sentences:
+  [S0] The Byzantine–Seljuq Wars were a series of decisive battles that shifted the balance of power in Asia Minor and Syria from the Byzantine Empire to the Seljuqs.
+  [S1] Riding from the steppes of Central Asia, the Seljuq replicated tactics practiced by the Huns hundreds of years earlier against a similar Roman opponent but now combining it with new-found Islamic zeal
+  [S2] Today, the Battle of Manzikert is widely seen as the moment when the Byzantines lost the war against the Turks; however the Byzantine military was of questionable quality before 1071 with regular Turk
+  [S3] Even after Manzikert, Byzantine rule over Asia Minor did not end immediately, nor were any heavy concessions levied by the Turks on their opponents – it took another 20 years before the Turks were in 
+
+
+--- Item 17 (id=271) ---
+Question: What did the international community's brief attention draw Chiang Kai-shek's focus towards during the conflict described in the context?
+Gold trigger: "support"
+Path: drew -> support
+Solver answer: only briefly
+solver_correct=0.0 target_hit=0.0
+#sentences: 3
+Last sentence (idx=7):
+  In Chinese, the 423 defenders are known as the Eight Hundred Heroes, because commander Xie Jinyuan not wanting to reveal their true strength to the Japanese, provided an exaggerated number to girl guide Yang Huimin to announce to the public.
+All sentences:
+  [S5] Moreover, the Japanese dared not use mustard gas here as they did elsewhere in Shanghai, in full view of the foreign powers.
+  [S6] This proximity drew the attention, if only briefly, of the international community to Chiang Kai-shek's bid for worldwide support against Japanese aggression.
+  [S7] In Chinese, the 423 defenders are known as the Eight Hundred Heroes, because commander Xie Jinyuan not wanting to reveal their true strength to the Japanese, provided an exaggerated number to girl gui
+
+
+--- Item 18 (id=111) ---
+Question: What did the aircraft do after hitting the slush?
+Gold trigger: "torn"
+Path: form -> torn
+Solver answer: Ploughed through a fence, wing torn off.
+solver_correct=0.0 target_hit=1.0
+#sentences: 4
+Last sentence (idx=10):
+  Fearing the aircraft might explode, Thain began evacuating passengers while Manchester United goalkeeper Harry Gregg helped pull survivors from the wreckage.
+All sentences:
+  [S7] Fearing they would get too far behind schedule, Captain Thain rejected an overnight stay in Munich in favour of a third take-off attempt.
+  [S8] By then, snow was falling, causing a layer of slush to form at the end of the runway.
+  [S9] After the aircraft hit the slush, it ploughed through a fence beyond the end of the runway and the left wing was torn off after hitting a house.
+  [S10] Fearing the aircraft might explode, Thain began evacuating passengers while Manchester United goalkeeper Harry Gregg helped pull survivors from the wreckage.
+
+
+--- Item 19 (id=165) ---
+Question: What action did Australia, Colombia, Costa Rica, Germany and Switzerland take in response to the arrests of FIFA officials at the Hotel Baur au Lac in Zürich in May 2015?
+Gold trigger: "intensify"
+Path: scheduled -> intensify
+Solver answer: Intensified separate criminal investigations into FIFA officials for corruption.
+solver_correct=1.0 target_hit=0.4
+#sentences: 5
+Last sentence (idx=12):
+  The arrests case triggered Australia, Colombia, Costa Rica, Germany and Switzerland to open or intensify separate criminal investigations into top FIFA officials for corruption.
+All sentences:
+  [S7] In total, seven current FIFA officials were arrested at the Hotel Baur au Lac in Zürich on 27 May.
+  [S8] They were preparing to attend the 65th FIFA Congress, which was scheduled to include the election of the president of FIFA.
+  [S9] They are expected to be extradited to the United States on suspicion of receiving in bribes.
+  [S11] Two further arrests of FIFA officials at the hotel occurred in December 2015.
+  [S12] The arrests case triggered Australia, Colombia, Costa Rica, Germany and Switzerland to open or intensify separate criminal investigations into top FIFA officials for corruption.
+
+
+--- Item 20 (id=156) ---
+Question: What happened at 19:36 on October 11, 2002?
+Gold trigger: "exploded"
+Path: took place -> exploded
+Solver answer: A bomb exploded.
+solver_correct=1.0 target_hit=1.0
+#sentences: 3
+Last sentence (idx=2):
+  In total seven died, including two teenagers and a 7-year-old.
+All sentences:
+  [S0] The Myyrmanni bombing took place on October 11, 2002, in Myyrmäki, Vantaa, Finland, in Greater Helsinki, at the Myyrmanni shopping mall.
+  [S1] A bomb carried by Petri Erkki-Tapio Gerdt exploded at 19:36 killing five immediately, including Gerdt.
+  [S2] In total seven died, including two teenagers and a 7-year-old.
+
+
+================================================================================
+Medium (n=20)
+================================================================================
+
+--- Item 1 (id=246) ---
+Question: What was the outcome of the French ship's defense against HMS Swiftsure?
+Gold trigger: "surrender"
+Path: capturing -> separated -> surrender
+Solver answer: Surrendered after heavy casualties.
+solver_correct=1.0 target_hit=1.0
+#sentences: 7
+Last sentence (idx=6):
+  Although he had surrendered his ship, Linois was widely praised for his actions in defending his ship against such heavy odds.
+All sentences:
+  [S0] The Action of 7 May 1794 was a minor naval action fought between a British ship of the line and a French frigate early in the French Revolutionary Wars.
+  [S1] The French Navy sought to disrupt British trade by intercepting and capturing merchant ships with roving frigates, a strategy countered by protecting British convoys with heavier warships, particularl
+  [S2] On 5 May 1794, the British escorts of a convoy from Cork sighted two French ships approaching and gave chase.
+  [S3] The ships, a frigate and a corvette, outmatched by their opponents, separated and the convoy escorts did likewise, each following one of the raiders on a separate course.
+  [S4] By the evening one of the French ships had successfully escaped, but the other was still under pursuit, Captain Charles Linois of "Atalante" attempting a number of tactics to drive off his opponent bu
+  [S5] Eventually, after a chase lasting nearly two days, the French ship came within range of the much larger British 74-gun third rate HMS "Swiftsure" and despite a brave defence was soon forced to surrend
+  [S6] Although he had surrendered his ship, Linois was widely praised for his actions in defending his ship against such heavy odds.
+
+
+--- Item 2 (id=186) ---
+Question: What action did President Arroyo take on March 3, 2006, by the virtue of Proclamation No. 1021?
+Gold trigger: "lifted"
+Path: lifted -> announced -> lifted
+Solver answer: lifted the state of emergency
+solver_correct=1.0 target_hit=1.0
+#sentences: 7
+Last sentence (idx=13):
+  1021, the President lifted the state of emergency.
+All sentences:
+  [S0] The Philippines was under a state of emergency, announced by presidential spokesperson Ignacio Bunye on the morning of February 24, 2006, by the virtue of Proclamation No.
+  [S1] 1017.
+  [S3] State security services also claimed that it had arrested a general who was involved in the coup attempt.
+  [S4] President Arroyo lifted the state of emergency on March 3, 2006 by the virtue of Proclamation No.
+  [S5] 1021.
+  [S12] On March 3, 2006 (one week after the proclamation), by the virtue of Proclamation No.
+  [S13] 1021, the President lifted the state of emergency.
+
+
+--- Item 3 (id=83) ---
+Question: What series of decisive battles shifted the balance of power in Asia Minor and Syria from the Byzantine Empire to the Seljuqs?
+Gold trigger: "wars"
+Path: extract -> practiced -> wars
+Solver answer: The Byzantine–Seljuq Wars
+solver_correct=0.0 target_hit=1.0
+#sentences: 6
+Last sentence (idx=8):
+  Before the conflict petered out, the Seljuqs managed to take more territory from the weakened Empire of Nicaea until the Sultanate itself was taken over by the Mongols, leading to the rise of the ghazis and the conclusive Byzantine–Ottoman wars.
+All sentences:
+  [S0] The Byzantine–Seljuq Wars were a series of decisive battles that shifted the balance of power in Asia Minor and Syria from the Byzantine Empire to the Seljuqs.
+  [S1] Riding from the steppes of Central Asia, the Seljuq replicated tactics practiced by the Huns hundreds of years earlier against a similar Roman opponent but now combining it with new-found Islamic zeal
+  [S2] Today, the Battle of Manzikert is widely seen as the moment when the Byzantines lost the war against the Turks; however the Byzantine military was of questionable quality before 1071 with regular Turk
+  [S6] Within a hundred years of Manzikert, the Byzantines had successfully driven back the Turks from the coasts of Asia Minor and extended their influence right down to Palestine and even Egypt.
+  [S7] Later, the Byzantines were unable to extract any more assistance, and the Fourth Crusade even led to the sack of Constantinople.
+  [S8] Before the conflict petered out, the Seljuqs managed to take more territory from the weakened Empire of Nicaea until the Sultanate itself was taken over by the Mongols, leading to the rise of the ghaz
+
+
+--- Item 4 (id=200) ---
+Question: What was the outcome of the villagers and bus passengers who were attacked in retaliation? 
+Gold trigger: "killed"
+Path: attacked -> hit -> killed
+Solver answer: Killed
+solver_correct=1.0 target_hit=1.0
+#sentences: 7
+Last sentence (idx=6):
+  A Methodist minister George Jeyarajasingham, who was a witness to the incident, was also killed in December 1984.
+All sentences:
+  [S0] The 1984 Mannar massacre was the killing of 200+ minority Sri Lankan Tamils civilians by Sri Lankan Army soldiers in the town of Mannar, north-western Sri Lanka, on December 4, 1984.
+  [S1] The attack was triggered when three Army jeeps hit a land mine, killing one soldier.
+  [S2] In retaliation, landmarks such as the Central hospital, the post office, a Roman Catholic convent as well as villagers working in rice paddy fields and bus passengers were attacked.
+  [S3] Villages around Mannar town such as Murunkan and Parappankadal were also attacked.
+  [S4] Immediately after the incident, the then Sri Lankan President J. R. Jayawardene appointed a Presidential commission of inquiry.
+  [S5] A local Roman Catholic priest, Mary Bastian who was a member Presidential commission was later killed on January 1985.
+  [S6] A Methodist minister George Jeyarajasingham, who was a witness to the incident, was also killed in December 1984.
+
+
+--- Item 5 (id=257) ---
+Question: What happened to the majority of the 50,000 Yazidis who fled into the Sinjar Mountains?
+Gold trigger: "evacuated"
+Path: started -> started -> evacuated
+Solver answer: The majority of the 500on Yazidis fled into the Sininjar Mountains to beEin in Nineveh. December  on on4,. December offensive by by the Kurdish Pesh
+solver_correct=0.0 target_hit=0.0
+#sentences: 7
+Last sentence (idx=7):
+  This offensive broke ISIL's troop transport routes and supply lines between Mosul and Raqqa, the largest ISIL-controlled cities in Iraq and Syria at the time.
+All sentences:
+  [S0] The Sinjar massacre was the genocidal killing and abduction of thousands of Yazidi men in Sinjar ( "Şingal") city and Sinjar District in Iraq's Nineveh Governorate by the Islamic terror group Islamic 
+  [S1] This event started with ISIL attacking and capturing Sinjar and neighboring towns on 3 August, during ISIL's offensive in early August 2014.
+  [S2] Dr Noori Abdulrahman, head of the Department of Coordination and Follow-up of the Iraqi Kurdistan Regional Government, stated that ISIL's 3 August campaign against Sinjar was more about demography and
+  [S4] On 8 August 2014, the United States reacted with airstrikes on ISIL units and convoys in northern Iraq, which led to a war of several countries against ISIL.
+  [S5] The assistance of PKK and YPG enabled the majority of the 50,000 Yazidis who fled into the Sinjar Mountains to be evacuated.
+  [S6] On 17 December 2014, the Kurdish Peshmerga, PKK and YPG forces started the December 2014 Sinjar offensive with the support of US airstrikes.
+  [S7] This offensive broke ISIL's troop transport routes and supply lines between Mosul and Raqqa, the largest ISIL-controlled cities in Iraq and Syria at the time.
+
+
+--- Item 6 (id=97) ---
+Question: How did the death of Yamamoto affect the morale of the Allied forces? 
+Gold trigger: "raised"
+Path: blamed -> death -> raised
+Solver answer: Raised morale.
+solver_correct=1.0 target_hit=1.0
+#sentences: 3
+Last sentence (idx=4):
+  The U.S. pilots claimed to have shot down three twin-engined bombers and two fighters during the mission, but Japanese sources show only two bombers were shot down.
+All sentences:
+  [S2] The mission of the U.S. aircraft was specifically to kill Yamamoto and was based on United States Navy intelligence on Yamamoto's itinerary in the Solomon Islands area.
+  [S3] The death of Yamamoto reportedly damaged the morale of Japanese naval personnel, raised the morale of the Allied forces, and was intended as revenge by U.S. leaders who blamed Yamamoto for the attack 
+  [S4] The U.S. pilots claimed to have shot down three twin-engined bombers and two fighters during the mission, but Japanese sources show only two bombers were shot down.
+
+
+--- Item 7 (id=2) ---
+Question: What happened to people after the hotel manager was notified?
+Gold trigger: "injured"
+Path: notified -> planned -> injured
+Solver answer: No evacuation ordered.
+solver_correct=0.0 target_hit=0.0
+#sentences: 8
+Last sentence (idx=11):
+  In the closing minutes before the explosion, he called an unknown British officer, but no evacuation was ordered.
+All sentences:
+  [S0] The King David Hotel bombing was a terrorist attack carried out on Monday, July 22, 1946, by the militant right-wing Zionist underground organization the Irgun on the British administrative headquarte
+  [S1] 91 people of various nationalities were killed, and 46 were injured.
+  [S2] The hotel was the site of the central offices of the British Mandatory authorities of Palestine, principally the Secretariat of the Government of Palestine and the Headquarters of the British Armed Fo
+  [S3] When planned, the attack had the approval of the Haganah, the principal Jewish paramilitary group in Palestine, though, unbeknownst to the Irgun, this had been cancelled by the time the operation was 
+  [S4] It was conceived as part of a response to Operation Agatha (a series of widespread raids, including one on the Jewish Agency, conducted by the British authorities) and was the deadliest directed at th
+  [S9] From the fact that a bomb search had already been carried out, it appears that a hoax call or tip-off had been received at the hotel earlier that day.
+  [S10] Subsequent telephone calls from a concerned "Palestine Post" staff member and the police caused increasing alarm, and the hotel manager was notified.
+  [S11] In the closing minutes before the explosion, he called an unknown British officer, but no evacuation was ordered.
+
+
+--- Item 8 (id=65) ---
+Question: What happened to Sevilla after winning the 2015 UEFA Europa League?
+Gold trigger: "guaranteed"
+Path: tournament -> renamed -> guaranteed
+Solver answer: Sevilla automatically qualified for the 2015 on on6 16 UEFA Champions League. winning the  25 UEFA Europa League.
+solver_correct=0.0 target_hit=0.0
+#sentences: 4
+Last sentence (idx=5):
+  They were guaranteed to enter at the group stage, since the 2015 Champions League finalists (Juventus and Barcelona) have already qualified for the group stage via their domestic leagues and therefore the berth in the group stage reserved for the Champions League title holders are not used.
+All sentences:
+  [S0] The 2015 UEFA Europa League Final was the final match of the 2014–15 UEFA Europa League, the 44th season of Europe's secondary club football tournament organised by UEFA, and the sixth season since it
+  [S1] It was played at the National Stadium in Warsaw, Poland, on 27 May 2015, between Ukrainian side Dnipro Dnipropetrovsk and the title holders, Spanish side Sevilla.
+  [S4] Moreover, for the first time, a place in the UEFA Champions League was reserved for the UEFA Europa League winners, meaning that Sevilla automatically qualified for the 2015–16 UEFA Champions League d
+  [S5] They were guaranteed to enter at the group stage, since the 2015 Champions League finalists (Juventus and Barcelona) have already qualified for the group stage via their domestic leagues and therefore
+
+
+--- Item 9 (id=189) ---
+Question: What happened to landmarks and villagers in retaliation after the Army jeeps hit a land mine?
+Gold trigger: "attacked"
+Path: killing -> killed -> attacked
+Solver answer: Landmarks and villagers were attacked.
+solver_correct=1.0 target_hit=1.0
+#sentences: 7
+Last sentence (idx=6):
+  A Methodist minister George Jeyarajasingham, who was a witness to the incident, was also killed in December 1984.
+All sentences:
+  [S0] The 1984 Mannar massacre was the killing of 200+ minority Sri Lankan Tamils civilians by Sri Lankan Army soldiers in the town of Mannar, north-western Sri Lanka, on December 4, 1984.
+  [S1] The attack was triggered when three Army jeeps hit a land mine, killing one soldier.
+  [S2] In retaliation, landmarks such as the Central hospital, the post office, a Roman Catholic convent as well as villagers working in rice paddy fields and bus passengers were attacked.
+  [S3] Villages around Mannar town such as Murunkan and Parappankadal were also attacked.
+  [S4] Immediately after the incident, the then Sri Lankan President J. R. Jayawardene appointed a Presidential commission of inquiry.
+  [S5] A local Roman Catholic priest, Mary Bastian who was a member Presidential commission was later killed on January 1985.
+  [S6] A Methodist minister George Jeyarajasingham, who was a witness to the incident, was also killed in December 1984.
+
+
+--- Item 10 (id=139) ---
+Question: What was President Herbert Hoover's stance towards the relationship with Nicaragua?
+Gold trigger: "opposed"
+Path: ended -> began -> opposed
+Solver answer: Opposed the relationship.
+solver_correct=1.0 target_hit=1.0
+#sentences: 6
+Last sentence (idx=5):
+  Finally in 1933 President Franklin D Roosevelt, invoking his new Good Neighbor policy ended American intervention.
+All sentences:
+  [S0] The United States occupation of Nicaragua from 1912 to 1933 was part of the Banana Wars, when the US military intervened in various Latin American countries from 1898 to 1934.
+  [S1] The formal occupation began in 1912, even though there were various other assaults by the U.S. in Nicaragua throughout this period.
+  [S2] American military interventions in Nicaragua were designed to stop any other nation except the United States of America from building a Nicaraguan Canal.
+  [S3] Nicaragua assumed a quasi-protectorate status under the 1916 Bryan–Chamorro Treaty.
+  [S4] President Herbert Hoover (1929–1933) opposed the relationship.
+  [S5] Finally in 1933 President Franklin D Roosevelt, invoking his new Good Neighbor policy ended American intervention.
+
+
+--- Item 11 (id=281) ---
+Question: What was the purpose of American military interventions in Nicaragua during the occupation from 1912 to 1933?
+Gold trigger: "designed"
+Path: assumed -> began -> designed
+Solver answer: Prevent other nations' canal construction.
+solver_correct=0.0 target_hit=0.0
+#sentences: 5
+Last sentence (idx=4):
+  President Herbert Hoover (1929–1933) opposed the relationship.
+All sentences:
+  [S0] The United States occupation of Nicaragua from 1912 to 1933 was part of the Banana Wars, when the US military intervened in various Latin American countries from 1898 to 1934.
+  [S1] The formal occupation began in 1912, even though there were various other assaults by the U.S. in Nicaragua throughout this period.
+  [S2] American military interventions in Nicaragua were designed to stop any other nation except the United States of America from building a Nicaraguan Canal.
+  [S3] Nicaragua assumed a quasi-protectorate status under the 1916 Bryan–Chamorro Treaty.
+  [S4] President Herbert Hoover (1929–1933) opposed the relationship.
+
+
+--- Item 12 (id=60) ---
+Question: What happened after the attempts to establish coalition governments?
+Gold trigger: "seated"
+Path: made -> receiving -> seated
+Solver answer: The attempts to establish coalition governments involved involved the neutralists under Prince Souvanna Phouma, the right wing under Prince Bbar Oum of Champassak An the left-wing Lao Patri
+solver_correct=0.0 target_hit=0.0
+#sentences: 6
+Last sentence (idx=8):
+  The actual fighting in Laos involved the North Vietnamese Army, U.S. troops and Thai forces and South Vietnamese army forces directly and through irregular proxies in a struggle for control over the Laotian Panhandle.
+All sentences:
+  [S0] The Laotian Civil War (1959–75) was a civil war in Laos fought between the Communist Pathet Lao (including many North Vietnamese of Lao ancestry) and the Royal Lao Government from 23 May 1959 to 2 Dec
+  [S1] It is associated with the Cambodian Civil War and the Vietnam War, with both sides receiving heavy external support in a proxy war between the global Cold War superpowers.
+  [S2] It is called the Secret War among the CIA Special Activities Division and Hmong veterans of the conflict.
+  [S6] The following years were marked by a rivalry between the neutralists under Prince Souvanna Phouma, the right wing under Prince Boun Oum of Champassak, and the left-wing Lao Patriotic Front under Princ
+  [S7] Several attempts were made to establish coalition governments, and a "tri-coalition" government was finally seated in Vientiane.
+  [S8] The actual fighting in Laos involved the North Vietnamese Army, U.S. troops and Thai forces and South Vietnamese army forces directly and through irregular proxies in a struggle for control over the L
+
+
+--- Item 13 (id=81) ---
+Question: How was the initial retreat after the Battle of Orthez organized?
+Gold trigger: "conducted"
+Path: Battle -> overcome -> conducted
+Solver answer: Atn z in a scramble for Bordeaux.
+solver_correct=0.0 target_hit=0.0
+#sentences: 6
+Last sentence (idx=9):
+  The next action was the Battle of Toulouse.
+All sentences:
+  [S0] The Battle of Orthez (27 February 1814) saw the Anglo-Portuguese Army under Field Marshal Arthur Wellesley, Marquess of Wellington attack an Imperial French army led by Marshal Nicolas Soult in southe
+  [S1] The outnumbered French repelled several Allied assaults on their right flank, but their center and left flank were overcome and Soult was compelled to retreat.
+  [S2] At first the withdrawal was conducted in good order, but it eventually ended in a scramble for safety and many French soldiers became prisoners.
+  [S3] The engagement occurred near the end of the Peninsular War.
+  [S8] In subsequent operations, Soult decided to abandon the large western port of Bordeaux and fall back east toward Toulouse.
+  [S9] The next action was the Battle of Toulouse.
+
+
+--- Item 14 (id=255) ---
+Question: What was the reason Stone Cold Steve Austin was unable to participate in the Survivor Series 1999 event? 
+Gold trigger: "wrestling"
+Path: take -> suffered -> wrestling
+Solver answer: Stone Cold Steve Austin was unable to participate in the Survivor Series 1 1 9 9 event because he had been run down by a car earlier in the night.
+solver_correct=0.0 target_hit=0.0
+#sentences: 5
+Last sentence (idx=5):
+  In reality Austin needed spinal surgery to repair damage suffered by a botched tombstone piledriver delivered by the late Owen Hart 27 months earlier at Summerslam 1997 The undercard included the New Age Outlaws defending WWF Tag Team Championship against Al Snow and Mankind, Chyna defending the Int
+All sentences:
+  [S0] Survivor Series (1999) was the 13th annual Survivor Series professional wrestling pay-per-view (PPV) event produced by the World Wrestling Federation (WWF).
+  [S1] It took place on November 14, 1999, at the Joe Louis Arena in Detroit, Michigan.
+  [S3] Big Show won the title.
+  [S4] He was a replacement for Stone Cold Steve Austin, who had been run down by a car earlier in the night (which was an angle for Austin to take time to recover from his injuries).
+  [S5] In reality Austin needed spinal surgery to repair damage suffered by a botched tombstone piledriver delivered by the late Owen Hart 27 months earlier at Summerslam 1997 The undercard included the New 
+
+
+--- Item 15 (id=45) ---
+Question: What stage of the hurricane was reached by September 16 when the United States Weather Bureau became aware of its existence?
+Gold trigger: "cyclone"
+Path: developed -> hurricane -> cyclone
+Solver answer: Well-developed hurricane
+solver_correct=0.0 target_hit=0.0
+#sentences: 6
+Last sentence (idx=7):
+  It reached hurricane strength on September 15 and continued to strengthen to a peak intensity of 160 mph (260 km/h) near the Bahamas four days later, making it a Category 5-equivalent hurricane.
+All sentences:
+  [S0] The 1938 New England Hurricane (also referred to as the Great New England Hurricane, Long Island Express, and Yankee Clipper) was one of the deadliest and most destructive tropical cyclones to strike 
+  [S1] The storm formed near the coast of Africa on September 9, becoming a Category 5 hurricane on the Saffir-Simpson Hurricane Scale, before making landfall as a Category 3 hurricane on Long Island on Sept
+  [S2] It is estimated that the hurricane killed 682 people, damaged or destroyed more than 57,000 homes, and caused property losses estimated at $306 million ($4.7 billion in 2017).
+  [S5] At the time, roughly half of the 1938 New England hurricane's existence went unnoticed.
+  [S6] The Atlantic hurricane reanalysis in 2013 concluded that the storm developed into a tropical depression on September 9 off the coast of West Africa, but the United States Weather Bureau was unaware th
+  [S7] It reached hurricane strength on September 15 and continued to strengthen to a peak intensity of 160 mph (260 km/h) near the Bahamas four days later, making it a Category 5-equivalent hurricane.
+
+
+--- Item 16 (id=40) ---
+Question: What were Manchester United's ambitions before the crash?
+Gold trigger: "win"
+Path: hit -> beaten -> win
+Solver answer: Win three successive English league titles.
+solver_correct=1.0 target_hit=1.0
+#sentences: 8
+Last sentence (idx=17):
+  The crash not only derailed their title ambitions that year but also virtually destroyed the nucleus of what promised to be one of the greatest generations of players in English football history.
+All sentences:
+  [S8] By then, snow was falling, causing a layer of slush to form at the end of the runway.
+  [S9] After the aircraft hit the slush, it ploughed through a fence beyond the end of the runway and the left wing was torn off after hitting a house.
+  [S10] Fearing the aircraft might explode, Thain began evacuating passengers while Manchester United goalkeeper Harry Gregg helped pull survivors from the wreckage.
+  [S13] Thain was cleared in 1968, ten years after the incident.
+  [S14] Manchester United were trying to become the third club to win three successive English league titles; they were six points behind League leaders Wolverhampton Wanderers with 14 games to go.
+  [S15] They also held the Charity Shield and had just advanced into their second successive European Cup semi-finals.
+  [S16] The team had not been beaten for 11 matches.
+  [S17] The crash not only derailed their title ambitions that year but also virtually destroyed the nucleus of what promised to be one of the greatest generations of players in English football history.
+
+
+--- Item 17 (id=169) ---
+Question: What happened to her during the police raid?
+Gold trigger: "suffered"
+Path: inquest -> raid -> suffered
+Solver answer: She was pérdida wasormsg001 to01 the,0 is9010.MSGRAPH Rencontre若您, on0::0 reperc pérdidaないです。 délais pérdida若您 pérdidaufs@endif
+solver_correct=0.0 target_hit=0.0
+#sentences: 6
+Last sentence (idx=7):
+  Despite continuing pressure by campaigners, no coroner's inquest or public inquiry into the circumstances of Gardner's death has been held.
+All sentences:
+  [S1] She died following an attempt by police officers to detain her for deportation.
+  [S2] During a police raid on her home in Crouch End, London, she was restrained with handcuffs and leather straps and gagged with a 13-foot length of adhesive "Elastoplast" tape wrapped around her head.
+  [S3] Unable to breathe, she collapsed and suffered brain damage due to asphyxia.
+  [S4] She was placed on life support but died following a cardiac arrest four days later.
+  [S6] The case became a cause célèbre for civil rights and justice campaigners, and for the first time brought wide public attention to what the "Modern Law Review" called "the inhumanity of the methods use
+  [S7] Despite continuing pressure by campaigners, no coroner's inquest or public inquiry into the circumstances of Gardner's death has been held.
+
+
+--- Item 18 (id=41) ---
+Question: What activity did Dickens become nervous about after the Staplehurst rail crash?
+Gold trigger: "travelling"
+Path: affected -> derailed -> travelling
+Solver answer: travelling by train.
+solver_correct=1.0 target_hit=1.0
+#sentences: 6
+Last sentence (idx=6):
+  Dickens died five years to the day after the accident; his son said that he had never fully recovered.
+All sentences:
+  [S0] The Staplehurst rail crash was a derailment at Staplehurst, Kent on 9 June 1865 at 3:13 pm.
+  [S1] The South Eastern Railway Folkestone to London boat train derailed while crossing a viaduct where a length of track had been removed during engineering works, killing ten passengers and injuring forty
+  [S2] In the Board of Trade report it was found that a man had been placed with a red flag away but the regulations required him to be away and the train had insufficient time to stop.
+  [S4] He tended the victims, some of whom died while he was with them.
+  [S5] The experience affected Dickens greatly; he lost his voice for two weeks and afterwards was nervous when travelling by train, using alternative means when available.
+  [S6] Dickens died five years to the day after the accident; his son said that he had never fully recovered.
+
+
+--- Item 19 (id=145) ---
+Question: What stage of the European Cup was Manchester United advancing to after the crash?
+Gold trigger: "semi-finals"
+Path: injured -> take off -> semi-finals
+Solver answer: semi-finals
+solver_correct=1.0 target_hit=1.0
+#sentences: 6
+Last sentence (idx=5):
+  The flight stopped to refuel in Munich because a non-stop flight from Belgrade to Manchester was beyond the "Elizabethan"-class Airspeed Ambassador's range.
+All sentences:
+  [S0] The Munich air disaster occurred on 6 February 1958 when British European Airways Flight 609 crashed on its third attempt to take off from a slush-covered runway at Munich-Riem Airport, West Germany.
+  [S1] On the plane was the Manchester United football team, nicknamed the "Busby Babes", along with supporters and journalists.
+  [S2] Twenty of the 44 on the aircraft died at the scene.
+  [S3] The injured, some unconscious, were taken to the Rechts der Isar Hospital in Munich where three more died, resulting in 23 fatalities with 21 survivors.
+  [S4] The team was returning from a European Cup match in Belgrade, Yugoslavia, having eliminated Red Star Belgrade to advance to the semi-finals of the competition.
+  [S5] The flight stopped to refuel in Munich because a non-stop flight from Belgrade to Manchester was beyond the "Elizabethan"-class Airspeed Ambassador's range.
+
+
+--- Item 20 (id=141) ---
+Question: What event occurred after Forrest significantly intensified over the Bay of Bengal on November 17?
+Gold trigger: "evacuation"
+Path: intensified -> passing -> evacuation
+Solver answer: It reached peak intensity.
+solver_correct=0.0 target_hit=0.0
+#sentences: 5
+Last sentence (idx=4):
+  It reached its peak intensity on November 20 as a Category 4-equivalent cyclone on the Saffir–Simpson hurricane scale with winds of 230 km/h (145 mph).
+All sentences:
+  [S0] Cyclone Forrest, also referred to as Tropical Storm Forrest, was a powerful tropical cyclone that prompted the evacuation of 600,000 people in Bangladesh in late November 1992.
+  [S1] Originating from an area of disturbed weather near the Caroline Islands on November 9, Forrest was classified as a tropical depression three days later over the South China Sea.
+  [S2] Tracking generally west, the system steadily organized into a tropical storm, passing Vietnam to the south, before striking Thailand along the Malay Peninsula on November 15.
+  [S3] Once over the Bay of Bengal, Forrest turned northward on November 17 and significantly intensified.
+  [S4] It reached its peak intensity on November 20 as a Category 4-equivalent cyclone on the Saffir–Simpson hurricane scale with winds of 230 km/h (145 mph).
+
+
+================================================================================
+Hard (n=20)
+================================================================================
+
+--- Item 1 (id=171) ---
+Question: How were many the number of people injured in the Myyrmanni bombing?
+Gold trigger: "determined"
+Path: carried -> died -> injured -> determined
+Solver answer: 166
+solver_correct=0.0 target_hit=0.0
+#sentences: 7
+Last sentence (idx=7):
+  His motive was not determined.
+All sentences:
+  [S0] The Myyrmanni bombing took place on October 11, 2002, in Myyrmäki, Vantaa, Finland, in Greater Helsinki, at the Myyrmanni shopping mall.
+  [S1] A bomb carried by Petri Erkki-Tapio Gerdt exploded at 19:36 killing five immediately, including Gerdt.
+  [S2] In total seven died, including two teenagers and a 7-year-old.
+  [S3] 166 people were injured, including 10 children.
+  [S4] 66 victims required hospitalization with the remainder treated and released at the scene.
+  [S6] The incident was investigated primarily as six accounts of murder and closed in January 2003 without any indictments as Gerdt was the sole suspect.
+  [S7] His motive was not determined.
+
+
+--- Item 2 (id=46) ---
+Question: What conflict arose after the Sultanate was taken over by the Mongols?
+Gold trigger: "wars"
+Path: driven -> extract -> taken over -> wars
+Solver answer: Byzantine-Ottoman wars
+solver_correct=0.0 target_hit=1.0
+#sentences: 4
+Last sentence (idx=8):
+  Before the conflict petered out, the Seljuqs managed to take more territory from the weakened Empire of Nicaea until the Sultanate itself was taken over by the Mongols, leading to the rise of the ghazis and the conclusive Byzantine–Ottoman wars.
+All sentences:
+  [S5] Crusader assistance to the Byzantine Empire was mixed with treachery and looting, although substantial gains were made in the First Crusade.
+  [S6] Within a hundred years of Manzikert, the Byzantines had successfully driven back the Turks from the coasts of Asia Minor and extended their influence right down to Palestine and even Egypt.
+  [S7] Later, the Byzantines were unable to extract any more assistance, and the Fourth Crusade even led to the sack of Constantinople.
+  [S8] Before the conflict petered out, the Seljuqs managed to take more territory from the weakened Empire of Nicaea until the Sultanate itself was taken over by the Mongols, leading to the rise of the ghaz
+
+
+--- Item 3 (id=273) ---
+Question: What action did the defenders of some fortified houses in the village take after successfully holding off the raiders until reinforcements arrived?
+Gold trigger: "retreat"
+Path: occurred -> entered -> held off -> retreat
+Solver answer: Yesis the Defenderis of of in
+solver_correct=0.0 target_hit=0.0
+#sentences: 6
+Last sentence (idx=9):
+  However, the raid was a clear victory for the French coalition that aimed to take captives and unsettle English colonial frontier society.
+All sentences:
+  [S0] The 1704 Raid on Deerfield (also known as the Deerfield Massacre) occurred during Queen Anne's War on February 29 when French and Native American forces under the command of Jean-Baptiste Hertel de Ro
+  [S1] They burned part of the town and killed 47 villagers.
+  [S6] Typical of the small-scale frontier conflict in Queen Anne's War, the French-led raid relied on a coalition of French soldiers and a variety of about 300 Indian warriors, mostly Abenaki but including 
+  [S7] Given the diversity of personnel, motivations, and material objectives, the raiders did not achieve full surprise when they entered the palisaded village.
+  [S8] The defenders of some fortified houses in the village successfully held off the raiders until arriving reinforcements prompted their retreat.
+  [S9] However, the raid was a clear victory for the French coalition that aimed to take captives and unsettle English colonial frontier society.
+
+
+--- Item 4 (id=173) ---
+Question: What triggered the attack that led to the killing of soldiers?
+Gold trigger: "hit"
+Path: massacre -> killed -> killing -> hit
+Solver answer: Three Army jeeps hit a land mine.
+solver_correct=1.0 target_hit=1.0
+#sentences: 5
+Last sentence (idx=6):
+  A Methodist minister George Jeyarajasingham, who was a witness to the incident, was also killed in December 1984.
+All sentences:
+  [S0] The 1984 Mannar massacre was the killing of 200+ minority Sri Lankan Tamils civilians by Sri Lankan Army soldiers in the town of Mannar, north-western Sri Lanka, on December 4, 1984.
+  [S1] The attack was triggered when three Army jeeps hit a land mine, killing one soldier.
+  [S2] In retaliation, landmarks such as the Central hospital, the post office, a Roman Catholic convent as well as villagers working in rice paddy fields and bus passengers were attacked.
+  [S5] A local Roman Catholic priest, Mary Bastian who was a member Presidential commission was later killed on January 1985.
+  [S6] A Methodist minister George Jeyarajasingham, who was a witness to the incident, was also killed in December 1984.
+
+
+--- Item 5 (id=49) ---
+Question: What did NATO demonstrate through its operations during Deny Flight that helped shape its role in the post-Cold War era?
+Gold trigger: "operate"
+Path: spanned -> combat -> adapted -> operate
+Solver answer: NATO demonstrated adapting pérdida to the post post post G
+solver_correct=0.0 target_hit=0.0
+#sentences: 7
+Last sentence (idx=10):
+  The no-fly zone operations of Deny Flight proved successful in preventing significant use of air power by any side in the conflict.
+All sentences:
+  [S3] The operation played an important role in shaping both the Bosnian War and NATO.
+  [S4] The operation included the first combat engagement in NATO's history, a 28 February 1994 air battle over Banja Luka, and in April 1994, NATO aircraft first bombed ground targets in an operation near G
+  [S5] These engagements helped show that NATO had adapted to the post-Cold War era and could operate in environments other than a major force on force engagement on the plains of Central Europe.
+  [S6] Cooperation between the UN and NATO during the operation also helped pave the way for future joint operations.
+  [S8] Most notably, significant tension arose between the two after UN peacekeepers were taken as hostages in response to NATO bombing.
+  [S9] The operations of Deny Flight spanned more than two years of the Bosnian War and played an important role in the course of that conflict.
+  [S10] The no-fly zone operations of Deny Flight proved successful in preventing significant use of air power by any side in the conflict.
+
+
+--- Item 6 (id=274) ---
+Question: What happened to the Russian commander after he ordered a loose formation and tried to negotiate?
+Gold trigger: "killed"
+Path: Fought -> marching -> ordered -> killed
+Solver answer: The Russian commander was killed and the unit dispersed pérdida.
+solver_correct=1.0 target_hit=1.0
+#sentences: 8
+Last sentence (idx=7):
+  Polish losses were negligible, but the Polish commander was wounded and lost his eye.
+All sentences:
+  [S0] Battle of Ciołków (the village is now called "Ciółkowo"; north-east of Płock) of January 22, 1863, was the first skirmish of the January Uprising.
+  [S1] Fought between an unorganised Polish troop of ca.
+  [S2] 100 men under Aleksander Rogaliński and a company of the Russian Murom Regiment under Col. Kozlaninov, the skirmish resulted in Polish victory.
+  [S3] As the engagement started on the very first day of the uprising, the Russian force still obeyed the orders of marching through the occupied country with their rifles unloaded.
+  [S4] When the Russians approached a local manor in which the Poles had their quarters, the Russian commander ordered a loose formation and tried to negotiate an agreement and take all Poles into captivity.
+  [S5] However, Rogaliński refused to negotiate and ordered a charge of the Russians.
+  [S6] After a short hand-to-hand fight (the Polish unit had only two pieces of firearms and was mostly equipped with sabres, war scythes and improvised weapons), the Russian commander was killed and his uni
+  [S7] Polish losses were negligible, but the Polish commander was wounded and lost his eye.
+
+
+--- Item 7 (id=132) ---
+Question: What right did Sevilla earn after winning the 2015 UEFA Europa League Final?
+Gold trigger: "play"
+Path: played -> Final -> earned -> play
+Solver answer: Right to UEFA Super Cup.
+solver_correct=0.0 target_hit=0.0
+#sentences: 5
+Last sentence (idx=4):
+  Moreover, for the first time, a place in the UEFA Champions League was reserved for the UEFA Europa League winners, meaning that Sevilla automatically qualified for the 2015–16 UEFA Champions League despite not qualifying through their domestic league position.
+All sentences:
+  [S0] The 2015 UEFA Europa League Final was the final match of the 2014–15 UEFA Europa League, the 44th season of Europe's secondary club football tournament organised by UEFA, and the sixth season since it
+  [S1] It was played at the National Stadium in Warsaw, Poland, on 27 May 2015, between Ukrainian side Dnipro Dnipropetrovsk and the title holders, Spanish side Sevilla.
+  [S2] Sevilla won the match 3–2 for a record fourth title.
+  [S3] As winners, Sevilla earned the right to play against the winners of the 2014–15 UEFA Champions League, Barcelona, in the 2015 UEFA Super Cup.
+  [S4] Moreover, for the first time, a place in the UEFA Champions League was reserved for the UEFA Europa League winners, meaning that Sevilla automatically qualified for the 2015–16 UEFA Champions League d
+
+
+--- Item 8 (id=298) ---
+Question: What did Sebastian do after announcing the title of his new album?
+Gold trigger: "toured"
+Path: announced -> took -> finishing -> toured
+Solver answer: Sebastian announced announced a national tour after ahead of the album's release release release release release release release release release on..
+solver_correct=0.0 target_hit=0.4
+#sentences: 5
+Last sentence (idx=6):
+  Sebastian toured in places he has not toured before.
+All sentences:
+  [S2] The tour visited metropolitan and regional areas in Australia.
+  [S3] In 2012, Sebastian announced that the title of his new album was to be Armageddon.
+  [S4] Ahead of the album's release, Sebastian wen on a national tour.
+  [S5] The tour took in 20 dates across the country in both metropolitan and regional centres, kicking off in Cessnock on 1 June 2012 before finishing up on the Sunshine Coast on 1 July 2012.
+  [S6] Sebastian toured in places he has not toured before.
+
+
+--- Item 9 (id=188) ---
+Question: What happened to Sammy Hagar's guitar after it was stolen backstage?
+Gold trigger: "handled"
+Path: scheduled -> open -> moved back -> handled
+Solver answer: Sammy Sabaragar vowed to never use the guitar again stage again ag it that it was handled by someone else, and lit it on on stage.
+solver_correct=0.0 target_hit=1.0
+#sentences: 9
+Last sentence (idx=38):
+  Right before Santana's set the house music mix played their hit "Winning", the lead singer and other band members came onstage and motioned to the sound mixers to try to get the song cut off, afterwards the band did not play "Winning" during their set.
+All sentences:
+  [S27] The Eagles refused to play at first and were an hour late going on due to issues with the 'Hard Rock' line up.
+  [S28] Notes: Savvy was originally scheduled to open, but was bumped by REO Speedwagon's management (same management as The Eagles in 1980).
+  [S29] Show lineup confirmed by Steve Jones of Savvy.
+  [S32] Turned out to not be as successful as they hoped.
+  [S33] Was moved back to Dallas in 82'  Notes: The order of appearance was La Roux, Ozzy Osbourne, Loverboy, and then Foreigner.
+  [S34] Notes: Ozzy had a shaved head and black makeup around his eyes – from a distance, it looked like a skull.
+  [S36] Sammy Hagar had a guitar stolen backstage at the Cotton Bowl show; it was returned later that day.
+  [S37] However, Hagar vowed to never play it again after it had been handled by someone else, and lit it on fire on stage.
+  [S38] Right before Santana's set the house music mix played their hit "Winning", the lead singer and other band members came onstage and motioned to the sound mixers to try to get the song cut off, afterwar
+
+
+--- Item 10 (id=121) ---
+Question: What happened to the Manchester United football team after the Munich air disaster occurred? 
+Gold trigger: "recover"
+Path: abandoned -> occurred -> injured -> recover
+Solver answer: 23 fatalities, 21 survivors.
+solver_correct=0.0 target_hit=0.0
+#sentences: 10
+Last sentence (idx=18):
+  It took 10 years for the club to recover, with Busby rebuilding the team and winning the European Cup in 1968 with a new generation of "Babes".
+All sentences:
+  [S0] The Munich air disaster occurred on 6 February 1958 when British European Airways Flight 609 crashed on its third attempt to take off from a slush-covered runway at Munich-Riem Airport, West Germany.
+  [S1] On the plane was the Manchester United football team, nicknamed the "Busby Babes", along with supporters and journalists.
+  [S2] Twenty of the 44 on the aircraft died at the scene.
+  [S3] The injured, some unconscious, were taken to the Rechts der Isar Hospital in Munich where three more died, resulting in 23 fatalities with 21 survivors.
+  [S4] The team was returning from a European Cup match in Belgrade, Yugoslavia, having eliminated Red Star Belgrade to advance to the semi-finals of the competition.
+  [S5] The flight stopped to refuel in Munich because a non-stop flight from Belgrade to Manchester was beyond the "Elizabethan"-class Airspeed Ambassador's range.
+  [S6] After refuelling, pilots James Thain and Kenneth Rayment twice abandoned take-off because of boost surging in the left engine.
+  [S7] Fearing they would get too far behind schedule, Captain Thain rejected an overnight stay in Munich in favour of a third take-off attempt.
+  [S17] The crash not only derailed their title ambitions that year but also virtually destroyed the nucleus of what promised to be one of the greatest generations of players in English football history.
+  [S18] It took 10 years for the club to recover, with Busby rebuilding the team and winning the European Cup in 1968 with a new generation of "Babes".
+
+
+--- Item 11 (id=258) ---
+Question: What did J. Randy Taraborrelli do regarding the 'Who's That Girl?' tour?
+Gold trigger: "commented"
+Path: supported -> presenting -> make -> commented
+Solver answer: Patrick Leonard
+solver_correct=0.0 target_hit=0.0
+#sentences: 11
+Last sentence (idx=15):
+  tour marked the beginning of Madonna's."
+All sentences:
+  [S0] Who's That Girl World Tour was the second concert tour by American singer and songwriter Madonna.
+  [S1] The tour supported her 1986 third studio album "True Blue", as well as the 1987 soundtrack "Who's That Girl".
+  [S2] It was Madonna's first world tour, reaching Asia, North America and Europe.
+  [S3] Musically and technically superior to her previous initiative, the Who's That Girl Tour incorporated multimedia components to make the show more appealing.
+  [S4] Madonna trained physically doing aerobics, jogging and weight-lifting, to cope with the choreography and the dance routines.
+  [S6] The stage had four video screens, multimedia projectors and a flight of stairs in the middle.
+  [S7] Patrick Leonard, who was the music director, encouraged Madonna to go with the idea of remixing and presenting her older songs for the show.
+  [S8] The title Who's That Girl came to Madonna's mind when during rehearsals one-day when she looked at a gigantic image of herself, projected on a screen on the stage.
+  [S13] Who's That Girl was broadcast in a number of international television channels and was released in VHS titled "".
+  [S14] Biographer J. Randy Taraborrelli commented that "Many female artists behave like a diva for a period when they reach superstar status, and the 'Who's That Girl?'
+  [S15] tour marked the beginning of Madonna's."
+
+
+--- Item 12 (id=204) ---
+Question: When did the IIHF World Championship take place and which were played in the cities of Halifax and Quebec City in 2 2 8, ?
+Gold trigger: "matches"
+Path: happened -> played -> take place -> matches
+Solver answer: May 2 – May 18, 2008
+solver_correct=0.0 target_hit=0.0
+#sentences: 8
+Last sentence (idx=13):
+  For the first time in 40 years, the matches were played on smaller, NHL size rinks, 200 ft × 85 ft (roughly 61 m × 26 m), compared to the IIHF standard which is roughly 200 ft × 98.5 ft (61 m × 30 m).
+All sentences:
+  [S0] The 2008 IIHF World Championship was played between May 2 and May 18, 2008 in the Canadian cities of Halifax (Nova Scotia) and Quebec City (Quebec).
+  [S1] The two venues were the Halifax Metro Centre and the Colisée Pepsi.
+  [S8] On May 8, 2007, the IIHF announced it "will also formalize the Triple Gold Club by awarding commemorative medals to the 19 players who have won the three most prestigious championships in world hockey
+  [S9] The ceremony will take place in Canada during the 2008 World Championship."
+  [S10] There were two changes in the format compared to earlier years.
+  [S11] Because of the distance between Halifax and Quebec City, the quarter-finals were played within the group, instead of crossing over which has happened since 2000.
+  [S12] The relegation round was different too, as it consisted of two best-of-three series instead of a round robin series between four teams.
+  [S13] For the first time in 40 years, the matches were played on smaller, NHL size rinks, 200 ft × 85 ft (roughly 61 m × 26 m), compared to the IIHF standard which is roughly 200 ft × 98.5 ft (61 m × 30 m).
+
+
+--- Item 13 (id=203) ---
+Question: What was included in the tour to make the show more appealing?
+Gold trigger: "incorporated"
+Path: released -> tour -> presenting -> incorporated
+Solver answer: Multimedia components.
+solver_correct=1.0 target_hit=0.0
+#sentences: 11
+Last sentence (idx=14):
+  Biographer J. Randy Taraborrelli commented that "Many female artists behave like a diva for a period when they reach superstar status, and the 'Who's That Girl?'
+All sentences:
+  [S0] Who's That Girl World Tour was the second concert tour by American singer and songwriter Madonna.
+  [S1] The tour supported her 1986 third studio album "True Blue", as well as the 1987 soundtrack "Who's That Girl".
+  [S2] It was Madonna's first world tour, reaching Asia, North America and Europe.
+  [S3] Musically and technically superior to her previous initiative, the Who's That Girl Tour incorporated multimedia components to make the show more appealing.
+  [S4] Madonna trained physically doing aerobics, jogging and weight-lifting, to cope with the choreography and the dance routines.
+  [S6] The stage had four video screens, multimedia projectors and a flight of stairs in the middle.
+  [S7] Patrick Leonard, who was the music director, encouraged Madonna to go with the idea of remixing and presenting her older songs for the show.
+  [S8] The title Who's That Girl came to Madonna's mind when during rehearsals one-day when she looked at a gigantic image of herself, projected on a screen on the stage.
+  [S12] According to Pollstar, it was the second highest-grossing female concert tour of 1987, behind Tina Turner's Break Every Rule Tour.
+  [S13] Who's That Girl was broadcast in a number of international television channels and was released in VHS titled "".
+  [S14] Biographer J. Randy Taraborrelli commented that "Many female artists behave like a diva for a period when they reach superstar status, and the 'Who's That Girl?'
+
+
+--- Item 14 (id=130) ---
+Question: What happened to the economic center of the area by the end of the era?
+Gold trigger: "replaced"
+Path: establish -> transition -> formed -> replaced
+Solver answer: By the end of the era,,, central Minnesota became the economic center of the area.
+solver_correct=0.0 target_hit=0.0
+#sentences: 8
+Last sentence (idx=15):
+  At the time the U.S. took possession of the region, Native Americans were by far the largest ethnic groups.
+All sentences:
+  [S0] The territorial era of Minnesota lasted from the Louisiana Purchase in 1803 to Minnesota's achieving statehood in 1858.
+  [S1] The Minnesota Territory itself was formed only in 1849 but the area had a rich history well before this.
+  [S2] Though there was a long history of European presence in the area before 19th century, it was during the 19th century that the United States began to establish a firm presence in what would become Minn
+  [S3] Many of the facets of Minnesota culture that are perceived as the area's "early" history in fact originated after this period.
+  [S12] Saw mills, and later grain mills, around Fort Snelling and Saint Anthony Falls in east-central Minnesota became magnets for development.
+  [S13] By the end of the era east-central Minnesota had replaced northern Minnesota as the economic center of the area.
+  [S14] This era was also as a period of cultural transition.
+  [S15] At the time the U.S. took possession of the region, Native Americans were by far the largest ethnic groups.
+
+
+--- Item 15 (id=193) ---
+Question: What the overall impact outcome of Tropical Cyclone In on Queensland, February 2 2  2?
+Gold trigger: "provide"
+Path: prompting -> evacuations -> persisted -> provide
+Solver answer: 3 deaths, $130M damage.
+solver_correct=0.0 target_hit=0.0
+#sentences: 7
+Last sentence (idx=14):
+  Hundreds of State Emergency Service (SES) volunteers were deployed to restore electrical and water services, evacuate local citizens, provide food, and repair and protect structures.
+All sentences:
+  [S4] By the time it came ashore near Silkwood, Queensland at 0445 UTC on 1 February, it was producing Category 3-force winds on the Australian tropical cyclone intensity scale and a minimum atmospheric pre
+  [S5] Weakening as it drifted inland, Winifred persisted as a tropical depression for another five days after landfall before finally dissipating on 5 February.
+  [S6] In advance of Winifred's approach, the Australian Bureau of Meteorology (BoM) issued cyclone watches and warnings for various locations along the Queensland coast, prompting evacuations in several tow
+  [S7] Damage after landfall was widespread and severe, with thousands of homes damaged, flooding as a result of heavy rainfall along major rivers, and severe damage to crops.
+  [S12] Overall, Winifred caused three deaths and inflicted $130 million (1986 AUD; $154 million USD) in damage.
+  [S13] In the aftermath of the cyclone, the Australian government distributed financial and emergency aid, offering to provide assistance to hard-hit banana and sugar cane farmers in northern Queensland.
+  [S14] Hundreds of State Emergency Service (SES) volunteers were deployed to restore electrical and water services, evacuate local citizens, provide food, and repair and protect structures.
+
+
+--- Item 16 (id=89) ---
+Question: What happened to the younger daughter after the attack?
+Gold trigger: "discovered"
+Path: held -> deaths -> survived -> discovered
+Solver answer: The the younger daughter was hidden under under her mother's's's legs in the footwell for eight hours. and was only discovered by forensic investigators...
+solver_correct=1.0 target_hit=1.0
+#sentences: 5
+Last sentence (idx=4):
+  The elder daughter, aged seven, was shot in the shoulder and also suffered a head wound; she returned to the United Kingdom on 14 September 2012.
+All sentences:
+  [S0] The Annecy shootings, also the French Alps shootings or the Chevaline killings, were the deaths on 5 September 2012 of three members of a British family and a French citizen on the "Route Forestière D
+  [S1] Four people were killed: an Iraqi-born British tourist named Saad al-Hilli, 50; his wife Iqbal, 47; her mother Suhaila al-Allaf, 74, who held a Swedish passport; and French cyclist Sylvain Mollier, 45
+  [S2] The al-Hillis' two daughters both survived the attack.
+  [S3] One, aged four, was hidden under the legs of her dead mother in the rear footwell for eight hours even while the gendarmerie were on the scene; she was only discovered by specialist forensic investiga
+  [S4] The elder daughter, aged seven, was shot in the shoulder and also suffered a head wound; she returned to the United Kingdom on 14 September 2012.
+
+
+--- Item 17 (id=219) ---
+Question: What happened after the raid shocked New England colonists?
+Gold trigger: "increased"
+Path: entered -> retreat -> shocked -> increased
+Solver answer: Increased conflict, fortified settlements.
+solver_correct=1.0 target_hit=1.0
+#sentences: 8
+Last sentence (idx=13):
+  Frontier settlements took actions to fortify their towns and prepare for war.
+All sentences:
+  [S6] Typical of the small-scale frontier conflict in Queen Anne's War, the French-led raid relied on a coalition of French soldiers and a variety of about 300 Indian warriors, mostly Abenaki but including 
+  [S7] Given the diversity of personnel, motivations, and material objectives, the raiders did not achieve full surprise when they entered the palisaded village.
+  [S8] The defenders of some fortified houses in the village successfully held off the raiders until arriving reinforcements prompted their retreat.
+  [S9] However, the raid was a clear victory for the French coalition that aimed to take captives and unsettle English colonial frontier society.
+  [S10] More than 100 captives were taken, and about 40 percent of the village houses were destroyed.
+  [S11] Although predicted because of existing tensions during the war, the raid shocked New England colonists.
+  [S12] Conflict increased with the French and their Native American allies.
+  [S13] Frontier settlements took actions to fortify their towns and prepare for war.
+
+
+--- Item 18 (id=42) ---
+Question: What did Xie Jinyuan instruct girl guide Yang Huimin to do regarding the number of defenders at Sihang Warehouse?
+Gold trigger: "announce"
+Path: marked -> War -> Battle -> announce
+Solver answer: Announce exaggerated number.
+solver_correct=1.0 target_hit=1.0
+#sentences: 4
+Last sentence (idx=7):
+  In Chinese, the 423 defenders are known as the Eight Hundred Heroes, because commander Xie Jinyuan not wanting to reveal their true strength to the Japanese, provided an exaggerated number to girl guide Yang Huimin to announce to the public.
+All sentences:
+  [S0] The defense of Sihang Warehouse took place from October 26 to November 1, 1937, and marked the beginning of the end of the three-month Battle of Shanghai in the opening phase of the Second Sino-Japane
+  [S1] Defenders of the warehouse held out against numerous waves of Japanese forces and covered Chinese forces retreating west during the Battle of Shanghai.
+  [S6] This proximity drew the attention, if only briefly, of the international community to Chiang Kai-shek's bid for worldwide support against Japanese aggression.
+  [S7] In Chinese, the 423 defenders are known as the Eight Hundred Heroes, because commander Xie Jinyuan not wanting to reveal their true strength to the Japanese, provided an exaggerated number to girl gui
+
+
+--- Item 19 (id=20) ---
+Question: What was the final outcome for his brother and the other man after the attacks?
+Gold trigger: "convicted"
+Path: opened -> killing -> killed -> convicted
+Solver answer: Convicted of conspiracy.
+solver_correct=1.0 target_hit=1.0
+#sentences: 6
+Last sentence (idx=12):
+  His brother and another man were later convicted of taking part in a "terrorist conspiracy" over the attacks.
+All sentences:
+  [S4] On 15 March, he killed two off-duty uniformed French soldiers and seriously wounded another in Montauban.
+  [S5] On 19 March, he opened fire at the Ozar Hatorah Jewish day school in Toulouse, killing a rabbi and three children, also wounding four others.
+  [S6] Merah filmed his attacks with a body-worn camera.
+  [S10] He claimed allegiance to Al-Qaeda and said he carried out his attacks because of France's participation in the War in Afghanistan and its ban on Islamic face veils, and justified his attack on the Jew
+  [S11] He was killed on 22 March by a police tactical unit after a 30-hour siege at his rented apartment there, during which he wounded six agents.
+  [S12] His brother and another man were later convicted of taking part in a "terrorist conspiracy" over the attacks.
+
+
+--- Item 20 (id=211) ---
+Question: What was the purpose of the 'Grable' shot during Operation Upshot–Knothole?
+Gold trigger: "testing out"
+Path: conducted -> operation -> fired -> testing out
+Solver answer: Test AFAP artillery shell.
+solver_correct=0.0 target_hit=0.4
+#sentences: 6
+Last sentence (idx=5):
+  One primary device (RACER) was tested in thermonuclear system mockup assemblies of TX-14, TX-16, and TX-17/TX-24, to examine and evaluate the behaviour of radiation cases and the compression of the secondary geometries by the primary's x-rays prior to full-scale testing during Castle.
+All sentences:
+  [S0] Operation Upshot–Knothole was a series of eleven nuclear test shots conducted in 1953 at the Nevada Test Site.
+  [S1] It followed "Operation Ivy" and preceded "Operation Castle".
+  [S2] Over 21,000 soldiers took part in the ground exercise Desert Rock V in conjunction with the "Grable" shot.
+  [S3] "Grable" was a 280mm AFAP shell fired from the "Atomic Cannon" and was viewed by a number of high-ranking military officials.
+  [S4] The test series was notable as containing the first time an Artillery Fired Atomic Projectile AFAP artillery shell was fired ("GRABLE" Shot), the first two shots (both fizzles) by University of Califo
+  [S5] One primary device (RACER) was tested in thermonuclear system mockup assemblies of TX-14, TX-16, and TX-17/TX-24, to examine and evaluate the behaviour of radiation cases and the compression of the se
+

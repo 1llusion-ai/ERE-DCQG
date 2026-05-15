@@ -364,6 +364,8 @@ class NarrativeGraphExtractor:
 
         req_ids = candidate.get("required_evidence_sentences", [])
         bridge_ids = candidate.get("bridge_sentence_ids", [])
+        section = candidate.get("story_section", "")
+        sentences = _split_sentences(section)
 
         prompt = _build_graph_prompt(candidate, difficulty=difficulty)
 
@@ -423,6 +425,49 @@ class NarrativeGraphExtractor:
                 elif role == "context":
                     n["evidence_role"] = "bridge"
 
+        # Post-process: force answer-role node from answer-grounded evidence plan
+        graph_role_repair_applied = False
+        graph_role_repair_reason = ""
+        answer_sid = candidate.get("answer_sentence_id")
+        if answer_sid is not None and isinstance(answer_sid, (int, float)):
+            answer_sid = int(answer_sid)
+            # Find node with this sentence_id
+            answer_nodes = [n for n in nodes if n.get("sentence_id") == answer_sid]
+            if answer_nodes:
+                for n in answer_nodes:
+                    current_role = n.get("evidence_role", "")
+                    # If not already answer or answer_bridge, override
+                    if current_role not in ("answer", "answer_bridge"):
+                        old_role = current_role
+                        if answer_sid in bridge_set:
+                            n["evidence_role"] = "answer_bridge"
+                        else:
+                            n["evidence_role"] = "answer"
+                        if not graph_role_repair_applied:
+                            graph_role_repair_applied = True
+                            graph_role_repair_reason = (
+                                f"overrode role={old_role} to "
+                                f"{n['evidence_role']} for node with sentence_id={answer_sid}"
+                            )
+            else:
+                # No node exists for answer_sentence_id — create a minimal one
+                if answer_sid < len(sentences):
+                    role = "answer_bridge" if answer_sid in bridge_set else "answer"
+                    minimal_node = {
+                        "id": f"N{len(nodes) + 1}",
+                        "type": "description",
+                        "sentence_id": answer_sid,
+                        "text": sentences[answer_sid],
+                        "participants": [],
+                        "evidence_role": role,
+                        "confidence": "high",
+                    }
+                    nodes.append(minimal_node)
+                    graph_role_repair_applied = True
+                    graph_role_repair_reason = (
+                        f"created minimal {role} node for sentence_id={answer_sid}"
+                    )
+
         # Validate with difficulty-aware rules
         graph_valid, validation_reason, diagnostics = _validate_graph(
             nodes, edges, req_ids, bridge_ids, difficulty=difficulty
@@ -439,6 +484,9 @@ class NarrativeGraphExtractor:
             "necessity_type": candidate.get("necessity_type", ""),
             "required_evidence_sentences": req_ids,
             "bridge_sentence_ids": bridge_ids,
+            "answer_sentence_id": answer_sid,
+            "graph_role_repair_applied": graph_role_repair_applied,
+            "graph_role_repair_reason": graph_role_repair_reason,
             "nodes": nodes,
             "edges": edges,
             "graph_valid": graph_valid,

@@ -279,42 +279,33 @@ def _validate_assessment(a, num_sentences):
 def classify_difficulty(assessment):
     """Classify Easy/Medium/Hard from the evidence assessment.
 
-    Hard requires ALL of:
-      - answer_sentence_alone_sufficient == "no"
-      - num_required_sentences >= 3
-      - bridge_removal_effect in {ambiguous, unanswerable}
-      - necessity_type in {answer_identification, disambiguation,
-                           causal_bridge, temporal_bridge,
-                           motivation_bridge, summary_synthesis}
+    Definitions (aligned with FINAL_PROPOSAL.md):
+      Easy:   answer_sentence_alone_sufficient=yes AND num_required_sentences=1
+      Medium: num_required_sentences=2
+      Hard:   num_required_sentences>=3
     """
     suff = assessment.get("answer_sentence_alone_sufficient", "yes")
     num_req = assessment.get("num_required_sentences", 1)
-    removal = assessment.get("bridge_removal_effect", "none")
-    nec_type = assessment.get("necessity_type", "background_context")
 
-    # Easy
-    if suff == "yes" or num_req <= 1:
+    # Easy: exactly 1 required sentence AND that sentence alone suffices
+    if suff == "yes" and num_req == 1:
         return "Easy"
 
-    # Hard: all conditions
-    if (suff == "no"
-            and num_req >= 3
-            and removal in ("ambiguous", "unanswerable")
-            and nec_type in ("answer_identification", "disambiguation",
-                             "causal_bridge", "temporal_bridge",
-                             "motivation_bridge", "summary_synthesis")):
+    # Hard: 3 or more required sentences
+    if num_req >= 3:
         return "Hard"
 
-    # Medium: everything else
+    # Medium: exactly 2 required sentences (or num_req=1 but ASA=no)
     return "Medium"
 
 
 class FairytaleEvidenceAuditor:
     """Audit evidence difficulty for FairytaleQA QA pairs."""
 
-    def __init__(self, batch_size=10, model=None, max_retries=2):
+    def __init__(self, batch_size=10, model=None, max_retries=2, timeout=120):
         self.batch_size = batch_size
         self.max_retries = max_retries
+        self.timeout = timeout
 
         cfg = get_api_config()
         self.api_url = cfg["SILICONFLOW_API_URL"]
@@ -407,10 +398,10 @@ class FairytaleEvidenceAuditor:
                     api_key=self.api_key,
                     model=self.model,
                     temperature=0.0,
-                    max_tokens=3000,
+                    max_tokens=4000,
                     json_mode=True,
                     system="You are a precise evidence analyst for narrative QA. Return only valid JSON.",
-                    timeout=120,
+                    timeout=self.timeout,
                 )
                 assessments = _parse_assessments(resp, len(qa_records))
                 if assessments:

@@ -1,0 +1,226 @@
+{
+  "n_total": 90,
+  "n_passed": 15,
+  "overall_pass_rate": 0.1667,
+  "per_level": {
+    "Easy": {
+      "total": 30,
+      "passed": 9,
+      "pass_rate": 0.3
+    },
+    "Medium": {
+      "total": 30,
+      "passed": 5,
+      "pass_rate": 0.16666666666666666
+    },
+    "Hard": {
+      "total": 30,
+      "passed": 1,
+      "pass_rate": 0.03333333333333333
+    }
+  },
+  "generation_error_count": 30,
+  "generation_error_rate": 0.3333,
+  "judge_error_count": 14,
+  "judge_error_rate": 0.2456,
+  "grammar_failures": {
+    "empty": 30,
+    "base": 3
+  },
+  "grammar_fail_examples": [
+    {
+      "question": "",
+      "difficulty": "Medium",
+      "reason": "empty"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "reason": "empty"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "reason": "empty"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "reason": "empty"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "reason": "empty"
+    }
+  ],
+  "weak_trigger_distribution": {
+    "hard_blacklist": 4,
+    "none": 86
+  },
+  "weak_trigger_fail_examples": [
+    {
+      "question": "What happened to the design of the Tay Rail Bridge that made it more susceptible to collapse during the storm in 1879?",
+      "trigger": "occurred",
+      "type": "hard_blacklist",
+      "reason": "hard_blacklisted trigger: 'occurred'"
+    },
+    {
+      "question": "What did Namibia and Montserrat do after gaining independence from South Africa in 1990?",
+      "trigger": "made",
+      "type": "hard_blacklist",
+      "reason": "hard_blacklisted trigger: 'made'"
+    },
+    {
+      "question": "What event characterized the first half of the 19th century in the area that would become Minnesota, according to the context provided?",
+      "trigger": "occurred",
+      "type": "hard_blacklist",
+      "reason": "hard_blacklisted trigger: 'occurred'"
+    },
+    {
+      "question": "After the band served to visit North America and two new members joined, what did the film contain?",
+      "trigger": "made",
+      "type": "hard_blacklist",
+      "reason": "hard_blacklisted trigger: 'made'"
+    }
+  ],
+  "answer_phrase_pass_rate": 0.5444,
+  "answer_consistency_distribution": {
+    "yes": 17,
+    "partial": 8,
+    "no": 51,
+    "judge_error": 14
+  },
+  "answer_consistency_yes_rate": 0.2237,
+  "answer_consistency_yes_partial_rate": 0.3289,
+  "answer_consistency_fail_examples": [
+    {
+      "question": "What happened to the design of the Tay Rail Bridge that made it more susceptible to collapse during the storm in 1879?",
+      "difficulty": "Medium",
+      "gold_phrase": "The Tay Bridge Disaster occurred during a violent storm on Sunday 28 December 1879",
+      "expected": "",
+      "reason": "The question asks about the design flaws that made the Tay Rail Bridge more susceptible to collapse, but the gold answer focuses on the occurrence of the disaster without addressing the design issues."
+    },
+    {
+      "question": "",
+      "difficulty": "Medium",
+      "gold_phrase": "lifted",
+      "expected": "",
+      "reason": "skipped (early exit)"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "gold_phrase": "restrain",
+      "expected": "",
+      "reason": "skipped (early exit)"
+    },
+    {
+      "question": "Why did the demand for furs in Europe decline during the early 19th century?",
+      "difficulty": "Easy",
+      "gold_phrase": "demand for furs in Europe diminished",
+      "expected": "",
+      "reason": "The question asks about the reason for the decline in demand for furs in Europe, while the gold phrase only states that the demand diminished without providing a reason."
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "gold_phrase": "replacing",
+      "expected": "",
+      "reason": "skipped (early exit)"
+    }
+  ],
+  "path_coverage_by_level": {
+    "Easy": {
+      "avg_coverage": 0.63,
+      "pass_count": 14,
+      "pass_rate": 0.4666666666666667
+    },
+    "Medium": {
+      "avg_coverage": 0.8,
+      "pass_count": 9,
+      "pass_rate": 0.3
+    },
+    "Hard": {
+      "avg_coverage": 1.2,
+      "pass_count": 3,
+      "pass_rate": 0.1
+    }
+  },
+  "path_coverage_fail_examples": [
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "coverage": 0,
+      "reason": "skipped (early exit)"
+    },
+    {
+      "question": "Why did the demand for furs in Europe decline during the early 19th century?",
+      "difficulty": "Easy",
+      "coverage": 0,
+      "reason": "covers 0/2 events, need >= 1 [FAIL]"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "coverage": 0,
+      "reason": "skipped (early exit)"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "coverage": 0,
+      "reason": "skipped (early exit)"
+    },
+    {
+      "question": "",
+      "difficulty": "Easy",
+      "coverage": 0,
+      "reason": "skipped (early exit)"
+    }
+  ],
+  "hard_degraded_count": 11,
+  "hard_degraded_ratio": 0.3667,
+  "hard_degraded_examples": [
+    {
+      "question": "After the defenders held out during the Battle of Shanghai and the successful defense marked a morale boost for the Chinese army, how did the Chinese authorities respond to inform the public about the heroic efforts of the 423 defenders?",
+      "reason": "can_answer_from_single_sentence=yes (sent=S7)",
+      "single_sentence": "yes",
+      "need_intermediate": "no"
+    },
+    {
+      "question": "After the Irgun members were disguised and planted the bomb, what action did the hotel staff take in response to the increasing alarm?",
+      "reason": "can_answer_from_single_sentence=yes (sent=None)",
+      "single_sentence": "yes",
+      "need_intermediate": "no"
+    },
+    {
+      "question": "After the government claimed to have foiled an alleged coup and revoked licenses for demonstrations, what did President Arroyo do regarding the state of emergency?",
+      "reason": "can_answer_from_single_sentence=yes (sent=S4)",
+      "single_sentence": "yes",
+      "need_intermediate": "no"
+    },
+    {
+      "question": "What was the Russian commander's initial intention when he ordered a loose formation and tried to negotiate an agreement with Rogaliński?",
+      "reason": "can_answer_from_single_sentence=yes (sent=S4)",
+      "single_sentence": "yes",
+      "need_intermediate": "no"
+    },
+    {
+      "question": "After Mohammed Merah wounded six agents during the siege and was killed by the police, what was the outcome for his brother and an accomplice?",
+      "reason": "can_answer_from_single_sentence=yes (sent=S11)",
+      "single_sentence": "yes",
+      "need_intermediate": "no"
+    }
+  ],
+  "success_criteria": {
+    "overall_pass_rate_50pct": false,
+    "answer_consistency_yes_partial_80pct": false,
+    "answer_consistency_yes_60pct": false,
+    "medium_path_coverage_70pct": false,
+    "hard_path_coverage_80pct": false,
+    "hard_degraded_20pct": false,
+    "grammar_fail_15pct": false
+  },
+  "recommendation": "NOT READY to scale. Failed criteria: overall_pass_rate_50pct, answer_consistency_yes_partial_80pct, answer_consistency_yes_60pct, medium_path_coverage_70pct, hard_path_coverage_80pct, hard_degraded_20pct, grammar_fail_15pct. Analyze failures and fix prompt/filter before scaling."
+}

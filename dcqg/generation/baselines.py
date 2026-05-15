@@ -62,9 +62,9 @@ def load_or_create_sample(results_file, output_path, n_per_level=100, seed=42):
 # ── Difficulty definitions and ICL examples ───────────────────
 
 DIFFICULTY_DEFINITIONS = {
-    "Easy": "Easy questions are straightforward, answerable from a single sentence in the context.",
-    "Medium": "Medium questions require connecting information from 2-3 sentences.",
-    "Hard": "Hard questions require synthesizing information across multiple sentences and reasoning chains.",
+    "Easy": "Easy: the question can be answered from exactly one sentence. That sentence alone is sufficient — no other sentence is needed.",
+    "Medium": "Medium: the question requires exactly two evidence sentences. Neither sentence alone is sufficient; both must be combined to answer.",
+    "Hard": "Hard: the question requires three or more evidence sentences. The reader must synthesize information across multiple sentences to determine the answer.",
 }
 
 ICL_EXAMPLES = {
@@ -81,16 +81,16 @@ Difficulty: Easy
 Output: {"question": "What happened to employees after the company announced layoffs?", "answer": "lost", "reasoning_type": "direct"}""",
 
     "Medium": """Example 1:
-Context: [S0] The CEO resigned last Monday. [S1] The board held an emergency meeting. [S2] A new leader was appointed.
-Target answer: "appointed"
+Context: [S0] The CEO resigned last Monday. [S1] The board held an emergency meeting to find a replacement.
+Target answer: "to find a replacement"
 Difficulty: Medium
-Output: {"question": "What was the outcome of the emergency meeting after the CEO resigned?", "answer": "appointed", "reasoning_type": "chain"}
+Output: {"question": "Why did the board hold an emergency meeting after the CEO resigned?", "answer": "to find a replacement", "reasoning_type": "chain"}
 
 Example 2:
-Context: [S0] Heavy rains hit the region. [S1] Rivers overflowed their banks. [S2] Thousands were evacuated.
-Target answer: "evacuated"
+Context: [S0] Heavy rains hit the region. [S1] Rivers overflowed their banks, flooding nearby villages.
+Target answer: "flooding nearby villages"
 Difficulty: Medium
-Output: {"question": "What happened to residents after the rivers overflowed following heavy rains?", "answer": "evacuated", "reasoning_type": "chain"}""",
+Output: {"question": "What was the consequence of the rivers overflowing after heavy rains?", "answer": "flooding nearby villages", "reasoning_type": "chain"}""",
 
     "Hard": """Example 1:
 Context: [S0] The government announced austerity measures. [S1] Citizens organized mass protests. [S2] Police deployed tear gas. [S3] Parliament repealed the legislation.
@@ -111,9 +111,9 @@ Difficulty: Easy
 Output: {"question": "What happened to the city after the attack?", "reasoning_type": "direct"}
 
 Example 2 (Medium):
-Context: [S0] The CEO resigned last Monday. [S1] The board appointed a new leader. [S2] The new CEO implemented reforms.
+Context: [S0] The CEO resigned last Monday. [S1] The board held an emergency meeting to find a replacement.
 Difficulty: Medium
-Output: {"question": "What did the new CEO do after being appointed?", "reasoning_type": "chain"}
+Output: {"question": "Why did the board hold an emergency meeting after the CEO resigned?", "reasoning_type": "chain"}
 
 Example 3 (Hard):
 Context: [S0] The government announced budget cuts. [S1] Citizens protested the decision. [S2] Officials canceled the policy. [S3] The announcement had been controversial.

@@ -1,0 +1,483 @@
+{
+  "n_total": 363,
+  "n_passed": 292,
+  "pass_rate": 0.8044,
+  "per_level": {
+    "Easy": {
+      "total": 125,
+      "passed": 91,
+      "pass_rate": 0.728
+    },
+    "Medium": {
+      "total": 122,
+      "passed": 102,
+      "pass_rate": 0.8361
+    },
+    "Hard": {
+      "total": 116,
+      "passed": 99,
+      "pass_rate": 0.8534
+    }
+  },
+  "weak_trigger_distribution": {
+    "none": 323,
+    "needs_phrase": 31,
+    "hard_blacklist": 9
+  },
+  "weak_trigger_fail_examples": {
+    "needs_phrase": [
+      {
+        "trigger": "control",
+        "difficulty": "Easy",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "weak trigger but valid phrase: 'In line with the agreement with Johor in 1606, the Dutch took control of Malacca'"
+      },
+      {
+        "trigger": "control",
+        "difficulty": "Medium",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "weak trigger but valid phrase: 'In line with the agreement with Johor in 1606, the Dutch took control of Malacca'"
+      },
+      {
+        "trigger": "control",
+        "difficulty": "Hard",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "weak trigger but valid phrase: 'In line with the agreement with Johor in 1606, the Dutch took control of Malacca'"
+      },
+      {
+        "trigger": "control",
+        "difficulty": "Hard",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "weak trigger but valid phrase: 'In line with the agreement with Johor in 1606, the Dutch took control of Malacca'"
+      },
+      {
+        "trigger": "operate",
+        "difficulty": "Medium",
+        "doc_id": "9fcf7e509cc4e59026333ba469e22ec3",
+        "reason": "weak trigger but valid phrase: 'could operate in environments other than a major force on force engagement on the plains of Central Europe'"
+      }
+    ],
+    "hard_blacklist": [
+      {
+        "trigger": "occurred",
+        "difficulty": "Easy",
+        "doc_id": "f46091471f38006751fcdcda15d5775b",
+        "reason": "hard_blacklisted trigger: 'occurred'"
+      },
+      {
+        "trigger": "occurred",
+        "difficulty": "Hard",
+        "doc_id": "28a13a10cb57f8245b1f98270bad9860",
+        "reason": "hard_blacklisted trigger: 'occurred'"
+      },
+      {
+        "trigger": "took place",
+        "difficulty": "Easy",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_blacklisted trigger: 'took place'"
+      },
+      {
+        "trigger": "took place",
+        "difficulty": "Medium",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_blacklisted trigger: 'took place'"
+      },
+      {
+        "trigger": "took place",
+        "difficulty": "Hard",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_blacklisted trigger: 'took place'"
+      }
+    ]
+  },
+  "answer_phrase_pass_rate": 0.8512,
+  "answer_phrase_fail_examples": [
+    {
+      "trigger": "given",
+      "difficulty": "Easy",
+      "doc_id": "c0c67db40cd5e2e03645ff1116fafcfc",
+      "phrase": "given",
+      "reason": "phrase equals trigger"
+    },
+    {
+      "trigger": "given",
+      "difficulty": "Easy",
+      "doc_id": "c0c67db40cd5e2e03645ff1116fafcfc",
+      "phrase": "given",
+      "reason": "phrase equals trigger"
+    },
+    {
+      "trigger": "given",
+      "difficulty": "Medium",
+      "doc_id": "c0c67db40cd5e2e03645ff1116fafcfc",
+      "phrase": "given",
+      "reason": "phrase equals trigger"
+    },
+    {
+      "trigger": "ended",
+      "difficulty": "Easy",
+      "doc_id": "f28bce270df5a122c09365002d247e76",
+      "phrase": "Finally in 1933 President Franklin D Roosevelt, invoking his new Good Neighbor policy ended American intervention",
+      "reason": "partial extraction (no clause boundary found)"
+    },
+    {
+      "trigger": "designed",
+      "difficulty": "Easy",
+      "doc_id": "f28bce270df5a122c09365002d247e76",
+      "phrase": "American military interventions in Nicaragua were designed to stop any other nation except the United States of America from building a Nicaraguan Canal",
+      "reason": "partial extraction (no clause boundary found)"
+    }
+  ],
+  "relation_group_by_level": {
+    "Easy": {
+      "TEMPORAL": 102,
+      "CAUSE": 23
+    },
+    "Medium": {
+      "TEMPORAL": 91,
+      "CAUSE": 30,
+      "SUBEVENT": 1
+    },
+    "Hard": {
+      "TEMPORAL": 59,
+      "CAUSE": 54,
+      "SUBEVENT": 3
+    }
+  },
+  "temporal_only_hard_count": 59,
+  "temporal_only_hard_ratio": 0.5086,
+  "single_sentence_risk_distribution": {
+    "low": 320,
+    "high": 21,
+    "medium": 22
+  },
+  "single_sentence_risk_by_level": {
+    "Easy": {
+      "low": 92,
+      "high": 20,
+      "medium": 13
+    },
+    "Medium": {
+      "low": 116,
+      "medium": 6
+    },
+    "Hard": {
+      "low": 112,
+      "high": 1,
+      "medium": 3
+    }
+  },
+  "fail_reason_distribution": {
+    "answer_phrase_fail: phrase equals trigger": 3,
+    "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)": 7,
+    "answer_phrase_fail: partial extraction (no clause boundary found)": 31,
+    "hard_weak_trigger='took'": 3,
+    "hard_weak_trigger='began'": 1,
+    "hard_weak_trigger='occurred'": 2,
+    "hard_weak_trigger='become'": 1,
+    "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='Battle' with no valid phrase": 1,
+    "hard_weak_trigger='ended'": 1,
+    "hard_weak_trigger='took place'": 4,
+    "hard_weak_trigger='seen'": 2,
+    "answer_phrase_fail: partial extraction: phrase ends with dangling word 'in'": 1,
+    "hard_weak_trigger='called'; answer_phrase_fail: partial extraction: unclosed bracket or quote": 1,
+    "answer_phrase_fail: partial extraction: unclosed bracket or quote": 3,
+    "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over'": 5,
+    "hard_weak_trigger='made'": 3,
+    "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='held' with no valid phrase": 2
+  },
+  "fail_examples": {
+    "answer_phrase_fail: phrase equals trigger": [
+      {
+        "trigger": "given",
+        "difficulty": "Easy",
+        "doc_id": "c0c67db40cd5e2e03645ff1116fafcfc",
+        "reason": "answer_phrase_fail: phrase equals trigger"
+      },
+      {
+        "trigger": "given",
+        "difficulty": "Easy",
+        "doc_id": "c0c67db40cd5e2e03645ff1116fafcfc",
+        "reason": "answer_phrase_fail: phrase equals trigger"
+      },
+      {
+        "trigger": "given",
+        "difficulty": "Medium",
+        "doc_id": "c0c67db40cd5e2e03645ff1116fafcfc",
+        "reason": "answer_phrase_fail: phrase equals trigger"
+      }
+    ],
+    "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)": [
+      {
+        "trigger": "ended",
+        "difficulty": "Easy",
+        "doc_id": "f28bce270df5a122c09365002d247e76",
+        "reason": "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "ended",
+        "difficulty": "Easy",
+        "doc_id": "f28bce270df5a122c09365002d247e76",
+        "reason": "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "ended",
+        "difficulty": "Easy",
+        "doc_id": "f28bce270df5a122c09365002d247e76",
+        "reason": "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "ended",
+        "difficulty": "Medium",
+        "doc_id": "f28bce270df5a122c09365002d247e76",
+        "reason": "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "ended",
+        "difficulty": "Medium",
+        "doc_id": "f28bce270df5a122c09365002d247e76",
+        "reason": "hard_weak_trigger='ended'; answer_phrase_fail: partial extraction (no clause boundary found)"
+      }
+    ],
+    "answer_phrase_fail: partial extraction (no clause boundary found)": [
+      {
+        "trigger": "designed",
+        "difficulty": "Easy",
+        "doc_id": "f28bce270df5a122c09365002d247e76",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "combined",
+        "difficulty": "Easy",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "destroyed",
+        "difficulty": "Easy",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "removing",
+        "difficulty": "Easy",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found)"
+      },
+      {
+        "trigger": "destroyed",
+        "difficulty": "Medium",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found)"
+      }
+    ],
+    "hard_weak_trigger='took'": [
+      {
+        "trigger": "took",
+        "difficulty": "Medium",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "hard_weak_trigger='took'"
+      },
+      {
+        "trigger": "took",
+        "difficulty": "Hard",
+        "doc_id": "3dcfd60153822a6a8f6a516f161fc506",
+        "reason": "hard_weak_trigger='took' [risk: temporal_only_hard]"
+      },
+      {
+        "trigger": "took",
+        "difficulty": "Easy",
+        "doc_id": "04a82d4eac379a98efcd87ebdba0b0ce",
+        "reason": "hard_weak_trigger='took'"
+      }
+    ],
+    "hard_weak_trigger='began'": [
+      {
+        "trigger": "began",
+        "difficulty": "Easy",
+        "doc_id": "9fcf7e509cc4e59026333ba469e22ec3",
+        "reason": "hard_weak_trigger='began'"
+      }
+    ],
+    "hard_weak_trigger='occurred'": [
+      {
+        "trigger": "occurred",
+        "difficulty": "Easy",
+        "doc_id": "f46091471f38006751fcdcda15d5775b",
+        "reason": "hard_weak_trigger='occurred'"
+      },
+      {
+        "trigger": "occurred",
+        "difficulty": "Hard",
+        "doc_id": "28a13a10cb57f8245b1f98270bad9860",
+        "reason": "hard_weak_trigger='occurred'"
+      }
+    ],
+    "hard_weak_trigger='become'": [
+      {
+        "trigger": "become",
+        "difficulty": "Easy",
+        "doc_id": "28a13a10cb57f8245b1f98270bad9860",
+        "reason": "hard_weak_trigger='become'"
+      }
+    ],
+    "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='Battle' with no valid phrase": [
+      {
+        "trigger": "Battle",
+        "difficulty": "Easy",
+        "doc_id": "db50381e7d1dd4a41fb4ac60eaebe3a4",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='Battle' with no valid phrase"
+      }
+    ],
+    "hard_weak_trigger='ended'": [
+      {
+        "trigger": "ended",
+        "difficulty": "Easy",
+        "doc_id": "db50381e7d1dd4a41fb4ac60eaebe3a4",
+        "reason": "hard_weak_trigger='ended'"
+      }
+    ],
+    "hard_weak_trigger='took place'": [
+      {
+        "trigger": "took place",
+        "difficulty": "Easy",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_weak_trigger='took place'"
+      },
+      {
+        "trigger": "took place",
+        "difficulty": "Medium",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_weak_trigger='took place'"
+      },
+      {
+        "trigger": "took place",
+        "difficulty": "Hard",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_weak_trigger='took place'"
+      },
+      {
+        "trigger": "took place",
+        "difficulty": "Hard",
+        "doc_id": "275eb0bc9caacb30e4f58d85469458d1",
+        "reason": "hard_weak_trigger='took place'"
+      }
+    ],
+    "hard_weak_trigger='seen'": [
+      {
+        "trigger": "seen",
+        "difficulty": "Easy",
+        "doc_id": "04a82d4eac379a98efcd87ebdba0b0ce",
+        "reason": "hard_weak_trigger='seen'"
+      },
+      {
+        "trigger": "seen",
+        "difficulty": "Medium",
+        "doc_id": "04a82d4eac379a98efcd87ebdba0b0ce",
+        "reason": "hard_weak_trigger='seen'"
+      }
+    ],
+    "answer_phrase_fail: partial extraction: phrase ends with dangling word 'in'": [
+      {
+        "trigger": "approached",
+        "difficulty": "Medium",
+        "doc_id": "a24058769038462f489b0091ebb24597",
+        "reason": "answer_phrase_fail: partial extraction: phrase ends with dangling word 'in'"
+      }
+    ],
+    "hard_weak_trigger='called'; answer_phrase_fail: partial extraction: unclosed bracket or quote": [
+      {
+        "trigger": "called",
+        "difficulty": "Easy",
+        "doc_id": "dd2a791aa826766cf0d05dc8102f5c8e",
+        "reason": "hard_weak_trigger='called'; answer_phrase_fail: partial extraction: unclosed bracket or quote"
+      }
+    ],
+    "answer_phrase_fail: partial extraction: unclosed bracket or quote": [
+      {
+        "trigger": "brought",
+        "difficulty": "Easy",
+        "doc_id": "dd2a791aa826766cf0d05dc8102f5c8e",
+        "reason": "answer_phrase_fail: partial extraction: unclosed bracket or quote"
+      },
+      {
+        "trigger": "brought",
+        "difficulty": "Easy",
+        "doc_id": "dd2a791aa826766cf0d05dc8102f5c8e",
+        "reason": "answer_phrase_fail: partial extraction: unclosed bracket or quote"
+      },
+      {
+        "trigger": "orders",
+        "difficulty": "Hard",
+        "doc_id": "dd2a791aa826766cf0d05dc8102f5c8e",
+        "reason": "answer_phrase_fail: partial extraction: unclosed bracket or quote [risk: temporal_only_hard]"
+      }
+    ],
+    "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over'": [
+      {
+        "trigger": "controversy",
+        "difficulty": "Easy",
+        "doc_id": "06f91ced00b41867979f3d5dc6996da2",
+        "reason": "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over'"
+      },
+      {
+        "trigger": "controversy",
+        "difficulty": "Medium",
+        "doc_id": "06f91ced00b41867979f3d5dc6996da2",
+        "reason": "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over'"
+      },
+      {
+        "trigger": "controversy",
+        "difficulty": "Medium",
+        "doc_id": "06f91ced00b41867979f3d5dc6996da2",
+        "reason": "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over'"
+      },
+      {
+        "trigger": "controversy",
+        "difficulty": "Hard",
+        "doc_id": "06f91ced00b41867979f3d5dc6996da2",
+        "reason": "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over'"
+      },
+      {
+        "trigger": "controversy",
+        "difficulty": "Hard",
+        "doc_id": "06f91ced00b41867979f3d5dc6996da2",
+        "reason": "answer_phrase_fail: partial extraction: phrase ends with dangling word 'over' [risk: temporal_only_hard]"
+      }
+    ],
+    "hard_weak_trigger='made'": [
+      {
+        "trigger": "made",
+        "difficulty": "Easy",
+        "doc_id": "741481a9c4e1312b87b317b785c84ed6",
+        "reason": "hard_weak_trigger='made'"
+      },
+      {
+        "trigger": "made",
+        "difficulty": "Hard",
+        "doc_id": "741481a9c4e1312b87b317b785c84ed6",
+        "reason": "hard_weak_trigger='made'"
+      },
+      {
+        "trigger": "made",
+        "difficulty": "Medium",
+        "doc_id": "61602917a654b1d482336063b88e93d4",
+        "reason": "hard_weak_trigger='made'"
+      }
+    ],
+    "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='held' with no valid phrase": [
+      {
+        "trigger": "held",
+        "difficulty": "Easy",
+        "doc_id": "741481a9c4e1312b87b317b785c84ed6",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='held' with no valid phrase"
+      },
+      {
+        "trigger": "held",
+        "difficulty": "Medium",
+        "doc_id": "741481a9c4e1312b87b317b785c84ed6",
+        "reason": "answer_phrase_fail: partial extraction (no clause boundary found); soft_weak_trigger='held' with no valid phrase"
+      }
+    ]
+  }
+}

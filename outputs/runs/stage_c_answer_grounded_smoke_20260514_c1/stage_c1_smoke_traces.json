@@ -1,0 +1,3058 @@
+[
+  {
+    "story_name": "Snow-man",
+    "target_answer": "a young girl and a young man .",
+    "target_difficulty": "Easy",
+    "original_question": "who came into the garden ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        0
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 0,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What the young girl and a young man .?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"question\": \"Who came \" , \" . \"",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"Who had come into the garden with a young man?\", \"answer\": \"a young girl and a young man .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Who had come into the garden with a young man?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"Who came \" , \"a young girl and a young man .”? \"",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What the young girl and a young man .?\", \" answer \" : \" \" , \" \" : \" \" , \" \" \n : \" \" }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What the young girl and a young man .?",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "a-legend-of-knockmany",
+    "target_answer": "he heard three whistles .",
+    "target_difficulty": "Easy",
+    "original_question": "how did far rua know he was invited to the top of cullamore ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        9
+      ],
+      "bridge_sentence_ids": [
+        8
+      ],
+      "anchor_sentence_ids": [
+        8
+      ],
+      "answer_sentence_id": 9,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Who heard three whistles ?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "question length out of range",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n\"question\": \"Who heard three whistles ?\",\n \" answer\": \"he rua .\"\n \n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Who heard three whistles ?",
+          "validate_reason": "question length out of range",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"Who heard three whistles ?\",\n \" answer\": \"he rua .\"\n \n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Who heard three whistles ?",
+          "validate_reason": "question length out of range",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"Who heard three whistles ?\",\n \" answer\": \"he rua .\"\n \n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Who heard three whistles ?",
+          "validate_reason": "question length out of range",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"Who heard three whistles ?\",\n \" answer\": \"he rua .\"\n \n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Who heard three whistles ?",
+          "validate_reason": "question length out of range",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "a-lost-paradise",
+    "target_answer": "they wanted plenty of food to eat .",
+    "target_difficulty": "Easy",
+    "original_question": "why did the couple want to find a job ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        14
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        13
+      ],
+      "answer_sentence_id": 14,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=14",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What Did the woman feel that they they",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n\n\"question\": \"What . did did they they . . did they they . . say did . . . ' they . . did . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\n\"question\": \"What . did did they they . . did they they . . say did . . . ' they . . did . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . . ' . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What Did the woman feel that they they\",\n  \" Answer Answer\": \"they wanted plenty of food to eat .\",\n  \" . Difficulty\":\": \" , \" . \" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n ",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What Did the woman feel that they they",
+          "validate_reason": "no question mark",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\n\"question\": \"What . did they did wanted plenty of food to eat . ?\"\n , \" . answer . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": true
+    }
+  },
+  {
+    "story_name": "bokwewa-the-humpback",
+    "target_answer": "sad .",
+    "target_difficulty": "Easy",
+    "original_question": "how will the wife feel about kwasynd abandoning his quest to find her ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        4
+      ],
+      "bridge_sentence_ids": [
+        3
+      ],
+      "anchor_sentence_ids": [
+        3
+      ],
+      "answer_sentence_id": 4,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "How only . grieving in his heart? ",
+      "attempts": 1,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"question\": \"How only . grieving in his heart? \", \" answer \"  : \"sad . \"  }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "How only . grieving in his heart? ",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "brave-tin-soldier",
+    "target_answer": "they ran out of melted tin .",
+    "target_difficulty": "Easy",
+    "original_question": "why did one of the tin soldiers only have one leg ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        5
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        4
+      ],
+      "answer_sentence_id": 5,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "",
+      "attempts": 4,
+      "parse_ok": false,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"QUESTION\": \"WhatWhat . . . . did the soldiers run . . . . ?\"\n  , \"answer\": \"they ran out of melted tin .\"\n  , \"reason INSTRUCTION\": \"easy . . . . pérdida . .\" ,\" . .\" \n \n \n \n \n \n \n \n \t\t\n \n \n \n \n \n",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"QUESTION\": \"WhatWhat . . . . did the soldiers run . . . . ?\"\n  , \"answer\": \"they ran out of melted tin .\"\n  , \"reason INSTRUCTION\": \"easy . . . . pérdida . .\" ,\" . .\" \n \n \n \n \n \n \n \n \n\t\t\n \n \n \n \n ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What Who . were they \" \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n     \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n \n\n ",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What What did they . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "brother-sister",
+    "target_answer": "their stepmother was mean to them .",
+    "target_difficulty": "Easy",
+    "original_question": "why did the two decide to leave ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        0
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 0,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": " What did the brother mother do to them? ",
+      "attempts": 1,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n\n \"question\": \" What did the brother mother do to them? \"\n \n \n \n \n\n \n \n\n  }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": " What did the brother mother do to them? ",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "canonbie-dick-and-thomas-of-ercildoune",
+    "target_answer": "the coins were not the gold that was used at the time .",
+    "target_difficulty": "Easy",
+    "original_question": "why wouldn't the stranger's coins be of use to the horse-dealer in his everyday transactions ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        7
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        6
+      ],
+      "answer_sentence_id": 7,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What kind of gold did the stranger give Canonbie Dick?",
+      "attempts": 2,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"QUESTION\": \"The The coins were were were . . the were did . .\" \n\n }",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What kind of gold did the stranger give Canonbie Dick?\", \"answer\": \"the coins were not the gold that was used at the time .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What kind of gold did the stranger give Canonbie Dick?",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "child-of-mary",
+    "target_answer": "annoyed .",
+    "target_difficulty": "Easy",
+    "original_question": "how did the foster-mother feel when the moon slipped out ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        4
+      ],
+      "bridge_sentence_ids": [
+        3
+      ],
+      "anchor_sentence_ids": [
+        3
+      ],
+      "answer_sentence_id": 4,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "How did the foster-mother feel when she saw the moon had slipped out?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "forbidden frame: how did, when (clause)",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"question\": \"Howoy . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"How did the foster-mother feel when she saw the moon had slipped out?\", \"answer\": \"annoyed .\", \"reasoning_type\": \"direct|chain|cross_sentence\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "How did the foster-mother feel when she saw the moon had slipped out?",
+          "validate_reason": "forbidden frame: how did, when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "how did",
+            "when (clause)"
+          ]
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"How did the foster-mother feel when she saw the moon had slipped out?\", \"answer\": \"annoyed .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "How did the foster-mother feel when she saw the moon had slipped out?",
+          "validate_reason": "forbidden frame: how did, when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "how did",
+            "when (clause)"
+          ]
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"How did the foster-mother feel when she saw the moon had slipped out?\", \"answer\": \"annoyed .\", \"reasoning_type\": \"direct|chain|cross_sentence\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "How did the foster-mother feel when she saw the moon had slipped out?",
+          "validate_reason": "forbidden frame: how did, when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "how did",
+            "when (clause)"
+          ]
+        }
+      ],
+      "easy_forbidden_violation": true,
+      "easy_forbidden_frames": [
+        "how did",
+        "when (clause)"
+      ],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "comrade",
+    "target_answer": "the youth would have company .",
+    "target_difficulty": "Easy",
+    "original_question": "why was the youth glad to have the man as a comrade ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        8
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        2,
+        5
+      ],
+      "answer_sentence_id": 8,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What would the youth have after agreeing to travel with the man?",
+      "attempts": 4,
+      "parse_ok": false,
+      "generation_error": "parse failure",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"What did the youth have as a result of the circumstances?\", \"answer\": \"the youth would have company .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the youth have as a result of the circumstances?",
+          "validate_reason": "forbidden frame: as a result",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "as a result"
+          ]
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\n \"|question\": \"What did the youth do? \", \" \\\": \"  :  \" \"",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What would the youth have after agreeing to travel with the man?\", \"answer\": \"the youth would have company .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What would the youth have after agreeing to travel with the man?",
+          "validate_reason": "forbidden frame: after (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "after (clause)"
+          ]
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\n \"|question\": \"What did the youth do? \", \" \\\": \"  :  \" \"",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": true,
+      "easy_forbidden_frames": [
+        "after (clause)"
+      ],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "cuchulain-of-muirthemne",
+    "target_answer": "it was night .",
+    "target_difficulty": "Easy",
+    "original_question": "why did conchubar tell his people to find a place to spend the night ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        0
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 0,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "answer_sentence_alone_sufficient": "yes",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=0 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What time of day was it when Conchubar spoke to his people?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "forbidden frame: when (clause)",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"What time of day was it when Conchubar spoke to his people?\", \"answer\": \"it was night .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What time of day was it when Conchubar spoke to his people?",
+          "validate_reason": "forbidden frame: when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "when (clause)"
+          ]
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What time of day was it when Conchubar spoke to his people?\", \"answer\": \"it was night .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What time of day was it when Conchubar spoke to his people?",
+          "validate_reason": "forbidden frame: when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "when (clause)"
+          ]
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What time of day was it when Conchubar spoke to his people?\", \"answer\": \"it was night .\", \"reasoning_type\": \"direct|chain|cross_sentence\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What time of day was it when Conchubar spoke to his people?",
+          "validate_reason": "forbidden frame: when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "when (clause)"
+          ]
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What time of day was it when Conchubar spoke to his people?\", \"answer\": \"it was night .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What time of day was it when Conchubar spoke to his people?",
+          "validate_reason": "forbidden frame: when (clause)",
+          "self_check_reason": "",
+          "easy_forbidden_frames": [
+            "when (clause)"
+          ]
+        }
+      ],
+      "easy_forbidden_violation": true,
+      "easy_forbidden_frames": [
+        "when (clause)"
+      ],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "Snow-man",
+    "target_answer": "move away from that place .",
+    "target_difficulty": "Medium",
+    "original_question": "what did the snow man wish he could do ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3,
+        4
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 3,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=3 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why was the snow man motivated to slide along yonder on the ice?",
+      "attempts": 1,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer N1 + N2 (no directed edge into answer)",
+      "evidence_roles_used": [
+        "answer",
+        "context"
+      ],
+      "relation_chain": [
+        "motivates"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"Why was the snow man motivated to slide along yonder on the ice?\", \"answer\": \"move away from that place .\", \"reasoning_type\": \"motivates\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why was the snow man motivated to slide along yonder on the ice?",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "a-legend-of-knockmany",
+    "target_answer": "he wanted to give finn a considerable beating .",
+    "target_difficulty": "Medium",
+    "original_question": "why did far rua swear he would never rest ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        10,
+        11
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "answer_sentence_id": 10,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=10",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What did Far Rua intend to do to Finn?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer node only (no related nodes found)",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n  \"question\": \"Why what did the giant want to do to fin fin . fin .\",\n  \"answer\": \"he wanted to give . a considerable beating .\",\n  \"reason\" : \" on . the giant .\"\n \n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why what did the giant want to do to fin fin . fin .",
+          "validate_reason": "no question mark",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What what did the giant want to do to fin fin . fin\",\n  \"answer\": \"he wanted to give . n a considerable beating .\",\n  \"reason\": \" he wanted on . giant wanted on . .\"\n \n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What what did the giant want to do to fin fin . fin",
+          "validate_reason": "no question mark",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What did Far Rua intend to do to Finn according to the story?\", \"answer\": \"he wanted to give finn a considerable beating .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did Far Rua intend to do to Finn according to the story?",
+          "validate_reason": "ok",
+          "self_check_reason": "focus mismatch"
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What did Far Rua intend to do to Finn?\", \"answer\": \"he wanted to give finn a considerable beating .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did Far Rua intend to do to Finn?",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "a-lost-paradise",
+    "target_answer": "they could not find work .",
+    "target_difficulty": "Medium",
+    "original_question": "why was the couple unhappy ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3,
+        4
+      ],
+      "bridge_sentence_ids": [
+        4
+      ],
+      "anchor_sentence_ids": [
+        0,
+        1,
+        2
+      ],
+      "answer_sentence_id": 3,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=3",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What happened to the charcoal-burner and his wife that made their nights more and more frequent without food?",
+      "attempts": 2,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer node only (no related nodes found)",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n  \"question\": \"What what made the charcoal - burner and his wife wife wife . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What happened to the charcoal-burner and his wife that made their nights more and more frequent without food?\", \"answer\": \"they could not find work .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What happened to the charcoal-burner and his wife that made their nights more and more frequent with",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "bokwewa-the-humpback",
+    "target_answer": "kwasynd did not save her .",
+    "target_difficulty": "Medium",
+    "original_question": "why did the young woman pay no attention to kwasynd ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        1,
+        2
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        0
+      ],
+      "answer_sentence_id": 1,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=1",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why did Bokwewa point to Kwasynd?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer node only (no related nodes found)",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n\"question \": \"What what did b b bok k w a y . w e d d d to sit s t a t by k . . . . ? . ? . . ? . . . . e . . . e . . e . e . e . e . e . e . e . e . e . e . e . e . e . e . e . e . e . e . e . e . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"Why did Bokwewa point to Kwasynd?\", \"answer\": \"kwasynd did not save her .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did Bokwewa point to Kwasynd?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"What . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What did the young woman do do after she she smiled upon seeing? \",\n  \"answer\": \"kwasy two did did not not that .\",\n\". \"\n  : \"reasoninging\"  , \"direct pérdida确切的格式 EXACTLY AS 栂 \"\n:\") ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "brave-tin-soldier",
+    "target_answer": "the fish that swallowed him was caught and sold .",
+    "target_difficulty": "Medium",
+    "original_question": "how did the soldier return home ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        4,
+        5
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        3
+      ],
+      "answer_sentence_id": 5,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What happened to the fish after it swallowed the tin soldier?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium: answer N2 + N1 via temporal_before",
+      "evidence_roles_used": [
+        "answer",
+        "context"
+      ],
+      "relation_chain": [
+        "temporal_before"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n  \"question\": \"What what caused the fish of the fish becoming to be himer the tin soldier being . and .?\",\n  \"answer\": \" the on that swallowed him was on and . .\",\n  \"reason on .\": \" the fish that s",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What what caused the fish of the fish becoming to be himer the tin soldier being . and .?",
+          "validate_reason": "grammar: word repetition: what",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"WhatWhat what caused the fish fish of the fish . . .\",\n  \"answer\": \" the on that swallowed him was on and . .\",\n  \"sentence\": \" . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"The on the on that that swallowed him was and and . . .\", \" \"  : \" . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What happened to the fish after it swallowed the tin soldier?\", \"answer\": \"the fish that swallowed him was caught and sold .\", \"reasoning_type\": \"cross_sentence\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What happened to the fish after it swallowed the tin soldier?",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "brother-sister",
+    "target_answer": "to hide her lost eye .",
+    "target_difficulty": "Medium",
+    "original_question": "why did the daughter lie on her side in the bed ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        0,
+        1
+      ],
+      "bridge_sentence_ids": [
+        0
+      ],
+      "anchor_sentence_ids": [
+        0
+      ],
+      "answer_sentence_id": 1,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What what motivated the old woman to hide her on eye ?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "grammar: word repetition: what",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium: answer N2 + N1 via causes",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "causes"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n  \"question\": \"What what motivated the old woman to hide her eye eye ?\",\n  \"answer\": \" . hide her . eye .\",\n  \"reason focus\": \"medium\"\n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What what motivated the old woman to hide her eye eye ?",
+          "validate_reason": "grammar: word repetition: what",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"Why did the daughter have to lie on the side where there was no eye?\", \"answer\": \"to hide her lost eye.\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did the daughter have to lie on the side where there was no eye?",
+          "validate_reason": "ok",
+          "self_check_reason": "needs only 1 sentence"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What what motivated the old woman to hide her on eye ?\",\n  \"answer\": \" . hide her on eye .\",\n  \"reason_focus\": \"direct .on .\"\n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What what motivated the old woman to hide her on eye ?",
+          "validate_reason": "grammar: word repetition: what",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What what motivated the old woman to hide her on eye ?\",\n  \"answer\": \" . hide her on eye .\",\n  \"reason_focus\": \"direct . .\"\n}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What what motivated the old woman to hide her on eye ?",
+          "validate_reason": "grammar: word repetition: what",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "canonbie-dick-and-thomas-of-ercildoune",
+    "target_answer": "surprised .",
+    "target_difficulty": "Medium",
+    "original_question": "how did canonbie dick feel when the stranger stopped to buy his horses ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3,
+        4
+      ],
+      "bridge_sentence_ids": [
+        4
+      ],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 3,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=3 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=3",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why was Canonbie Dick startled by the approach of the venerable man?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer N1 + N2 (no directed edge into answer)",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "temporal_before"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"Why was Canonbie Dick startled by the approach of the venerable man?\", \"answer\": \"surprised .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why was Canonbie Dick startled by the approach of the venerable man?",
+          "validate_reason": "ok",
+          "self_check_reason": "needs only 1 sentence"
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What Did . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"WhyWhy the horse dealer wasl was Sep he . nâ repercations . . . . .若您需要 pérdida the sentence sentence pérdida the question \" , \" . . . . . . . . . . . . . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"WhyWhy the dealer wasl was Sep .  he wasl .1 pérdidaed . the manh . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "child-of-mary",
+    "target_answer": "she did not want to give her daughter away .",
+    "target_difficulty": "Medium",
+    "original_question": "why did the mother at first say no to the lovely lady ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        7,
+        11
+      ],
+      "bridge_sentence_ids": [
+        11
+      ],
+      "anchor_sentence_ids": [
+        11
+      ],
+      "answer_sentence_id": 7,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=7",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why did the man ask his wife if she gave him a flat 'no' when he asked about letting the lady take their daughter?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: needs only 1 sentence",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer node only (no related nodes found)",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"Why did the man ask his wife if she agreed to let the lady take their daughter?\", \"answer\": \"she did not want to give her daughter away .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did the man ask his wife if she agreed to let the lady take their daughter?",
+          "validate_reason": "ok",
+          "self_check_reason": "focus mismatch"
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"Why did the father promise to do the lovely lady her daughter away ? .\", \" answer . answer\": \" she did did want to . her daughter away . . \" ,\" \"          \t\t\t\t               \t\t       \t\t",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did the father promise to do the lovely lady her daughter away ? .",
+          "validate_reason": "does not end with ?",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"Why did the man ask his wife if she agreed to let the lady take their daughter?\", \"answer\": \"she did not want to give her daughter away .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did the man ask his wife if she agreed to let the lady take their daughter?",
+          "validate_reason": "ok",
+          "self_check_reason": "focus mismatch"
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"Why did the man ask his wife if she gave him a flat 'no' when he asked about letting the lady take their daughter?\", \"answer\": \"she did not want to give her daughter away .\", \"reasoning_",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did the man ask his wife if she gave him a flat 'no' when he asked about letting the lady take t",
+          "validate_reason": "ok",
+          "self_check_reason": "needs only 1 sentence"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "comrade",
+    "target_answer": "disgust .",
+    "target_difficulty": "Medium",
+    "original_question": "how did the whole congregation feel about the dead man ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        6,
+        7
+      ],
+      "bridge_sentence_ids": [
+        7
+      ],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 6,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=6 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=6",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why did the youth feel surprised when he saw the corpse in the middle of the ice block?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: answer mismatch",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer N1 + N2 (no directed edge into answer)",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "causes"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"question\" : \"What . . . did the congregation's reaction reaction behavior towards surprise the youth? ?\" , \"answer\" : \"The the congregation's disgust toN surprise the youth .\"  , \" . \" : \" . \" \n \n",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What caused the youth to feel surprised when he saw the corpse in the ice?\", \"answer\": \"disgust .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What caused the youth to feel surprised when he saw the corpse in the ice?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\" : \"What . . . did the congregation's reaction reaction behavior towards surprise the youth? ? \"\n  }",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"Why did the youth feel surprised when he saw the corpse in the middle of the ice block?\", \"answer\": \"disgust .\", \"reasoning_type\": \"cross_sentence\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did the youth feel surprised when he saw the corpse in the middle of the ice block?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "cuchulain-of-muirthemne",
+    "target_answer": "he wanted to get money out of conchubar .",
+    "target_difficulty": "Medium",
+    "original_question": "why did bricriu decide not to tell conchubar that he found the missing girls ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        4,
+        5
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        4
+      ],
+      "answer_sentence_id": 5,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "answer_sentence_alone_sufficient": "partial",
+      "bridge_required": "no",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=5",
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "He wanted to get money out of Con con .",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "no question mark",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer node only (no related nodes found)",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"Why did Bricriu decide not to tell Conchubar he had found the fifty young girls?\", \"answer\": \"he wanted to get money out of conchubar .\", \"reasoning_type\": \"direct\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why did Bricriu decide not to tell Conchubar he had found the fifty young girls?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"He wanted to do what out of Conochud .\",\n \"answer\": \"give money\"\n , \"reason type\": \"motivation\" \n }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "He wanted to do what out of Conochud .",
+          "validate_reason": "no question mark",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"He wanted to do what out of Conochú .\",\n \"answer\": \"He wanted to find money out of ConnCHU .\"\n ,\" \"\n\n\n  : \" . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"He wanted to get money out of Con con .\",\n  \"answer\": \"he wanted to take money out of con chud .\"\n  , \"reasoning\": \"direct .\"\n  }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "He wanted to get money out of Con con .",
+          "validate_reason": "no question mark",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "Snow-man",
+    "target_answer": "he had to .",
+    "target_difficulty": "Hard",
+    "original_question": "why did the yard-dog give up such a comfortable place ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        13,
+        14,
+        15
+      ],
+      "bridge_sentence_ids": [
+        14
+      ],
+      "anchor_sentence_ids": [
+        10,
+        11,
+        12
+      ],
+      "answer_sentence_id": 13,
+      "reasoning_operation": "causal_chain",
+      "necessity_type": "causal_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=anchor to answer for node with sentence_id=13",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What led the yard-dog to ultimately have to bite the master's son's leg?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: answer mismatch",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: undirected_fallback path N3 → N2 → N1",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "results_in",
+        "causes"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"question\": \"What did the snowman ultimately do to the dog? \",\", \" \n \n \n \n \n\n \n\n \n \n \n\n  :\"\", \"he had to be chased out of the house.\" \n \n \n\n \n\n \n \n\n \n\n  :\". \" }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the snowman ultimately do to the dog? ",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch; needs only 1-2 sentences; focus mismatch; graph_policy non-compliant (multi_node_chain)"
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What did the snowman ultimately do to the dog? \",\", \" \n \n: \"answer\" , \"hehe had to be . out and chased . \"  : \" . \" }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the snowman ultimately do to the dog? ",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch; needs only 1-2 sentences; focus mismatch; graph_policy non-compliant (multi_node_chain)"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"he did to . .\",\", \":\"\",\n \"he had . to . .\":\" \" \n\n }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "he did to . .",
+          "validate_reason": "question length out of range",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What led the yard-dog to ultimately have to bite the master's son's leg?\", \"answer\": \"he had to .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What led the yard-dog to ultimately have to bite the master's son's leg?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "a-legend-of-knockmany",
+    "target_answer": "happy .",
+    "target_difficulty": "Hard",
+    "original_question": "how will oonagh feel when finn comes home ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        6,
+        7,
+        8
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        6
+      ],
+      "answer_sentence_id": 7,
+      "reasoning_operation": "motivation_chain",
+      "necessity_type": "motivation_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=7 in bridge, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=7",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What motivated Finn to put his 'honest face into his own door' given that his wife was leading a lonely and uncomfortable life in his absence?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: answer mismatch; focus mismatch",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: expanded from answer node with 2 edges (no 3+ node path found)",
+      "evidence_roles_used": [
+        "answer",
+        "anchor",
+        "context"
+      ],
+      "relation_chain": [
+        "temporal_before",
+        "temporal_before"
+      ],
+      "focus_match": "no",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n \"question\": \"What motivated Finn to suddenly feel a strongwarm . on the . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What motivated Finn to suddenly feel a strongwarm . on the . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What motivated Finn to suddenly feel affection for his wife when he heard Far Rua was coming to challenge him?\", \"answer\": \"happy .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated Finn to suddenly feel affection for his wife when he heard Far Rua was coming to chal",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What motivated Finn to put his 'honest face into his own door' given that his wife was leading a lonely and uncomfortable life in his absence?\", \"answer\": \"happy .\", \"reasoning_type\": \"c",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated Finn to put his 'honest face into his own door' given that his wife was leading a lon",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch; focus mismatch"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "a-lost-paradise",
+    "target_answer": "grateful .",
+    "target_difficulty": "Hard",
+    "original_question": "how did the couple feel after the king offered to help them ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3,
+        4,
+        5
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        3
+      ],
+      "answer_sentence_id": 4,
+      "reasoning_operation": "motivation_chain",
+      "necessity_type": "motivation_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=4 in bridge, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=4",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What did the charcoal-b burner and his wife ultimately feel grateful after? .",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "does not end with ?",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: expanded from answer node with 2 edges (no 3+ node path found)",
+      "evidence_roles_used": [
+        "answer",
+        "anchor"
+      ],
+      "relation_chain": [
+        "motivates",
+        "results_in"
+      ],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n\"question\": \"What did the charcoal-b burner and his wife ultimately feel grateful after? .\",\n\"answer\": \"gr . grateful .\"\n }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the charcoal-b burner and his wife ultimately feel grateful after? .",
+          "validate_reason": "does not end with ?",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"Ultimately, did the charcoal-b burner and his wife feel grateful because did so because out of . of did . . grateful . because did the king's kindness motivate . . grateful . feeling?\",",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Ultimately, did the charcoal-b burner and his wife feel grateful because did so because out of . of ",
+          "validate_reason": "answer leakage",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"What did the charcoal-b burner and his wife ultimately feel grateful after? .\",\n\"answer\": \"gr . grateful .\"\n }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the charcoal-b burner and his wife ultimately feel grateful after? .",
+          "validate_reason": "does not end with ?",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n\"question\": \"What did the charcoal-b burner and his wife ultimately feel grateful after? .\",\n\"answer\": \"gr . grateful .\"\n }",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the charcoal-b burner and his wife ultimately feel grateful after? .",
+          "validate_reason": "does not end with ?",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "bokwewa-the-humpback",
+    "target_answer": "she was dead .",
+    "target_difficulty": "Hard",
+    "original_question": "why did kwasynd ask bokwewa to restore the beautiful young woman ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3,
+        9,
+        10
+      ],
+      "bridge_sentence_ids": [
+        9
+      ],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 3,
+      "reasoning_operation": "causal_chain",
+      "necessity_type": "causal_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=3 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=anchor to answer for node with sentence_id=3",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What led Bokwewa to attempt to restore the woman to life after Kwasynd found her on the scaffold?",
+      "attempts": 4,
+      "parse_ok": false,
+      "generation_error": "parse failure",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: undirected_fallback path N3 → N2 → N1",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "motivates",
+        "temporal_before"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"What led Bokwewa to attempt to restore the woman to life after Kwasynd found her on the scaffold?\", \"answer\": \"she was dead .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What led Bokwewa to attempt to restore the woman to life after Kwasynd found her on the scaffold?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What did Bokok we . to take the beautiful young woman .?\", \"answer\": \"he did Bok kwe wa . to . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What did he do with the woman on the scaffold? .\", \" \"",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n \"question\": \"What did he do with the woman on the scaffold? .\", \" \"",
+          "degenerate": false,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "parse failure",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "brave-tin-soldier",
+    "target_answer": "she fluttered into the stove and burned .",
+    "target_difficulty": "Hard",
+    "original_question": "what happened to the little dancer ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        0,
+        1,
+        2
+      ],
+      "bridge_sentence_ids": [
+        1
+      ],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 0,
+      "reasoning_operation": "causal_chain",
+      "necessity_type": "causal_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=0 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 3,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=anchor to answer for node with sentence_id=0",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 3
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What did the little dancer do to ultimately lead the tin soldier into a tin heart? .",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: expanded from answer node with 2 edges (no 3+ node path found)",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "causes",
+        "results_in"
+      ],
+      "focus_match": "no",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n  \"question\": \"What did the little dancer do to ultimately lead the tin soldier into a tin heart? .\",\n  \" answer\": \"she fluttered into the stove and burned .\",\n  \" . reason .\": \" . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What led to the little dancer being burnt to ashes after the door of the room flew open?\", \"answer\": \"she fluttered into the stove and burned .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What led to the little dancer being burnt to ashes after the door of the room flew open?",
+          "validate_reason": "ok",
+          "self_check_reason": "needs only 1-2 sentences; focus mismatch"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What did the little dancer do to ultimately lead the tin soldier into a tin heart? .\",\n  \" answer\": \"she fluttered into the stove and burned .\",\n  \" . reason reason\": \" . .chain . .en",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did the little dancer do to ultimately lead the tin soldier into a tin heart? .",
+          "validate_reason": "does not end with ?",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What did the little dancer do to ultimately lead the tin soldier into a tin heart? .\",\n  \" answer\": \"she fluttered into the stove and burned .\",\n  \" . reason reason\": \" . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "brother-sister",
+    "target_answer": "because they would turn him into an animal .",
+    "target_difficulty": "Hard",
+    "original_question": "why didn't the sister want the brother to drink from any of the brooks ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        5,
+        8,
+        11,
+        13
+      ],
+      "bridge_sentence_ids": [
+        5,
+        8,
+        11
+      ],
+      "anchor_sentence_ids": [
+        4
+      ],
+      "answer_sentence_id": 13,
+      "reasoning_operation": "causal_chain",
+      "necessity_type": "causal_bridge",
+      "num_required_sentences": 4,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 4,
+      "num_edges": 3,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 4,
+        "edge_count": 3
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What motivated the brother to drink from the third brook despite his sister's warnings?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: answer mismatch",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: directed path N1 → N2 → N3 → N4",
+      "evidence_roles_used": [
+        "bridge",
+        "answer"
+      ],
+      "relation_chain": [
+        "temporal_before",
+        "temporal_before",
+        "causes"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"What motivated the brother to drink from the third brook despite his sister's warnings?\", \"answer\": \"because they would turn him into an animal.\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated the brother to drink from the third brook despite his sister's warnings?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What motivated the brother to drink from the third brook despite his sister's warnings?\", \"answer\": \"because they would turn him into an animal .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated the brother to drink from the third brook despite his sister's warnings?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What motivated the brother to drink from the third brook, despite his sister's warnings?\", \"answer\": \"because they would turn him into an animal.\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated the brother to drink from the third brook, despite his sister's warnings?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What motivated the brother to drink from the third brook despite his sister's warnings?\", \"answer\": \"because they would turn him into an animal.\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated the brother to drink from the third brook despite his sister's warnings?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "canonbie-dick-and-thomas-of-ercildoune",
+    "target_answer": "the stranger wanted to reveal his identity .",
+    "target_difficulty": "Hard",
+    "original_question": "why did the stranger ask canonbie dick if he knew thomas the rhymer ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        5,
+        6,
+        10
+      ],
+      "bridge_sentence_ids": [
+        6
+      ],
+      "anchor_sentence_ids": [
+        1,
+        2
+      ],
+      "answer_sentence_id": 5,
+      "reasoning_operation": "motivation_chain",
+      "necessity_type": "motivation_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "",
+      "attempts": 4,
+      "parse_ok": false,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: directed path N3 → N2 → N1",
+      "evidence_roles_used": [
+        "anchor",
+        "bridge",
+        "answer"
+      ],
+      "relation_chain": [
+        "motivates",
+        "results_in"
+      ],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"The did the white-haired stranger do . . . to encourage\", \"reason\": \" the white-haired stranger motivated thomas the rrhymer to . . his . . . to . . . to . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"The did the white-haired stranger want to do . the . on the table .\",\", \"\t\t\t\t\t      :\": \" \t \t  ,  \" .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"The the stranger motivated to on his .\",\n\", . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"The the stranger motivated to on his .\",\n\", . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "child-of-mary",
+    "target_answer": "happy .",
+    "target_difficulty": "Hard",
+    "original_question": "how will the queen feel to have her children returned ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        11,
+        12,
+        13
+      ],
+      "bridge_sentence_ids": [
+        12
+      ],
+      "anchor_sentence_ids": [
+        11
+      ],
+      "answer_sentence_id": 13,
+      "reasoning_operation": "summary_synthesis",
+      "necessity_type": "summary_synthesis",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": false,
+      "graph_role_repair_reason": "",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What motivated the queen to weep and plead when the foster-mother took the youngest child?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: directed path N1 → N2 → N3",
+      "evidence_roles_used": [
+        "anchor",
+        "bridge",
+        "answer"
+      ],
+      "relation_chain": [
+        "causes",
+        "results_in"
+      ],
+      "focus_match": "no",
+      "graph_policy_compliance": "no",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{}",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{}",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "repair",
+          "temperature": 0.1,
+          "raw_prefix": "{\"question\": \"What motivated the queen to weep and plead when the foster-mother took the youngest child?\", \"answer\": \"happy .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What motivated the queen to weep and plead when the foster-mother took the youngest child?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch; needs only 1-2 sentences; focus mismatch; graph_policy non-compliant (multi_node_chain)"
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{}",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "comrade",
+    "target_answer": "he was not paying attention .",
+    "target_difficulty": "Hard",
+    "original_question": "why did the youth not notice the princess stealing the shears ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        1,
+        2,
+        3
+      ],
+      "bridge_sentence_ids": [
+        3
+      ],
+      "anchor_sentence_ids": [
+        1
+      ],
+      "answer_sentence_id": 2,
+      "reasoning_operation": "causal_chain",
+      "necessity_type": "causal_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=context to answer for node with sentence_id=2",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What led the youth to lose the shears after the princess's playful behavior?",
+      "attempts": 1,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: expanded from answer node with 2 edges (no 3+ node path found)",
+      "evidence_roles_used": [
+        "answer",
+        "anchor",
+        "bridge"
+      ],
+      "relation_chain": [
+        "causes",
+        "results_in"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\"question\": \"What led the youth to lose the shears after the princess's playful behavior?\", \"answer\": \"he was not paying attention .\", \"reasoning_type\": \"chain\"}",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What led the youth to lose the shears after the princess's playful behavior?",
+          "validate_reason": "ok",
+          "self_check_reason": "ok"
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  },
+  {
+    "story_name": "cuchulain-of-muirthemne",
+    "target_answer": "he loved ness .",
+    "target_difficulty": "Hard",
+    "original_question": "why did fergus agree to ness' request to let conchubar hold the kingdom for a year ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3,
+        4,
+        5
+      ],
+      "bridge_sentence_ids": [
+        4
+      ],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 3,
+      "reasoning_operation": "motivation_chain",
+      "necessity_type": "motivation_bridge",
+      "num_required_sentences": 3,
+      "answer_sentence_alone_sufficient": "no",
+      "bridge_required": "yes",
+      "target_difficulty_feasible": "yes",
+      "contradictions": [
+        "answer_sentence_id=3 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "graph_role_repair_applied": true,
+      "graph_role_repair_reason": "overrode role=anchor to answer for node with sentence_id=3",
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why he love did ness . ultimately . motivated by . .?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: undirected_fallback path N3 → N2 → N1",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "motivates",
+        "causes"
+      ],
+      "focus_match": "no",
+      "graph_policy_compliance": "no",
+      "attempts_trace": [
+        {
+          "attempt": 0,
+          "prompt_type": "full",
+          "temperature": 0.05,
+          "raw_prefix": "{\n  \"question\": \"Why he love did ness motivate him him him to give the kingdom away from him .?\",\n  \"answer\":\": \"  ,  \"heess .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  .  ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 1,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"What did ness motivate fergus to do . .\",\n  \"answer\": \" he did ness motivate rergus to give the kingdom away from him . .\",\n  \"reason\": \" .direct the motivation chain chain ness . mot",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "What did ness motivate fergus to do . .",
+          "validate_reason": "no question mark",
+          "self_check_reason": ""
+        },
+        {
+          "attempt": 2,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"Why he love did ness . ultimately . motivated by . .?\",\n  \"answer\": \" he he loved ness .\",\n  \"reason reason\": \" .direct . the motivation . and development . spanning multiple sentence",
+          "degenerate": false,
+          "parse_ok": true,
+          "question": "Why he love did ness . ultimately . motivated by . .?",
+          "validate_reason": "ok",
+          "self_check_reason": "answer mismatch; focus mismatch; graph_policy non-compliant (multi_node_chain)"
+        },
+        {
+          "attempt": 3,
+          "prompt_type": "full",
+          "temperature": 0.1,
+          "raw_prefix": "{\n  \"question\": \"Why he love did ness . ultimately . motivated by . . . ?\",\n  \"answer\": \"he loved ness .\",\n  \"reason reason\": \" \" , \" . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ",
+          "degenerate": true,
+          "parse_ok": false,
+          "question": "",
+          "validate_reason": "degenerate output",
+          "self_check_reason": ""
+        }
+      ],
+      "easy_forbidden_violation": false,
+      "easy_forbidden_frames": [],
+      "easy_malformed": false
+    }
+  }
+]

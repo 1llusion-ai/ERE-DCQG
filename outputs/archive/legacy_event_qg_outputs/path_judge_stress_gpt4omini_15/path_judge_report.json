@@ -1,0 +1,91 @@
+{
+  "model": "gpt-4o-mini",
+  "input_count": 3890,
+  "judged_count": 15,
+  "parse_ok_count": 15,
+  "parse_ok_rate": 1.0,
+  "kept_count": 14,
+  "kept_rate": 0.9333,
+  "path_questionable_distribution": {
+    "yes": 13,
+    "no": 1,
+    "partial": 1
+  },
+  "expected_required_steps_distribution": {
+    "1": 15
+  },
+  "single_sentence_risk_distribution": {
+    "high": 4,
+    "low": 10,
+    "medium": 1
+  },
+  "recommended_difficulty_distribution": {
+    "easy": 14,
+    "medium": 1
+  },
+  "per_level": {
+    "Easy": {
+      "total": 15,
+      "kept": 14,
+      "kept_rate": 0.9333,
+      "difficulty_agreement": 14,
+      "difficulty_agreement_rate": 0.9333,
+      "single_sentence_high_risk": 4,
+      "single_sentence_high_risk_rate": 0.2667,
+      "recommended_difficulty_distribution": {
+        "easy": 14,
+        "medium": 1
+      },
+      "expected_steps_distribution": {
+        "1": 15
+      }
+    },
+    "Medium": {
+      "total": 0
+    },
+    "Hard": {
+      "total": 0
+    }
+  },
+  "examples": {
+    "not_kept": [
+      {
+        "difficulty": "Easy",
+        "title": "Cherry Valley massacre",
+        "path": "ordered/Arranging -> took place/Process_start",
+        "relations": [
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "atrocities that took place at Cherry Valley",
+        "judge": {
+          "path_questionable": "no",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The event path includes a weak trigger 'took place' which does not support a natural question about the final event."
+        },
+        "keep_reason": "path_questionable=no"
+      }
+    ],
+    "disagreement": [
+      {
+        "difficulty": "Easy",
+        "title": "Cherry Valley massacre",
+        "path": "permitted/Preventing_or_letting -> took place/Process_start",
+        "relations": [
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "atrocities that took place at Cherry Valley",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "medium",
+          "recommended_difficulty": "medium",
+          "reason": "The path can support a question about the final event, but the presence of the phrase 'took place' introduces some ambiguity that may require clarification."
+        },
+        "keep_reason": "keep"
+      }
+    ],
+    "hard_high_risk": []
+  }
+}

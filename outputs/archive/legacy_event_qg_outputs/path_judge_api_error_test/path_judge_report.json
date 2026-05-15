@@ -1,0 +1,52 @@
+{
+  "model": "test-model",
+  "input_count": 3789,
+  "judged_count": 1,
+  "parse_ok_count": 0,
+  "parse_ok_rate": 0.0,
+  "kept_count": 1,
+  "kept_rate": 1.0,
+  "llm_path_judge_status_distribution": {
+    "api_error": 1
+  },
+  "path_questionable_distribution": {
+    "no": 1
+  },
+  "expected_required_steps_distribution": {
+    "1": 1
+  },
+  "single_sentence_risk_distribution": {
+    "high": 1
+  },
+  "recommended_difficulty_distribution": {
+    "easy": 1
+  },
+  "per_level": {
+    "Easy": {
+      "total": 1,
+      "kept": 1,
+      "kept_rate": 1.0,
+      "difficulty_agreement": 1,
+      "difficulty_agreement_rate": 1.0,
+      "single_sentence_high_risk": 1,
+      "single_sentence_high_risk_rate": 1.0,
+      "recommended_difficulty_distribution": {
+        "easy": 1
+      },
+      "expected_steps_distribution": {
+        "1": 1
+      }
+    },
+    "Medium": {
+      "total": 0
+    },
+    "Hard": {
+      "total": 0
+    }
+  },
+  "examples": {
+    "not_kept": [],
+    "disagreement": [],
+    "hard_high_risk": []
+  }
+}

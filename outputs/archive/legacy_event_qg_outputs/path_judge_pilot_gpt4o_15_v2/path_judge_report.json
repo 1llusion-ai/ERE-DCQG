@@ -1,0 +1,364 @@
+{
+  "model": "gpt-4o",
+  "input_count": 3890,
+  "judged_count": 15,
+  "parse_ok_count": 15,
+  "parse_ok_rate": 1.0,
+  "kept_count": 10,
+  "kept_rate": 0.6667,
+  "path_questionable_distribution": {
+    "partial": 15
+  },
+  "expected_required_steps_distribution": {
+    "1": 12,
+    "2": 3
+  },
+  "single_sentence_risk_distribution": {
+    "high": 15
+  },
+  "recommended_difficulty_distribution": {
+    "easy": 11,
+    "medium": 4
+  },
+  "per_level": {
+    "Easy": {
+      "total": 5,
+      "kept": 5,
+      "kept_rate": 1.0,
+      "difficulty_agreement": 4,
+      "difficulty_agreement_rate": 0.8,
+      "single_sentence_high_risk": 5,
+      "single_sentence_high_risk_rate": 1.0,
+      "recommended_difficulty_distribution": {
+        "easy": 4,
+        "medium": 1
+      },
+      "expected_steps_distribution": {
+        "1": 5
+      }
+    },
+    "Medium": {
+      "total": 5,
+      "kept": 5,
+      "kept_rate": 1.0,
+      "difficulty_agreement": 0,
+      "difficulty_agreement_rate": 0.0,
+      "single_sentence_high_risk": 5,
+      "single_sentence_high_risk_rate": 1.0,
+      "recommended_difficulty_distribution": {
+        "easy": 5
+      },
+      "expected_steps_distribution": {
+        "1": 5
+      }
+    },
+    "Hard": {
+      "total": 5,
+      "kept": 0,
+      "kept_rate": 0.0,
+      "difficulty_agreement": 0,
+      "difficulty_agreement_rate": 0.0,
+      "single_sentence_high_risk": 5,
+      "single_sentence_high_risk_rate": 1.0,
+      "recommended_difficulty_distribution": {
+        "easy": 2,
+        "medium": 3
+      },
+      "expected_steps_distribution": {
+        "1": 2,
+        "2": 3
+      }
+    }
+  },
+  "examples": {
+    "not_kept": [
+      {
+        "difficulty": "Hard",
+        "title": "Operation Vengeance",
+        "path": "Vengeance/Revenge -> killed/Killing -> blamed/Judgment_communication -> claimed/Statement",
+        "relations": [
+          "SUBEVENT",
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "U.S. pilots claimed to have shot down",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event's answer phrase is clear but can be directly obtained from the answer sentence alone, making the path weak for multi-step question generation."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Byzantine–Seljuq wars",
+        "path": "practiced/Practice -> control/Control -> taken over/Conquering -> rise/Cause_change_of_position_on_a_scale",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/CAUSE"
+        ],
+        "answer_phrase": "to the rise of the ghazis and",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event ('rise of the ghazis') is answerable from the answer sentence alone, but the path provides some additional context. The proposed answer phrase is truncated and unnatural, reducing clarity."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Big Picture Tour",
+        "path": "started/Process_start -> ended/Process_end -> returned/Arriving -> ending/Process_end",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION"
+        ],
+        "answer_phrase": "returning and ending the tour in Europe",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event is answerable from the answer sentence alone, making the single_sentence_risk high. While the path connects multiple events, the phrasing of the proposed answer phrase is somewhat noisy and could be clearer. The question would likely require connecting two events but does not fully justify a 'hard' difficulty level."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Big Picture Tour",
+        "path": "started/Process_start -> completing/Process_end -> started/Process_start -> interrupted/Hindering",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION"
+        ],
+        "answer_phrase": "but was interrupted by John's and Billy",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event ('interrupted') and its explanation are fully contained within a single sentence (S5). While the path includes multiple events, they do not contribute significantly to forming a natural, multi-step question. The proposed answer phrase is also slightly truncated and awkward."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Cherry Valley massacre",
+        "path": "committed/Commitment -> took place/Process_start -> minimize/Cause_change_of_position_on_a_scale -> drove/Motion",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "Expedition which drove the Iroquois out of",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event is answerable from the answer sentence alone, but the path provides some additional context that could support a slightly more complex question."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      }
+    ],
+    "disagreement": [
+      {
+        "difficulty": "Medium",
+        "title": "Cherry Valley massacre",
+        "path": "restrain/Hindering -> took place/Process_start -> described/Statement",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "has been described as one of the",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event's answer phrase is truncated and unnatural ('has been described as one of the'), and the answer can be obtained directly from the answer sentence without requiring the full event path."
+        },
+        "keep_reason": "keep"
+      },
+      {
+        "difficulty": "Medium",
+        "title": "Photographer of Dreams",
+        "path": "given/Giving -> decided/Deciding -> flashed/Motion",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "Santa Barbara\", flashed the endless waters of",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event is answerable directly from the answer sentence alone, but the proposed answer phrase is truncated and unnatural, making the path weak for question generation."
+        },
+        "keep_reason": "keep"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Operation Vengeance",
+        "path": "Vengeance/Revenge -> killed/Killing -> blamed/Judgment_communication -> claimed/Statement",
+        "relations": [
+          "SUBEVENT",
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "U.S. pilots claimed to have shot down",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event's answer phrase is clear but can be directly obtained from the answer sentence alone, making the path weak for multi-step question generation."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Byzantine–Seljuq wars",
+        "path": "practiced/Practice -> control/Control -> taken over/Conquering -> rise/Cause_change_of_position_on_a_scale",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/CAUSE"
+        ],
+        "answer_phrase": "to the rise of the ghazis and",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event ('rise of the ghazis') is answerable from the answer sentence alone, but the path provides some additional context. The proposed answer phrase is truncated and unnatural, reducing clarity."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Big Picture Tour",
+        "path": "started/Process_start -> ended/Process_end -> returned/Arriving -> ending/Process_end",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION"
+        ],
+        "answer_phrase": "returning and ending the tour in Europe",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event is answerable from the answer sentence alone, making the single_sentence_risk high. While the path connects multiple events, the phrasing of the proposed answer phrase is somewhat noisy and could be clearer. The question would likely require connecting two events but does not fully justify a 'hard' difficulty level."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      }
+    ],
+    "hard_high_risk": [
+      {
+        "difficulty": "Hard",
+        "title": "Operation Vengeance",
+        "path": "Vengeance/Revenge -> killed/Killing -> blamed/Judgment_communication -> claimed/Statement",
+        "relations": [
+          "SUBEVENT",
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "U.S. pilots claimed to have shot down",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event's answer phrase is clear but can be directly obtained from the answer sentence alone, making the path weak for multi-step question generation."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Byzantine–Seljuq wars",
+        "path": "practiced/Practice -> control/Control -> taken over/Conquering -> rise/Cause_change_of_position_on_a_scale",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/CAUSE"
+        ],
+        "answer_phrase": "to the rise of the ghazis and",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event ('rise of the ghazis') is answerable from the answer sentence alone, but the path provides some additional context. The proposed answer phrase is truncated and unnatural, reducing clarity."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Big Picture Tour",
+        "path": "started/Process_start -> ended/Process_end -> returned/Arriving -> ending/Process_end",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION"
+        ],
+        "answer_phrase": "returning and ending the tour in Europe",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event is answerable from the answer sentence alone, making the single_sentence_risk high. While the path connects multiple events, the phrasing of the proposed answer phrase is somewhat noisy and could be clearer. The question would likely require connecting two events but does not fully justify a 'hard' difficulty level."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Big Picture Tour",
+        "path": "started/Process_start -> completing/Process_end -> started/Process_start -> interrupted/Hindering",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION"
+        ],
+        "answer_phrase": "but was interrupted by John's and Billy",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "1",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "easy",
+          "reason": "The final event ('interrupted') and its explanation are fully contained within a single sentence (S5). While the path includes multiple events, they do not contribute significantly to forming a natural, multi-step question. The proposed answer phrase is also slightly truncated and awkward."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      },
+      {
+        "difficulty": "Hard",
+        "title": "Cherry Valley massacre",
+        "path": "committed/Commitment -> took place/Process_start -> minimize/Cause_change_of_position_on_a_scale -> drove/Motion",
+        "relations": [
+          "TEMPORAL/BEFORE",
+          "CAUSE/PRECONDITION",
+          "TEMPORAL/BEFORE"
+        ],
+        "answer_phrase": "Expedition which drove the Iroquois out of",
+        "judge": {
+          "path_questionable": "partial",
+          "expected_required_steps": "2",
+          "single_sentence_risk": "high",
+          "recommended_difficulty": "medium",
+          "reason": "The final event is answerable from the answer sentence alone, but the path provides some additional context that could support a slightly more complex question."
+        },
+        "keep_reason": "hard_single_sentence_risk=high"
+      }
+    ]
+  }
+}

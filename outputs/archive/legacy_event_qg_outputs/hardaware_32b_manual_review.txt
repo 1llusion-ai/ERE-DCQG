@@ -1,0 +1,860 @@
+--- Item 1 | Easy | id=21 ---
+Q: What did the Communist Pathet Lao and the Royal Lao Government do after the Franco–Lao Treaty of Amity and Association transferred remaining French powers to the Royal Lao Government?
+Gold: "fought"
+Path: transferred -> fought
+Solver(32B): "Fought civil war."
+  target_hit=1.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.917
+Sentences with gold trigger "fought":
+  [S0] The Laotian Civil War (1959–75) was a civil war in Laos fought between the Communist Pathet Lao (including many North Vietnamese of Lao ancestry) and the Royal Lao Government from 23 May 1959 to 2 Dec
+All sentences (5):
+  [S0] The Laotian Civil War (1959–75) was a civil war in Laos fought between the Communist Pathet Lao (including many North Vietnamese of Lao ancestry) and the Royal Lao Government from 23 May 1959 to 2 December 1975.
+  [S1] It is associated with the Cambodian Civil War and the Vietnam War, with both sides receiving heavy external support in a proxy war between the global Cold War superpowers.
+  [S3] The Kingdom of Laos was a covert theater for other belligerents during the Vietnam War.
+  [S4] The Franco–Lao Treaty of Amity and Association (signed 22 October 1953) transferred remaining French powers to the Royal Lao Government (except control of military affairs), establishing Laos as an independent member of the French Union.
+  [S5] However, this government did not include representatives from the Lao Issara anti-colonial armed nationalist movement.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 2 | Easy | id=135 ---
+Q: What action did the Polish unit take after the Russian commander was killed and his unit dispersed? 
+Gold: "equipped"
+Path: approached -> equipped
+Solver(32B): "Polish unit likely pursued or consolidated."
+  target_hit=0.0 solver_correct=0.0
+  answerable=0.0 support=0.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.133
+Sentences with gold trigger "equipped":
+  [S6] After a short hand-to-hand fight (the Polish unit had only two pieces of firearms and was mostly equipped with sabres, war scythes and improvised weapons), the Russian commander was killed and his uni
+All sentences (5):
+  [S3] As the engagement started on the very first day of the uprising, the Russian force still obeyed the orders of marching through the occupied country with their rifles unloaded.
+  [S4] When the Russians approached a local manor in which the Poles had their quarters, the Russian commander ordered a loose formation and tried to negotiate an agreement and take all Poles into captivity.
+  [S5] However, Rogaliński refused to negotiate and ordered a charge of the Russians.
+  [S6] After a short hand-to-hand fight (the Polish unit had only two pieces of firearms and was mostly equipped with sabres, war scythes and improvised weapons), the Russian commander was killed and his unit dispersed.
+  [S7] Polish losses were negligible, but the Polish commander was wounded and lost his eye.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 3 | Easy | id=38 ---
+Q: After Madonna trained for the choreography, what did she do for the costumes?
+Gold: "collaborated"
+Path: trained -> collaborated
+Solver(32B): "Collaborated with Marlene Stewart."
+  target_hit=1.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=0.0 single_sent=0.0 hops=0.67
+  composite=0.917
+Sentences with gold trigger "collaborated":
+  [S5] For the costumes, she collaborated with designer Marlene Stewart, expanding on the idea of bringing her popular video characters to life onstage, reworking scenes from her music videos.
+All sentences (4):
+  [S3] Musically and technically superior to her previous initiative, the Who's That Girl Tour incorporated multimedia components to make the show more appealing.
+  [S4] Madonna trained physically doing aerobics, jogging and weight-lifting, to cope with the choreography and the dance routines.
+  [S5] For the costumes, she collaborated with designer Marlene Stewart, expanding on the idea of bringing her popular video characters to life onstage, reworking scenes from her music videos.
+  [S6] The stage had four video screens, multimedia projectors and a flight of stairs in the middle.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 4 | Easy | id=191 ---
+Q: What happened to her after the police wrapped her head with tape?
+Gold: "placed"
+Path: wrapped -> placed
+Solver(32B): "Collapsed, asphyxiated, brain damage."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=0.5 single_sent=0.5 hops=0.67
+  composite=0.667
+Sentences with gold trigger "placed":
+  [S4] She was placed on life support but died following a cardiac arrest four days later.
+All sentences (5):
+  [S1] She died following an attempt by police officers to detain her for deportation.
+  [S2] During a police raid on her home in Crouch End, London, she was restrained with handcuffs and leather straps and gagged with a 13-foot length of adhesive "Elastoplast" tape wrapped around her head.
+  [S3] Unable to breathe, she collapsed and suffered brain damage due to asphyxia.
+  [S4] She was placed on life support but died following a cardiac arrest four days later.
+  [S5] In 1995, three of the police officers involved stood trial for Gardner's manslaughter, but were acquitted.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 5 | Easy | id=292 ---
+Q: What happened to the aircraft after it ploughed through a fence?
+Gold: "torn"
+Path: ploughed -> torn
+Solver(32B): "Left wing torn off."
+  target_hit=1.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=0.0 single_sent=0.0 hops=0.67
+  composite=0.883
+Sentences with gold trigger "torn":
+  [S9] After the aircraft hit the slush, it ploughed through a fence beyond the end of the runway and the left wing was torn off after hitting a house.
+All sentences (3):
+  [S8] By then, snow was falling, causing a layer of slush to form at the end of the runway.
+  [S9] After the aircraft hit the slush, it ploughed through a fence beyond the end of the runway and the left wing was torn off after hitting a house.
+  [S10] Fearing the aircraft might explode, Thain began evacuating passengers while Manchester United goalkeeper Harry Gregg helped pull survivors from the wreckage.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 6 | Easy | id=57 ---
+Q: What action did the Dutch take that effectively destroyed the last bastion of Portuguese power in the Malay archipelago?
+Gold: "removing"
+Path: assaulted -> removing
+Solver(32B): "Assaulted and captured Malacca."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=0.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "removing":
+  [S7] This combined Dutch-Johor effort effectively destroyed the last bastion of Portuguese power, removing their influence in the Malay archipelago.
+All sentences (4):
+  [S5] Although the Dutch were routed, the Portuguese fleet of Martim Afonso de Castro, the Viceroy of Portuguese India, suffered heavier casualties and the battle rallied the forces of the Sultanate of Johor in an alliance with the Dutch.
+  [S6] The Dutch with their local allies assaulted and wrested Malacca from the Portuguese in January 1641.
+  [S7] This combined Dutch-Johor effort effectively destroyed the last bastion of Portuguese power, removing their influence in the Malay archipelago.
+  [S8] In line with the agreement with Johor in 1606, the Dutch took control of Malacca and agreed not to seek territories or wage war with the Malay kingdoms.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 7 | Easy | id=18 ---
+Q: What event took place after the IIHF announced its plans for the Triple Gold Club ceremony?
+Gold: "played"
+Path: announced -> played
+Solver(32B): "2008 World Championship"
+  target_hit=0.0 solver_correct=0.0
+  answerable=0.0 support=1.0
+  faith_need_ie=0.0 single_sent=0.0 hops=0.67
+  composite=0.433
+Sentences with gold trigger "played":
+  [S0] The 2008 IIHF World Championship was played between May 2 and May 18, 2008 in the Canadian cities of Halifax (Nova Scotia) and Quebec City (Quebec).
+All sentences (5):
+  [S0] The 2008 IIHF World Championship was played between May 2 and May 18, 2008 in the Canadian cities of Halifax (Nova Scotia) and Quebec City (Quebec).
+  [S1] The two venues were the Halifax Metro Centre and the Colisée Pepsi.
+  [S7] The tournament featured many countries' elite stars, as it served as the last and most important stage in selecting nine automatic qualifiers for the men's hockey competition at the 2010 Winter Olympics in Vancouver, British Columbia, Canada, a proce
+  [S8] On May 8, 2007, the IIHF announced it "will also formalize the Triple Gold Club by awarding commemorative medals to the 19 players who have won the three most prestigious championships in world hockey: Olympic gold, Stanley Cup, and World Championshi
+  [S9] The ceremony will take place in Canada during the 2008 World Championship."
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 8 | Easy | id=179 ---
+Q: What was the outcome for Charleston after the Battle of Sullivan's Island?
+Gold: "capture"
+Path: War -> capture
+Solver(32B): "Charleston remained in American hands."
+  target_hit=0.0 solver_correct=0.0
+  answerable=0.0 support=0.0
+  faith_need_ie=0.0 single_sent=0.0 hops=0.67
+  composite=0.233
+Sentences with gold trigger "capture":
+  [S1] It took place near Charleston, South Carolina, during the first British attempt to capture the city from American forces.
+All sentences (3):
+  [S0] The Battle of Sullivan's Island or the Battle of Fort Sullivan was fought on June 28, 1776, during the American Revolutionary War.
+  [S1] It took place near Charleston, South Carolina, during the first British attempt to capture the city from American forces.
+  [S2] It is also sometimes referred to as the First Siege of Charleston, owing to a more successful British siege in 1780.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 9 | Easy | id=260 ---
+Q: What attempt did the Irish Catholic gentry make during the beginning of the Irish Rebellion of 1641?
+Gold: "seize"
+Path: began -> seize
+Solver(32B): "Coup d'état attempt."
+  target_hit=0.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=0.0 single_sent=1.0 hops=0.33
+  composite=0.967
+Sentences with gold trigger "seize":
+  [S0] The Irish Rebellion of 1641 () began as an attempted "coup d'état" by Irish Catholic gentry, who tried to seize control of the English administration in Ireland to force concessions for Catholics.
+All sentences (2):
+  [S0] The Irish Rebellion of 1641 () began as an attempted "coup d'état" by Irish Catholic gentry, who tried to seize control of the English administration in Ireland to force concessions for Catholics.
+  [S1] The coup failed and the rebellion developed into an ethnic conflict between the Gaelic Irish and old English Catholics on one side, and both ethnically English Protestants and Scottish/Presbyterian planters on the other.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 10 | Easy | id=156 ---
+Q: What happened to the bomb after it took place?
+Gold: "exploded"
+Path: took place -> exploded
+Solver(32B): "Exploded, causing deaths."
+  target_hit=1.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=0.5 single_sent=1.0 hops=0.33
+  composite=0.883
+Sentences with gold trigger "exploded":
+  [S1] A bomb carried by Petri Erkki-Tapio Gerdt exploded at 19:36 killing five immediately, including Gerdt.
+All sentences (3):
+  [S0] The Myyrmanni bombing took place on October 11, 2002, in Myyrmäki, Vantaa, Finland, in Greater Helsinki, at the Myyrmanni shopping mall.
+  [S1] A bomb carried by Petri Erkki-Tapio Gerdt exploded at 19:36 killing five immediately, including Gerdt.
+  [S2] In total seven died, including two teenagers and a 7-year-old.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Easy is correct  [ ] should be Medium  [ ] should be Hard
+
+============================================================
+
+--- Item 11 | Medium | id=143 ---
+Q: What was the next event after the survivors were found and the initial investigation began?
+Gold: "investigated"
+Path: survived -> involved -> investigated
+Solver(32B): "Police investigated potential motives."
+  target_hit=1.0 solver_correct=0.0
+  answerable=0.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.467
+Sentences with gold trigger "investigated":
+  [S5] Police investigated al-Hilli's past in Iraq as an engineer on sensitive topics, as well as his work at the time of his death, as a potential motive for the attack.
+All sentences (7):
+  [S1] Four people were killed: an Iraqi-born British tourist named Saad al-Hilli, 50; his wife Iqbal, 47; her mother Suhaila al-Allaf, 74, who held a Swedish passport; and French cyclist Sylvain Mollier, 45.
+  [S2] The al-Hillis' two daughters both survived the attack.
+  [S3] One, aged four, was hidden under the legs of her dead mother in the rear footwell for eight hours even while the gendarmerie were on the scene; she was only discovered by specialist forensic investigators.
+  [S4] The elder daughter, aged seven, was shot in the shoulder and also suffered a head wound; she returned to the United Kingdom on 14 September 2012.
+  [S5] Police investigated al-Hilli's past in Iraq as an engineer on sensitive topics, as well as his work at the time of his death, as a potential motive for the attack.
+  [S6] Al-Hilli's work in the UK involved nuclear and satellite technology, whilst Mollier was also probed to determine if he was the primary target of the attack.
+  [S7] The attack has been compared to the 1952 killing of biochemist Jack Drummond in the Dominici Affair.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 12 | Medium | id=23 ---
+Q: How did the United States' airstrikes on 8 August 2014 contribute to the later offensive that disrupted ISIL's supply lines?
+Gold: "broke"
+Path: airstrikes -> started -> broke
+Solver(32B): "Enabled later offensive success."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.667
+Sentences with gold trigger "broke":
+  [S7] This offensive broke ISIL's troop transport routes and supply lines between Mosul and Raqqa, the largest ISIL-controlled cities in Iraq and Syria at the time.
+All sentences (8):
+  [S0] The Sinjar massacre was the genocidal killing and abduction of thousands of Yazidi men in Sinjar ( "Şingal") city and Sinjar District in Iraq's Nineveh Governorate by the Islamic terror group Islamic State of Iraq and the Levant (ISIS) in August 2014
+  [S1] This event started with ISIL attacking and capturing Sinjar and neighboring towns on 3 August, during ISIL's offensive in early August 2014.
+  [S2] Dr Noori Abdulrahman, head of the Department of Coordination and Follow-up of the Iraqi Kurdistan Regional Government, stated that ISIL's 3 August campaign against Sinjar was more about demography and strategy than about religion.
+  [S3] According to Abdulrahman, ISIL wanted to push most of the Kurds out of strategic Yazidi areas and bring in Arabs, obedient to ISIL.
+  [S4] On 8 August 2014, the United States reacted with airstrikes on ISIL units and convoys in northern Iraq, which led to a war of several countries against ISIL.
+  [S5] The assistance of PKK and YPG enabled the majority of the 50,000 Yazidis who fled into the Sinjar Mountains to be evacuated.
+  [S6] On 17 December 2014, the Kurdish Peshmerga, PKK and YPG forces started the December 2014 Sinjar offensive with the support of US airstrikes.
+  [S7] This offensive broke ISIL's troop transport routes and supply lines between Mosul and Raqqa, the largest ISIL-controlled cities in Iraq and Syria at the time.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 13 | Medium | id=65 ---
+Q: What change was made to the UEFA Europa League following its final match in 2015 that affected Sevilla's qualification for the UEFA Champions League?
+Gold: "guaranteed"
+Path: tournament -> renamed -> guaranteed
+Solver(32B): "Winners qualify for Champions League."
+  target_hit=0.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=1.0
+Sentences with gold trigger "guaranteed":
+  [S5] They were guaranteed to enter at the group stage, since the 2015 Champions League finalists (Juventus and Barcelona) have already qualified for the group stage via their domestic leagues and therefore
+All sentences (4):
+  [S0] The 2015 UEFA Europa League Final was the final match of the 2014–15 UEFA Europa League, the 44th season of Europe's secondary club football tournament organised by UEFA, and the sixth season since it was renamed from the UEFA Cup to the UEFA Europa 
+  [S1] It was played at the National Stadium in Warsaw, Poland, on 27 May 2015, between Ukrainian side Dnipro Dnipropetrovsk and the title holders, Spanish side Sevilla.
+  [S4] Moreover, for the first time, a place in the UEFA Champions League was reserved for the UEFA Europa League winners, meaning that Sevilla automatically qualified for the 2015–16 UEFA Champions League despite not qualifying through their domestic leagu
+  [S5] They were guaranteed to enter at the group stage, since the 2015 Champions League finalists (Juventus and Barcelona) have already qualified for the group stage via their domestic leagues and therefore the berth in the group stage reserved for the Cha
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 14 | Medium | id=55 ---
+Q: What after the troops settle into after connect the Inkerman stalemate turned?
+Gold: "recognize"
+Path: took place -> settled -> recognize
+Solver(32B): "Siege conditions."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=0.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.333
+Sentences with gold trigger "recognize":
+  [S35] The humiliation forced Russia's educated elites to identify the Empire's problems and to recognize the need for fundamental transformations aimed at modernizing and restoring Russia's position in the 
+All sentences (7):
+  [S20] A second counterattack, at Inkerman, ended in stalemate.
+  [S21] The front settled into a siege and led to brutal conditions for troops on both sides.
+  [S22] Smaller military actions took place in the Baltic, the Caucasus, the White Sea, and the North Pacific.
+  [S23] Sevastopol fell after eleven months, and neutral countries began to join the Allied cause.
+  [S34] The Crimean War proved to be the moment of truth for Nikolaevan Russia.
+  [S35] The humiliation forced Russia's educated elites to identify the Empire's problems and to recognize the need for fundamental transformations aimed at modernizing and restoring Russia's position in the ranks of European powers.
+  [S36] Historians have studied the role of the Crimean War as a catalyst for the reforms of Russia's social institutions: serfdom, justice, local self-government, education, and military service.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 15 | Medium | id=297 ---
+Q: What was the result of the insufficient time given to the train to react after the placement of the man with a red flag away from the track during the engineering works?
+Gold: "stop"
+Path: derailed -> works -> stop
+Solver(32B): "Train derailed, many casualties."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.667
+Sentences with gold trigger "stop":
+  [S2] In the Board of Trade report it was found that a man had been placed with a red flag away but the regulations required him to be away and the train had insufficient time to stop.
+All sentences (4):
+  [S0] The Staplehurst rail crash was a derailment at Staplehurst, Kent on 9 June 1865 at 3:13 pm.
+  [S1] The South Eastern Railway Folkestone to London boat train derailed while crossing a viaduct where a length of track had been removed during engineering works, killing ten passengers and injuring forty.
+  [S2] In the Board of Trade report it was found that a man had been placed with a red flag away but the regulations required him to be away and the train had insufficient time to stop.
+  [S3] Charles Dickens was travelling with Ellen Ternan and her mother on the train; they all survived the derailment.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 16 | Medium | id=256 ---
+Q: What was the significance of the 'Grable' shot during the Desert Rock V exercise in the context of Operation Ivy and Operation Castle?
+Gold: "testing out"
+Path: viewed -> exercise -> testing out
+Solver(32B): "First AFAP artillery shell fired."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.667
+Sentences with gold trigger "testing out":
+  [S4] The test series was notable as containing the first time an Artillery Fired Atomic Projectile AFAP artillery shell was fired ("GRABLE" Shot), the first two shots (both fizzles) by University of Califo
+All sentences (5):
+  [S1] It followed "Operation Ivy" and preceded "Operation Castle".
+  [S2] Over 21,000 soldiers took part in the ground exercise Desert Rock V in conjunction with the "Grable" shot.
+  [S3] "Grable" was a 280mm AFAP shell fired from the "Atomic Cannon" and was viewed by a number of high-ranking military officials.
+  [S4] The test series was notable as containing the first time an Artillery Fired Atomic Projectile AFAP artillery shell was fired ("GRABLE" Shot), the first two shots (both fizzles) by University of California Radiation Laboratory—Livermore (now Lawrence 
+  [S5] One primary device (RACER) was tested in thermonuclear system mockup assemblies of TX-14, TX-16, and TX-17/TX-24, to examine and evaluate the behaviour of radiation cases and the compression of the secondary geometries by the primary's x-rays prior t
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 17 | Medium | id=141 ---
+Q: What event occurred after the cyclone significantly intensified and prompted the movement of people in the region?
+Gold: "evacuation"
+Path: intensified -> passing -> evacuation
+Solver(32B): "Evacuation of 600,000 people."
+  target_hit=1.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.917
+Sentences with gold trigger "evacuation":
+  [S0] Cyclone Forrest, also referred to as Tropical Storm Forrest, was a powerful tropical cyclone that prompted the evacuation of 600,000 people in Bangladesh in late November 1992.
+All sentences (5):
+  [S0] Cyclone Forrest, also referred to as Tropical Storm Forrest, was a powerful tropical cyclone that prompted the evacuation of 600,000 people in Bangladesh in late November 1992.
+  [S1] Originating from an area of disturbed weather near the Caroline Islands on November 9, Forrest was classified as a tropical depression three days later over the South China Sea.
+  [S2] Tracking generally west, the system steadily organized into a tropical storm, passing Vietnam to the south, before striking Thailand along the Malay Peninsula on November 15.
+  [S3] Once over the Bay of Bengal, Forrest turned northward on November 17 and significantly intensified.
+  [S4] It reached its peak intensity on November 20 as a Category 4-equivalent cyclone on the Saffir–Simpson hurricane scale with winds of 230 km/h (145 mph).
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 18 | Medium | id=95 ---
+Q: What was the final event in the sequence of the Myyrmanni bombing? ?
+Gold: "died"
+Path: released -> carried -> died
+Solver(32B): "Bomb explosion."
+  target_hit=0.0 solver_correct=0.0
+  answerable=0.0 support=1.0
+  faith_need_ie=0.0 single_sent=1.0 hops=0.33
+  composite=0.467
+Sentences with gold trigger "died":
+  [S2] In total seven died, including two teenagers and a 7-year-old.
+All sentences (6):
+  [S0] The Myyrmanni bombing took place on October 11, 2002, in Myyrmäki, Vantaa, Finland, in Greater Helsinki, at the Myyrmanni shopping mall.
+  [S1] A bomb carried by Petri Erkki-Tapio Gerdt exploded at 19:36 killing five immediately, including Gerdt.
+  [S2] In total seven died, including two teenagers and a 7-year-old.
+  [S3] 166 people were injured, including 10 children.
+  [S4] 66 victims required hospitalization with the remainder treated and released at the scene.
+  [S5] The shopping center was especially crowded, with 1,000–2,000 people, including many children who had come to see a clown performance.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 19 | Medium | id=291 ---
+Q: How did Operation Deny Flight demonstrate NATO's adaptation in the post-Cold War era?
+Gold: "adapted"
+Path: response -> expanded -> adapted
+Solver(32B): "Engaged in air combat, bombings."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.483
+Sentences with gold trigger "adapted":
+  [S5] These engagements helped show that NATO had adapted to the post-Cold War era and could operate in environments other than a major force on force engagement on the plains of Central Europe.
+All sentences (9):
+  [S0] Operation Deny Flight was a North Atlantic Treaty Organization (NATO) operation that began on 12 April 1993 as the enforcement of a United Nations (UN) no-fly zone over Bosnia and Herzegovina.
+  [S1] The United Nations and NATO later expanded the mission of the operation to include providing close air support for UN troops in Bosnia and carrying out coercive air strikes against targets in Bosnia.
+  [S2] Twelve NATO members contributed forces to the operation and, by its end on 20 December 1995, NATO pilots had flown 100,420 sorties.
+  [S4] The operation included the first combat engagement in NATO's history, a 28 February 1994 air battle over Banja Luka, and in April 1994, NATO aircraft first bombed ground targets in an operation near Goražde.
+  [S5] These engagements helped show that NATO had adapted to the post-Cold War era and could operate in environments other than a major force on force engagement on the plains of Central Europe.
+  [S6] Cooperation between the UN and NATO during the operation also helped pave the way for future joint operations.
+  [S7] Although it helped establish UN-NATO relations, Deny Flight led to conflict between the two organizations.
+  [S8] Most notably, significant tension arose between the two after UN peacekeepers were taken as hostages in response to NATO bombing.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 20 | Medium | id=2 ---
+Q: What happened to the people at the King David Hotel after the hotel manager was notified of the potential threat and no evacuation was ordered?
+Gold: "injured"
+Path: notified -> planned -> injured
+Solver(32B): "Many died, injured when bombed."
+  target_hit=1.0 solver_correct=0.0
+  answerable=0.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.467
+Sentences with gold trigger "injured":
+  [S1] 91 people of various nationalities were killed, and 46 were injured.
+All sentences (8):
+  [S0] The King David Hotel bombing was a terrorist attack carried out on Monday, July 22, 1946, by the militant right-wing Zionist underground organization the Irgun on the British administrative headquarters for Palestine, which was housed in the southern
+  [S1] 91 people of various nationalities were killed, and 46 were injured.
+  [S2] The hotel was the site of the central offices of the British Mandatory authorities of Palestine, principally the Secretariat of the Government of Palestine and the Headquarters of the British Armed Forces in Palestine and Transjordan.
+  [S3] When planned, the attack had the approval of the Haganah, the principal Jewish paramilitary group in Palestine, though, unbeknownst to the Irgun, this had been cancelled by the time the operation was carried out.
+  [S4] It was conceived as part of a response to Operation Agatha (a series of widespread raids, including one on the Jewish Agency, conducted by the British authorities) and was the deadliest directed at the British during the Mandate era (1920–1948).
+  [S9] From the fact that a bomb search had already been carried out, it appears that a hoax call or tip-off had been received at the hotel earlier that day.
+  [S10] Subsequent telephone calls from a concerned "Palestine Post" staff member and the police caused increasing alarm, and the hotel manager was notified.
+  [S11] In the closing minutes before the explosion, he called an unknown British officer, but no evacuation was ordered.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Medium is correct  [ ] should be Easy  [ ] should be Hard
+
+============================================================
+
+--- Item 21 | Hard | id=298 ---
+Q: After Sebastian announced the title of his new album Armageddon and the tour took in 20 dates across the country, where did the tour finish its journey in 2012?
+Gold: "toured"
+Path: announced -> took -> finishing -> toured
+Solver(32B): "Sunshine Coast"
+  target_hit=0.0 solver_correct=1.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.917
+Sentences with gold trigger "toured":
+  [S6] Sebastian toured in places he has not toured before.
+All sentences (5):
+  [S2] The tour visited metropolitan and regional areas in Australia.
+  [S3] In 2012, Sebastian announced that the title of his new album was to be Armageddon.
+  [S4] Ahead of the album's release, Sebastian wen on a national tour.
+  [S5] The tour took in 20 dates across the country in both metropolitan and regional centres, kicking off in Cessnock on 1 June 2012 before finishing up on the Sunshine Coast on 1 July 2012.
+  [S6] Sebastian toured in places he has not toured before.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 22 | Hard | id=149 ---
+Q: After the expedition reached the coast of North Carolina and General Clinton called for a change in strategy, what action did they take regarding the Battle of Sullivan's Island?
+Gold: "fought"
+Path: reached -> called -> Battle -> fought
+Solver(32B): "Landed troops, prepared assault."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "fought":
+  [S0] The Battle of Sullivan's Island or the Battle of Fort Sullivan was fought on June 28, 1776, during the American Revolutionary War.
+All sentences (7):
+  [S0] The Battle of Sullivan's Island or the Battle of Fort Sullivan was fought on June 28, 1776, during the American Revolutionary War.
+  [S1] It took place near Charleston, South Carolina, during the first British attempt to capture the city from American forces.
+  [S3] The British organized an expedition in early 1776 for operations in the rebellious southern colonies of North America.
+  [S4] Delayed by logistical concerns and bad weather, the expedition reached the coast of North Carolina in May 1776.
+  [S5] Finding conditions unsuitable for their operations, General Henry Clinton and Admiral Sir Peter Parker decided instead to act against Charlestown.
+  [S6] Arriving there in early June, troops were landed on Long Island (now called Isle of Palms), near Sullivan's Island where Colonel William Moultrie commanded a partially constructed fort, in preparation for a naval bombardment and land assault.
+  [S7] General Charles Lee, commanding the southern Continental theater of the war,
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 23 | Hard | id=258 ---
+Q: Who encouraged Madonna to remix and present her older songs for the tour and what multimedia components were incorporated to make the show more appealing?
+Gold: "commented"
+Path: supported -> presenting -> make -> commented
+Solver(32B): "Patrick Leonard; screens, projectors, stairs."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.667
+Sentences with gold trigger "commented":
+  [S14] Biographer J. Randy Taraborrelli commented that "Many female artists behave like a diva for a period when they reach superstar status, and the 'Who's That Girl?'
+All sentences (11):
+  [S0] Who's That Girl World Tour was the second concert tour by American singer and songwriter Madonna.
+  [S1] The tour supported her 1986 third studio album "True Blue", as well as the 1987 soundtrack "Who's That Girl".
+  [S2] It was Madonna's first world tour, reaching Asia, North America and Europe.
+  [S3] Musically and technically superior to her previous initiative, the Who's That Girl Tour incorporated multimedia components to make the show more appealing.
+  [S4] Madonna trained physically doing aerobics, jogging and weight-lifting, to cope with the choreography and the dance routines.
+  [S6] The stage had four video screens, multimedia projectors and a flight of stairs in the middle.
+  [S7] Patrick Leonard, who was the music director, encouraged Madonna to go with the idea of remixing and presenting her older songs for the show.
+  [S8] The title Who's That Girl came to Madonna's mind when during rehearsals one-day when she looked at a gigantic image of herself, projected on a screen on the stage.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 24 | Hard | id=49 ---
+Q: After the operation adapted to the post-Cold War era and combat engagements began, how did NATO proceed in the conflict?
+Gold: "operate"
+Path: spanned -> combat -> adapted -> operate
+Solver(32B): "Bombed ground targets, prevented air use."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "operate":
+  [S5] These engagements helped show that NATO had adapted to the post-Cold War era and could operate in environments other than a major force on force engagement on the plains of Central Europe.
+All sentences (7):
+  [S3] The operation played an important role in shaping both the Bosnian War and NATO.
+  [S4] The operation included the first combat engagement in NATO's history, a 28 February 1994 air battle over Banja Luka, and in April 1994, NATO aircraft first bombed ground targets in an operation near Goražde.
+  [S5] These engagements helped show that NATO had adapted to the post-Cold War era and could operate in environments other than a major force on force engagement on the plains of Central Europe.
+  [S6] Cooperation between the UN and NATO during the operation also helped pave the way for future joint operations.
+  [S8] Most notably, significant tension arose between the two after UN peacekeepers were taken as hostages in response to NATO bombing.
+  [S9] The operations of Deny Flight spanned more than two years of the Bosnian War and played an important role in the course of that conflict.
+  [S10] The no-fly zone operations of Deny Flight proved successful in preventing significant use of air power by any side in the conflict.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 25 | Hard | id=209 ---
+Q: What was the status of the French Army paratrooper who was shot by Mohammed Merah on 11 March in Toulouse before the attack that resulted in his killing? 
+Gold: "wounded"
+Path: attacks -> wounded -> killing -> wounded
+Solver(32B): "Off-duty French Army paratrooper."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "wounded":
+  [S4] On 15 March, he killed two off-duty uniformed French soldiers and seriously wounded another in Montauban.
+  [S11] He was killed on 22 March by a police tactical unit after a 30-hour siege at his rented apartment there, during which he wounded six agents.
+All sentences (9):
+  [S0] The Toulouse and Montauban shootings were a series of Islamist terrorist attacks committed by Mohammed Merah from 11–19 March 2012 in the cities of Montauban and Toulouse in the Midi-Pyrénées region of France.
+  [S1] He targeted French Army soldiers as well as children and teachers at a Jewish school.
+  [S3] On 11 March, Merah shot dead an off-duty French Army paratrooper in Toulouse.
+  [S4] On 15 March, he killed two off-duty uniformed French soldiers and seriously wounded another in Montauban.
+  [S5] On 19 March, he opened fire at the Ozar Hatorah Jewish day school in Toulouse, killing a rabbi and three children, also wounding four others.
+  [S6] Merah filmed his attacks with a body-worn camera.
+  [S10] He claimed allegiance to Al-Qaeda and said he carried out his attacks because of France's participation in the War in Afghanistan and its ban on Islamic face veils, and justified his attack on the Jewish school because "The Jews kill our brothers and
+  [S11] He was killed on 22 March by a police tactical unit after a 30-hour siege at his rented apartment there, during which he wounded six agents.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 26 | Hard | id=137 ---
+Q: What was the sequence of events that led to the combined Dutch-Johor effort to remove Portuguese influence in the Malay archipelago after the siege of Malacca in 1606?
+Gold: "removing"
+Path: capture -> siege -> combined -> removing
+Solver(32B): "Skirmishes, alliance, assault, victory."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "removing":
+  [S7] This combined Dutch-Johor effort effectively destroyed the last bastion of Portuguese power, removing their influence in the Malay archipelago.
+All sentences (8):
+  [S0] The Battle of Malacca (2 August 1640 – 14 January 1641) was a successful attempt by the Dutch to capture Malacca from the Portuguese.
+  [S1] In the early 17th century, the Dutch East India Company ("Verenigde Oostindische Compagnie", "VOC") began the campaign to destroy Portuguese power in the East.
+  [S3] The Dutch started by launching small incursions and skirmishes against the Portuguese.
+  [S4] The first serious attempt was the siege of Malacca in 1606 by the third VOC fleet from Holland with eleven ships, led by Admiral Cornelis Matelief de Jonge that lead to the naval battle of Cape Rachado.
+  [S5] Although the Dutch were routed, the Portuguese fleet of Martim Afonso de Castro, the Viceroy of Portuguese India, suffered heavier casualties and the battle rallied the forces of the Sultanate of Johor in an alliance with the Dutch.
+  [S6] The Dutch with their local allies assaulted and wrested Malacca from the Portuguese in January 1641.
+  [S7] This combined Dutch-Johor effort effectively destroyed the last bastion of Portuguese power, removing their influence in the Malay archipelago.
+  [S8] In line with the agreement with Johor in 1606, the Dutch took control of Malacca and agreed not to seek territories or wage war with the Malay kingdoms.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 27 | Hard | id=44 ---
+Q: During the opening phase of the War, how did the successful defense of Sihang Warehouse impact the Chinese forces that were retreating?
+Gold: "Battle"
+Path: retreating -> War -> opening -> Battle
+Solver(32B): "Provided morale boost."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "Battle":
+  [S0] The defense of Sihang Warehouse took place from October 26 to November 1, 1937, and marked the beginning of the end of the three-month Battle of Shanghai in the opening phase of the Second Sino-Japane
+  [S1] Defenders of the warehouse held out against numerous waves of Japanese forces and covered Chinese forces retreating west during the Battle of Shanghai.
+All sentences (3):
+  [S0] The defense of Sihang Warehouse took place from October 26 to November 1, 1937, and marked the beginning of the end of the three-month Battle of Shanghai in the opening phase of the Second Sino-Japanese War.
+  [S1] Defenders of the warehouse held out against numerous waves of Japanese forces and covered Chinese forces retreating west during the Battle of Shanghai.
+  [S2] The successful defense of the warehouse provided a morale-lifting consolation to the Chinese army and people in the demoralizing aftermath of the Japanese invasion of Shanghai.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 28 | Hard | id=1 ---
+Q: After the IIHF announced its plans for the 2008 World Championship and the tournament was played, what did the organization do in terms of celebrating the federation's 100th anniversary?
+Gold: "holding"
+Path: played -> announced -> played -> holding
+Solver(32B): "Formalized Triple Gold Club."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "holding":
+  [S5] The IIHF wanted to celebrate the federation's 100th anniversary by holding the tournament in the country where ice hockey was born.
+All sentences (11):
+  [S0] The 2008 IIHF World Championship was played between May 2 and May 18, 2008 in the Canadian cities of Halifax (Nova Scotia) and Quebec City (Quebec).
+  [S1] The two venues were the Halifax Metro Centre and the Colisée Pepsi.
+  [S4] It was the first time the final tournament is held in a non-European country since 1962, when it was held in Colorado, USA.
+  [S5] The IIHF wanted to celebrate the federation's 100th anniversary by holding the tournament in the country where ice hockey was born.
+  [S6] The tournament was also included as part of the celebrations of Quebec City's 400th anniversary.
+  [S7] The tournament featured many countries' elite stars, as it served as the last and most important stage in selecting nine automatic qualifiers for the men's hockey competition at the 2010 Winter Olympics in Vancouver, British Columbia, Canada, a proce
+  [S8] On May 8, 2007, the IIHF announced it "will also formalize the Triple Gold Club by awarding commemorative medals to the 19 players who have won the three most prestigious championships in world hockey: Olympic gold, Stanley Cup, and World Championshi
+  [S9] The ceremony will take place in Canada during the 2008 World Championship."
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 29 | Hard | id=123 ---
+Q: How did the tour supported by Madonna's 'True Blue' album and her reaching out to new continents differ from her previous tour in terms of incorporating multimedia components? 
+Gold: "marked"
+Path: supported -> reaching -> incorporated -> marked
+Solver(32B): "More multimedia, broader reach."
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.75
+Sentences with gold trigger "marked":
+  [S15] tour marked the beginning of Madonna's."
+All sentences (8):
+  [S0] Who's That Girl World Tour was the second concert tour by American singer and songwriter Madonna.
+  [S1] The tour supported her 1986 third studio album "True Blue", as well as the 1987 soundtrack "Who's That Girl".
+  [S2] It was Madonna's first world tour, reaching Asia, North America and Europe.
+  [S3] Musically and technically superior to her previous initiative, the Who's That Girl Tour incorporated multimedia components to make the show more appealing.
+  [S4] Madonna trained physically doing aerobics, jogging and weight-lifting, to cope with the choreography and the dance routines.
+  [S14] Biographer J. Randy Taraborrelli commented that "Many female artists behave like a diva for a period when they reach superstar status, and the 'Who's That Girl?'
+  [S15] tour marked the beginning of Madonna's."
+  [S16] It is also noted for giving rise to the term "new Madonna", a stronger and more intelligent sexual image of her former self which had given rise to the term Madonna wannabe.
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+
+--- Item 30 | Hard | id=243 ---
+Q: What event was organised that led to the match played between Dnipro Dnipropetrovsk and Sevilla in the 2015 UEFA Europa League Final?
+Gold: "earned"
+Path: organised -> tournament -> played -> earned
+Solver(32B): "2014–15 UEFA Europa League"
+  target_hit=0.0 solver_correct=0.0
+  answerable=1.0 support=1.0
+  faith_need_ie=1.0 single_sent=0.0 hops=1.0
+  composite=0.717
+Sentences with gold trigger "earned":
+  [S3] As winners, Sevilla earned the right to play against the winners of the 2014–15 UEFA Champions League, Barcelona, in the 2015 UEFA Super Cup.
+All sentences (5):
+  [S0] The 2015 UEFA Europa League Final was the final match of the 2014–15 UEFA Europa League, the 44th season of Europe's secondary club football tournament organised by UEFA, and the sixth season since it was renamed from the UEFA Cup to the UEFA Europa 
+  [S1] It was played at the National Stadium in Warsaw, Poland, on 27 May 2015, between Ukrainian side Dnipro Dnipropetrovsk and the title holders, Spanish side Sevilla.
+  [S2] Sevilla won the match 3–2 for a record fourth title.
+  [S3] As winners, Sevilla earned the right to play against the winners of the 2014–15 UEFA Champions League, Barcelona, in the 2015 UEFA Super Cup.
+  [S4] Moreover, for the first time, a place in the UEFA Champions League was reserved for the UEFA Europa League winners, meaning that Sevilla automatically qualified for the 2015–16 UEFA Champions League despite not qualifying through their domestic leagu
+
+MANUAL ANNOTATION:
+  1. 是否可答? (Is the question answerable from context?)
+     [ ] yes  [ ] partial  [ ] no
+  2. 是否真的需要多跳? (Does it genuinely need multi-hop reasoning?)
+     [ ] yes, needs 2+ sentences  [ ] borderline  [ ] no, single sentence enough
+  3. 难度排序是否合理? (Is the difficulty label reasonable?)
+     [ ] Hard is correct  [ ] should be Easy  [ ] should be Medium
+
+============================================================
+

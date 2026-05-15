@@ -1,0 +1,469 @@
+[
+  {
+    "story_name": "master-girl",
+    "target_answer": "the giant gave seemingly simple tasks .",
+    "target_difficulty": "Easy",
+    "original_question": "why did the giant think he was a kind master ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        1
+      ],
+      "bridge_sentence_ids": [
+        2
+      ],
+      "anchor_sentence_ids": [
+        0
+      ],
+      "answer_sentence_id": 1,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Who did the giant do simple tasks? ",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: answer mismatch; graph_policy non-compliant (answer_only)",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "yes",
+      "graph_policy_compliance": "no"
+    }
+  },
+  {
+    "story_name": "thomas-the-rhymer",
+    "target_answer": "the road lead to elf - land .",
+    "target_difficulty": "Easy",
+    "original_question": "why did thomas and the queen of fairies need to take the third road ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        3
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 3,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "The the road that runs to elf - land .",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "no question mark",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown"
+    }
+  },
+  {
+    "story_name": "the-fox-and-the-wolf",
+    "target_answer": "dug a hole , buried the keg , and went off hunting as usual .",
+    "target_difficulty": "Easy",
+    "original_question": "what did the fox and the wolf do after the wolf agreed with the fox ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        7
+      ],
+      "bridge_sentence_ids": [
+        6
+      ],
+      "anchor_sentence_ids": [
+        6
+      ],
+      "answer_sentence_id": 7,
+      "reasoning_operation": "explicit_lookup",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 1,
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 1,
+      "num_edges": 0,
+      "diagnostics": {
+        "node_count": 1,
+        "edge_count": 0
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What did the two animals do after digging a hole and burying the keg?",
+      "attempts": 4,
+      "parse_ok": false,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "answer_only",
+      "graph_policy_reason": "Easy: using answer node N1 only",
+      "evidence_roles_used": [
+        "answer"
+      ],
+      "relation_chain": [],
+      "focus_match": "unknown",
+      "graph_policy_compliance": "unknown"
+    }
+  },
+  {
+    "story_name": "three-dogs",
+    "target_answer": "happy .",
+    "target_difficulty": "Medium",
+    "original_question": "how did the boy feel about the great dog ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        10,
+        11
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        6,
+        9
+      ],
+      "answer_sentence_id": 11,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "answer_local",
+      "num_required_sentences": 2,
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What made the youth feel that fortune had indeed favored him?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium: answer N2 + N1 via enables",
+      "evidence_roles_used": [
+        "answer",
+        "context"
+      ],
+      "relation_chain": [
+        "enables"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes"
+    }
+  },
+  {
+    "story_name": "how-boots-befooled-king",
+    "target_answer": "they wanted to marry the king 's daughter .",
+    "target_difficulty": "Medium",
+    "original_question": "why were two or three men dawdling around the house every day ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        2,
+        3
+      ],
+      "bridge_sentence_ids": [
+        3
+      ],
+      "anchor_sentence_ids": [],
+      "answer_sentence_id": 2,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "contradictions": [
+        "answer_sentence_id=2 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "Why did so many lads keep coming to the king's house every day?",
+      "attempts": 3,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium fallback: answer N1 + N2 (no directed edge into answer)",
+      "evidence_roles_used": [
+        "answer",
+        "bridge"
+      ],
+      "relation_chain": [
+        "causes"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes"
+    }
+  },
+  {
+    "story_name": "youth-who-wanted-to-win-daughter-of-mother-in-corner",
+    "target_answer": "it was rat food .",
+    "target_difficulty": "Medium",
+    "original_question": "why did the youth have no great appetite for the food ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        7,
+        9
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        7
+      ],
+      "answer_sentence_id": 9,
+      "reasoning_operation": "local_inference",
+      "necessity_type": "one_relation",
+      "num_required_sentences": 2,
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 2,
+      "num_edges": 1,
+      "diagnostics": {
+        "node_count": 2,
+        "edge_count": 1
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What caused the youth to have no great appetite for the food?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "degenerate output",
+      "self_check_pass": false,
+      "graph_policy": "two_node_relation",
+      "graph_policy_reason": "Medium: answer N2 + N1 via results_in",
+      "evidence_roles_used": [
+        "answer",
+        "context"
+      ],
+      "relation_chain": [
+        "results_in"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes"
+    }
+  },
+  {
+    "story_name": "three-dogs",
+    "target_answer": "three times .",
+    "target_difficulty": "Hard",
+    "original_question": "how many times did the boy make an exchange with the old gray-beard ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        6,
+        18,
+        32
+      ],
+      "bridge_sentence_ids": [],
+      "anchor_sentence_ids": [
+        6,
+        18
+      ],
+      "answer_sentence_id": 32,
+      "reasoning_operation": "summary_synthesis",
+      "necessity_type": "summary_synthesis",
+      "num_required_sentences": 3,
+      "contradictions": [
+        "Hard with bridge_required=no (expected yes)"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "How many times did the young swine-herd exchange his pigs for dogs due to his admiration of the dogs?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "",
+      "self_check_pass": true,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: directed path N1 → N2 → N3 [pure_temporal_chain]",
+      "evidence_roles_used": [
+        "anchor",
+        "context",
+        "answer"
+      ],
+      "relation_chain": [
+        "temporal_before",
+        "temporal_before"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes"
+    }
+  },
+  {
+    "story_name": "princess-glass-mountain",
+    "target_answer": "three times .",
+    "target_difficulty": "Hard",
+    "original_question": "how many times did the princess's suitors attempt to go up glass mountain ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        7,
+        14,
+        17
+      ],
+      "bridge_sentence_ids": [
+        17
+      ],
+      "anchor_sentence_ids": [
+        7
+      ],
+      "answer_sentence_id": 14,
+      "reasoning_operation": "summary_synthesis",
+      "necessity_type": "summary_synthesis",
+      "num_required_sentences": 3,
+      "contradictions": [
+        "answer_sentence_id=14 in anchor, removed"
+      ]
+    },
+    "graph_result": {
+      "graph_valid": false,
+      "graph_validation_reason": "no answer-role node found",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2,
+        "fail_reasons": [
+          "no answer-role node found"
+        ]
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "",
+      "error": "graph_invalid: no answer-role node found"
+    }
+  },
+  {
+    "story_name": "the-three-crowns",
+    "target_answer": "they chose the eldest prince .",
+    "target_difficulty": "Hard",
+    "original_question": "how did the men decide who would go down in the well ?",
+    "evidence_plan": {
+      "parse_ok": true,
+      "valid": "yes",
+      "required_evidence_sentences": [
+        6,
+        7,
+        8
+      ],
+      "bridge_sentence_ids": [
+        6
+      ],
+      "anchor_sentence_ids": [
+        4,
+        5
+      ],
+      "answer_sentence_id": 7,
+      "reasoning_operation": "motivation_chain",
+      "necessity_type": "motivation_bridge",
+      "num_required_sentences": 3,
+      "contradictions": []
+    },
+    "graph_result": {
+      "graph_valid": true,
+      "graph_validation_reason": "all checks passed",
+      "num_nodes": 3,
+      "num_edges": 2,
+      "diagnostics": {
+        "node_count": 3,
+        "edge_count": 2
+      }
+    },
+    "qg_result": {
+      "method": "Ours_AnswerGrounded",
+      "generated_question": "What motivated the group to ultimately let the eldest prince down into the well after the second daughter's sweetheart claimed it was his turn first?",
+      "attempts": 4,
+      "parse_ok": true,
+      "generation_error": "self-check failed: answer mismatch",
+      "self_check_pass": false,
+      "graph_policy": "multi_node_chain",
+      "graph_policy_reason": "Hard: directed path N1 → N2 → N3",
+      "evidence_roles_used": [
+        "bridge",
+        "context",
+        "answer"
+      ],
+      "relation_chain": [
+        "contrasts_with",
+        "causes"
+      ],
+      "focus_match": "yes",
+      "graph_policy_compliance": "yes"
+    }
+  }
+]

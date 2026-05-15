@@ -1,0 +1,30 @@
+{
+  "round": 4,
+  "threadId": "019dda05-f865-7e01-8ed9-17ae500dbdb1",
+  "status": "completed",
+  "difficulty": "medium",
+  "last_score": 2.0,
+  "last_verdict": "not ready (adversarial reviewer, but real signal exists)",
+  "pending_experiments": [],
+  "fixes_implemented": [
+    "Improved path_binding matching with fuzzy stem matching",
+    "Added retry logic for empty API responses (0% empty in quick test)",
+    "Added statistical significance tests (Mann-Whitney U, bootstrap CI)",
+    "Improved path coverage lexical matching",
+    "Relaxed Hard path_coverage threshold (3+ → 2+)",
+    "Added Self-Refine baseline (generate→critique→revise, 3 API calls/item)",
+    "Fixed SelfRefine integration bug",
+    "Confirmed Full4Dim = PL-only (100% agreement on 3890 paths)",
+    "Ran full baseline comparison: PathQG (0.695) > PathOnlyQG (0.584) > SelfRefine (0.550) > DirectLLM (0.542) > RelationTypeQG (0.519)",
+    "Updated method description with path-length reframing",
+    "Updated RESULTS_SUMMARY.md with complete baseline comparison"
+  ],
+  "remaining_blockers": [
+    "Circular evaluation (32B judges 32B) — needs different model family API",
+    "No human evaluation — needs annotators",
+    "Medium vs Hard not statistically significant (p=0.103)",
+    "Paper rewrite needed (4D → path-length framing)",
+    "End-to-end yield reporting needed"
+  ],
+  "timestamp": "2026-04-30T00:15:00"
+}

@@ -1,3 +1,4 @@
-from dcqg.graph.event_graph import EventGraph, build_graphs_from_file
+"""Graph module: narrative graph extraction for FairytaleQA."""
+from dcqg.graph.narrative_graph import NarrativeGraphExtractor
 
-__all__ = ["EventGraph", "build_graphs_from_file"]
+__all__ = ["NarrativeGraphExtractor"]

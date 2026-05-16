@@ -1,11 +1,11 @@
 # DCQG Claude Instructions
 
-This repository is the DCQG / event-path-constrained question generation project.
+This repository is the DCQG / evidence-necessity-aware difficulty-controlled question generation project.
 
 Before making research claims, code changes, or experiment decisions, read:
 
 - `review-stage/PROJECT_STATUS.md`
-- `review-stage/RESULTS_SUMMARY.md` if comparing results
+- `refine-logs/FINAL_PROPOSAL.md` for the full experiment plan
 
 `PROJECT_STATUS.md` is the source of truth for current pipeline status, known failures, metric definitions, and update protocol.
 
@@ -13,54 +13,34 @@ Before making research claims, code changes, or experiment decisions, read:
 
 ## Core Research Framing
 
-The project is **target-event-grounded question generation with event-path constraints**.
+The project is **evidence-necessity-aware question generation with difficulty control**.
 
-Difficulty is determined by hop count (Easy=1hop, Medium=2hop, Hard=3hop). The old four-dimensional scoring (PL/RD/ES/EA) has been removed.
+Difficulty is defined by a **two-dimensional combination** of answer explicitness and evidence scope (not hop count):
+
+- **Easy**: Answer directly found in text + 1 necessary evidence sentence.
+- **Medium**: Case 1 (answer not directly found + 1 necessary evidence sentence + simple inference) OR Case 2 (answer directly found + multiple necessary evidence sentences + simple synthesis).
+- **Hard**: Answer not directly found + multiple necessary evidence sentences + at least one inference.
+
+Canonical definitions live in `dcqg/difficulty/definitions.py`. All prompts inject from this single source.
 
 The main research question is:
 
-> Can document-level event paths help generate questions whose required reasoning difficulty matches Easy / Medium / Hard targets?
+> Can evidence-necessity labels enable a multi-task classifier to provide reproducible, interpretable difficulty evaluation and improve difficulty control via generation-time reranking?
 
-Do not claim that PathQG-HardAware fully outperforms ICL or ZeroShot on general question quality unless current results support it.
-
----
-
-## Trace-First Debugging Rule
-
-Never diagnose quality problems from aggregate tables alone.
-
-For any unexpected result, inspect trace items in this order:
-
-```text
-MAVEN raw sentence/event/offset
- -> graph node and directed edge
- -> sampled path and relation direction
- -> answer phrase extraction
- -> prefilter result
- -> LLM path judge prompt/raw/parsed
- -> QG prompt/raw/repair
- -> quality filter
- -> solver answer and judge raw response
-```
-
-If a conclusion cannot be traced to concrete examples, do not write it as a project conclusion or paper claim.
-
-Known upstream failure modes (all fixed as of 2026-05-01):
-
-- `answer_extraction.extract_answer_phrase_local()` is the single shared answer phrase extractor; use trace logs to verify truncation or partial extraction.
-- `path_sampler.py` Medium sampling 鈥?fixed to strict `src -> mid -> tgt`.
-- `difficulty_scorer.py` 鈥?deleted, replaced by hop-based scoring.
-- Path length is not the same as actual inference-step difficulty.
+Do not claim that PathQG-HardAware outperforms baselines on general question quality unless current results support it.
 
 ---
 
 ## Current Priority
 
-Upstream data chain is fixed. Next steps:
+Four-stage experiment plan (details in `refine-logs/FINAL_PROPOSAL.md`):
 
-1. Run larger pilots to validate hop-based scoring works at scale.
-2. Address hard degradation and path coverage issues.
-3. Full experiment rerun when pilots look good.
+1. **Evidence Audit** — No-Vote pipeline (Selector → Blind Verifier → Removal Verifier) on FairytaleQA to produce `(story, QA, evidence_sentences, difficulty_label)` labels.
+2. **Classifier Training** — Multi-task DeBERTa-v3 (difficulty head + evidence head) on audit labels.
+3. **QG + Reranking** — Generate K=5 candidates per method, rerank with classifier.
+4. **Evaluation** — Human eval (primary), classifier on held-out fold (consistency), LLM judge (diagnostic).
+
+Current bottleneck: No-Vote pipeline produces very few final Hard labels (Blind Verifier is very strict).
 
 ---
 
@@ -69,25 +49,32 @@ Upstream data chain is fixed. Next steps:
 The primary codebase is the `dcqg/` package. Do not depend on `event_qg/`; it is a legacy implementation scheduled for deletion.
 
 **Package (`dcqg/`):**
-- `dcqg/graph/event_graph.py`: builds document-level event graphs.
-- `dcqg/path/sampler.py`: samples Easy / Medium / Hard paths (hop-based).
-- `dcqg/path/diagnostics.py`: deterministic path diagnostics / prefilter.
-- `dcqg/path/llm_filter.py`: LLM path quality judge.
-- `dcqg/path/answer_extraction.py`: answer phrase extraction and final-event validity.
-- `dcqg/path/direction.py`: path binding check, Hard validation.
-- `dcqg/generation/generator.py`: PathQG-HardAware generation with retry.
-- `dcqg/generation/prompts.py`: difficulty-aware few-shot prompts.
-- `dcqg/generation/baselines.py`: baseline models (ZeroShot, ICL, SelfRefine, ablations).
-- `dcqg/question_filter/pipeline.py`: post-generation quality filter pipeline.
-- `dcqg/evaluation/solver.py`: Solver and Judge classes.
-- `dcqg/evaluation/judge.py`: LLM judge v2, quality judge, evaluate_item.
-- `dcqg/tracing/render.py`: full-chain debug trace (readable_trace.md).
+- `dcqg/difficulty/definitions.py`: canonical Easy/Medium/Hard definitions — single source of truth.
+- `dcqg/difficulty/classifier.py`: MultiTaskDifficultyClassifier (DeBERTa-v3).
+- `dcqg/difficulty/data.py`: training data construction for classifier.
+- `dcqg/difficulty/reranker.py`: DifficultyReranker for generation-time selection.
+- `dcqg/path/no_vote_evidence.py`: No-Vote evidence audit pipeline (Selector → Blind Verifier → Removal Verifier).
+- `dcqg/path/fairytale_evidence_audit.py`: `_split_sentences()` utility and old FairytaleEvidenceAuditor.
+- `dcqg/path/answer_grounded_evidence.py`: answer-grounded evidence planner + validator.
+- `dcqg/graph/narrative_graph.py`: narrative evidence graph extraction for QG.
+- `dcqg/generation/fairytale_qg.py`: 4 QG methods (Direct, ICL, SelfRefine, Ours).
+- `dcqg/generation/parser.py`: JSON response parsing and generation helper.
+- `dcqg/question_filter/grammar.py`: grammar quality filter.
+- `dcqg/evaluation/judge.py`: LLM judge, solver, evaluate_item.
+- `dcqg/evaluation/metrics.py`: fair metrics computation.
+- `dcqg/evaluation/report.py`: comparison table formatting.
+- `dcqg/datasets/fairytaleqa_loader.py`: FairytaleQA data loader (HuggingFace).
 
 **Entry points (`scripts/`):**
-- `scripts/run_smoke_test.py`: end-to-end smoke test.
-- `scripts/run_quality_pilot.py`: generation/filter pilot.
-- `scripts/run_pipeline.py`: full pipeline orchestrator.
-- `scripts/01_build_graph.py` through `scripts/05_evaluate.py`: individual stage entry points.
+- `scripts/run_evidence_no_vote_pilot.py`: Stage 1 — No-Vote evidence audit.
+- `scripts/train_classifier.py`: Stage 2 — train multi-task classifier.
+- `scripts/run_fairytale_qg_pilot.py`: Stage 3 — QG with 4 methods.
+- `scripts/run_crossqg_eval.py`: Stage 3/4 — CrossQG-style evaluation.
+- `scripts/run_k5_generation.py`: Stage 3 — K=5 candidate generation.
+- `scripts/run_reranking_eval.py`: Stage 3/4 — reranking evaluation.
+- `scripts/run_human_eval.py`: Stage 4 — human evaluation sample prep.
+- `scripts/compute_table1.py` / `scripts/compute_table3.py`: Stage 4 — results tables.
+- `scripts/run_llm_judge_difficulty.py`: Stage 4 — LLM judge diagnostic.
 
 - `review-stage/PROJECT_STATUS.md`: project status and required update protocol.
 
@@ -97,44 +84,37 @@ The primary codebase is the `dcqg/` package. Do not depend on `event_qg/`; it is
 
 Run commands as modules from the repository root so `dcqg/` resolves cleanly.
 
-Run a 3-item end-to-end smoke test (skip path judge and solver for speed):
+### Stage 1 — Evidence Audit
 
 ```powershell
-python -m scripts.run_smoke_test --limit 3 --skip_path_judge --skip_solver
+python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/no_vote_pilot --implicit_limit 100 --batch_size 5 --timeout 300 --model Qwen/Qwen3-32B
 ```
 
-Run the full smoke test with all stages:
+### Stage 2 — Classifier Training
 
 ```powershell
-python -m scripts.run_smoke_test --limit 5
+python -m scripts.train_classifier --data outputs/runs/evidence_audit/train_dataset.jsonl --output_dir outputs/runs/classifier
 ```
 
-Run quality pilot (30 per level):
+### Stage 3 — QG + Reranking
 
 ```powershell
-python -m scripts.run_quality_pilot --n_per_level 30
+python -m scripts.run_fairytale_qg_pilot --candidates_path outputs/runs/candidates.jsonl --output_dir outputs/runs/qg_pilot
+python -m scripts.run_k5_generation --candidates_path outputs/runs/candidates.jsonl --output_dir outputs/runs/k5
 ```
 
-Run the full pipeline:
+### Stage 4 — Evaluation
 
 ```powershell
-python -m scripts.run_pipeline --limit 50 --skip_path_judge --skip_solver
-```
-
-Individual stages:
-
-```powershell
-python -m scripts.01_build_graph --input data/raw/maven_ere/valid.jsonl --limit 10
-python -m scripts.02_sample_paths --input data/raw/maven_ere/valid.jsonl --limit 100
-python -m scripts.03_filter_paths --input outputs/runs/latest/paths.raw.jsonl --skip_llm_judge
-python -m scripts.04_generate_questions --input outputs/runs/latest/paths.filtered.jsonl
-python -m scripts.05_evaluate --input outputs/runs/latest/questions.raw.jsonl --skip_solver
+python -m scripts.run_crossqg_eval --selection_mode story_matched --output_dir outputs/runs/crossqg
+python -m scripts.run_reranking_eval --k5_dir outputs/runs/k5 --classifier_path outputs/runs/classifier
+python -m scripts.run_llm_judge_difficulty --samples_path outputs/eval/test_200.jsonl
 ```
 
 Check syntax for a changed Python file:
 
 ```powershell
-python -m py_compile dcqg/path/sampler.py
+python -m py_compile dcqg/path/no_vote_evidence.py
 ```
 
 ---
@@ -142,17 +122,19 @@ python -m py_compile dcqg/path/sampler.py
 ## Experiment Rules
 
 - Use fixed samples when comparing methods.
-- Treat `PathOnlyQG` and `RelationTypeQG` as ablations, not external baselines.
-- Use `ZeroShotTargetQG`, `ICLTargetQG`, `SelfRefine`, and `PathQG-HardAware` as main comparisons.
-- Do not use `Composite` as the main paper metric; it is internally weighted and custom.
-- Prefer primary metrics from `PROJECT_STATUS.md`: Difficulty Consistency, Inference-step Consistency, Solver Accuracy by Difficulty, and Question Quality.
+- Treat Direct, ICL, and SelfRefine as baselines; Ours (narrative graph) as the proposed method.
+- Do not expose target difficulty to the independent difficulty judge.
+- Do not use solver answer or solver correctness as input to the difficulty judge.
+- Do not use `Composite` as the main paper metric.
+- Primary metrics: Difficulty consistency (human-evaluated), classifier accuracy (held-out fold), per-class F1, evidence recall/precision.
 - API errors and parse errors must be reported separately. Do not count them as real model judgments.
+- Do not depend on `event_qg/` or MAVEN-ERE scripts in new code.
 
 ---
 
 ## Documentation Update Rule
 
-After any change to sampling, filtering, judging, generation, evaluation, or metrics, update:
+After any change to evidence audit, classifier training, generation, reranking, or evaluation, update:
 
 - `review-stage/PROJECT_STATUS.md`
 
@@ -162,6 +144,5 @@ Update at least:
 - solved problems
 - remaining problems
 - reportable conclusions
-- trace/log status
 
 Keep `PROJECT_STATUS.md` as the full research log. Keep this `CLAUDE.md` concise and operational.

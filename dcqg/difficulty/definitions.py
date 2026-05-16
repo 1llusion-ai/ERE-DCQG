@@ -27,8 +27,7 @@ DIFFICULTY_DEFINITIONS = {
     "Hard": (
         "The answer cannot be directly found in the text; obtaining the "
         "answer requires synthesizing information from multiple necessary "
-        "evidence sentences and performing complex implicit reasoning or "
-        "multi-step reasoning."
+        "evidence sentences and making at least one inference."
     ),
 }
 
@@ -52,4 +51,3 @@ def difficulty_definitions_block():
     for level in ["Easy", "Medium", "Hard"]:
         lines.append(f"{level}:\n{DIFFICULTY_DEFINITIONS[level]}")
     return "\n\n".join(lines)
-

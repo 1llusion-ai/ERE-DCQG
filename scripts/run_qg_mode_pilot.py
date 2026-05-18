@@ -209,6 +209,7 @@ def _summarize(results):
                 "quality_judged": sum(1 for r in subset if "quality_pass" in r),
                 "quality_pass": sum(1 for r in subset if r.get("quality_pass")),
                 "strict_quality_pass": sum(1 for r in subset if r.get("strict_quality_pass")),
+                "difficulty_judged": sum(1 for r in subset if "difficulty_match" in r),
                 "difficulty_match": sum(1 for r in subset if r.get("difficulty_match")),
             }
     return summary
@@ -253,34 +254,35 @@ def _write_report(path, candidates, results, args):
                     f"{_rate_cell(s['parse_ok'], total)} | "
                     f"{_optional_rate_cell(s['quality_pass'], s['quality_judged'], total)} | "
                     f"{_optional_rate_cell(s['strict_quality_pass'], s['quality_judged'], total)} | "
-                    f"{_rate_cell(s['difficulty_match'], total)} |\n"
+                    f"{_optional_rate_cell(s['difficulty_match'], s['difficulty_judged'], total)} |\n"
                 )
         f.write("\n")
 
-        f.write("## Difficulty Match By Target Difficulty\n\n")
-        f.write("| Method | Mode | Target | Match | Pred Easy | Pred Medium | Pred Hard | Judge Error |\n")
-        f.write("|---|---|---|---:|---:|---:|---:|---:|\n")
-        for method in METHODS:
-            for mode in MODES:
-                for diff in DIFFICULTIES:
-                    subset = [
-                        r for r in rows
-                        if r.get("method_family") == method
-                        and r.get("mode") == mode
-                        and r.get("target_difficulty") == diff
-                    ]
-                    total = len(subset)
-                    match = sum(1 for r in subset if r.get("difficulty_match"))
-                    pred_easy = sum(1 for r in subset if r.get("predicted_difficulty") == "Easy")
-                    pred_med = sum(1 for r in subset if r.get("predicted_difficulty") == "Medium")
-                    pred_hard = sum(1 for r in subset if r.get("predicted_difficulty") == "Hard")
-                    pred_err = total - pred_easy - pred_med - pred_hard
-                    f.write(
-                        f"| {method} | {mode} | {diff} | "
-                        f"{match}/{total} ({_pct(match, total)}) | "
-                        f"{pred_easy} | {pred_med} | {pred_hard} | {pred_err} |\n"
-                    )
-        f.write("\n")
+        if not args.skip_judges:
+            f.write("## Difficulty Match By Target Difficulty\n\n")
+            f.write("| Method | Mode | Target | Match | Pred Easy | Pred Medium | Pred Hard | Judge Error |\n")
+            f.write("|---|---|---|---:|---:|---:|---:|---:|\n")
+            for method in METHODS:
+                for mode in MODES:
+                    for diff in DIFFICULTIES:
+                        subset = [
+                            r for r in rows
+                            if r.get("method_family") == method
+                            and r.get("mode") == mode
+                            and r.get("target_difficulty") == diff
+                        ]
+                        total = len(subset)
+                        match = sum(1 for r in subset if r.get("difficulty_match"))
+                        pred_easy = sum(1 for r in subset if r.get("predicted_difficulty") == "Easy")
+                        pred_med = sum(1 for r in subset if r.get("predicted_difficulty") == "Medium")
+                        pred_hard = sum(1 for r in subset if r.get("predicted_difficulty") == "Hard")
+                        pred_err = total - pred_easy - pred_med - pred_hard
+                        f.write(
+                            f"| {method} | {mode} | {diff} | "
+                            f"{match}/{total} ({_pct(match, total)}) | "
+                            f"{pred_easy} | {pred_med} | {pred_hard} | {pred_err} |\n"
+                        )
+            f.write("\n")
 
         f.write("## Examples\n\n")
         for cand in candidates:
@@ -307,8 +309,8 @@ def _write_report(path, candidates, results, args):
                         f.write(
                             f"- **{label}:** Q: {r.get('generated_question', '?')} "
                             f"| A: {r.get('generated_answer', '?')} "
-                            f"| pred: {r.get('predicted_difficulty', '?')} "
-                            f"| quality: {r.get('quality_pass', False)}\n"
+                            f"| pred: {r.get('predicted_difficulty', 'not run')} "
+                            f"| quality: {r.get('quality_pass', 'not run')}\n"
                         )
                 f.write("\n")
 
@@ -390,10 +392,15 @@ def main():
             if s["quality_judged"] == 0
             else f"{s['quality_pass']}/{s['quality_judged']}"
         )
+        difficulty_cell = (
+            "not run"
+            if s["difficulty_judged"] == 0
+            else f"{s['difficulty_match']}/{s['difficulty_judged']}"
+        )
         print(
             f"{key}: parse={s['parse_ok']}/{total}, "
             f"quality={quality_cell}, "
-            f"difficulty_match={s['difficulty_match']}/{total}"
+            f"difficulty_match={difficulty_cell}"
         )
     print(f"\nResults: {results_path}")
     print(f"Report: {report_path}")

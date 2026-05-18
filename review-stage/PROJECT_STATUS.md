@@ -1186,3 +1186,42 @@ judge was run.
 - Run the same script on a larger story sample, then add quality judging for
   the stronger mode. If the pattern holds, keep target-answer-conditioned
   baselines for fair comparison with answer-grounded generation and reranking.
+
+**Generation-only follow-up run:**
+
+```powershell
+python -m scripts.run_qg_mode_pilot `
+  --max_stories 10 `
+  --seed 42 `
+  --retries 1 `
+  --skip_judges `
+  --output_dir outputs/runs/qg_mode_pilot_baselines_10_seed42_generation_only
+```
+
+**Output:**
+- `outputs/runs/qg_mode_pilot_baselines_10_seed42_generation_only/results.jsonl`
+- `outputs/runs/qg_mode_pilot_baselines_10_seed42_generation_only/comparison.md`
+- `outputs/runs/qg_mode_pilot_baselines_10_seed42_generation_only/summary.json`
+
+**Generation-only parse results:** 10 validation stories x 3 difficulties x 3
+methods x 2 modes = 180 generations. No difficulty or quality judge was run.
+
+| Method | Mode | Parse OK |
+|---|---|---:|
+| Direct | with_answer | 26/30 |
+| Direct | no_answer | 24/30 |
+| ICL | with_answer | 22/30 |
+| ICL | no_answer | 27/30 |
+| SelfRefine | with_answer | 15/30 |
+| SelfRefine | no_answer | 18/30 |
+
+**Surface-level observations:**
+- Direct with target answer remained the most stable target-answer-conditioned
+  baseline.
+- ICL without target answer had the highest parse rate, but inspection showed
+  many malformed or weak answers; parse rate alone should not be treated as
+  quality.
+- SelfRefine remained unstable under Qwen2.5-7B, with many degenerate initial
+  generations.
+- Since no judges were run, this follow-up only compares generation stability
+  and sample output behavior, not actual difficulty match.

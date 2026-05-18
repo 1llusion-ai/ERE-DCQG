@@ -665,6 +665,35 @@ Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
 
 
+def build_direct_no_answer_prompt(story_section, difficulty):
+    """Direct QG without target answer: context + difficulty definition only.
+
+    The model chooses its own answer and generates a QA pair at the target difficulty.
+    """
+    ctx = _format_story_context(story_section)
+    diff_def = difficulty_definition(difficulty)
+
+    return f"""Your task is to generate one question-answer pair according to the following context and target difficulty.
+
+Context:
+{ctx}
+
+Target Difficulty:
+{difficulty}
+
+Requirements:
+1. Difficulty Definition:
+{diff_def}
+2. You must choose a specific, concrete answer from the context.
+3. The question must be answerable using only the context.
+4. The answer must be clear, concrete, and well-justified based on the context.
+5. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+6. Output exactly one JSON object, nothing else.
+
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""
+
+
 def build_icl_prompt(story_section, target_answer, difficulty):
     """ICL QG: context + target answer + difficulty definition + examples. No graph."""
     ctx = _format_story_context(story_section)
@@ -967,6 +996,52 @@ def generate_direct(story_section, target_answer, difficulty, max_retries=2):
     return {
         "generated_question": question,
         "method": "Direct",
+        "generation_prompt": last_prompt,
+        "generation_raw": last_raw,
+        "parse_ok": gen is not None,
+        "generation_error": reason,
+    }, max_retries + 1
+
+
+def generate_direct_no_answer(story_section, difficulty, max_retries=2):
+    """Generate QA pair without target answer. Model chooses its own answer."""
+    question = ""
+    answer = ""
+    reason = "unknown"
+    gen = None
+    last_prompt = ""
+    last_raw = ""
+
+    for attempt in range(max_retries + 1):
+        prompt = build_direct_no_answer_prompt(story_section, difficulty)
+        temp = 0.1 + min(attempt * 0.1, 0.3)
+        raw = _call_llm(prompt, temperature=temp)
+        last_prompt = prompt
+        last_raw = raw
+
+        if _is_degenerate(raw):
+            reason = "degenerate output"
+            continue
+
+        gen = _parse_json(raw)
+        if gen:
+            question = gen.get("question", "")
+            answer = gen.get("answer", "")
+        ok, reason = _validate_question(question, "")
+        if ok and answer:
+            return {
+                "generated_question": question,
+                "generated_answer": answer,
+                "method": "DirectNoAnswer",
+                "generation_prompt": prompt,
+                "generation_raw": raw,
+                "parse_ok": True,
+            }, 1 + attempt
+
+    return {
+        "generated_question": question,
+        "generated_answer": answer,
+        "method": "DirectNoAnswer",
         "generation_prompt": last_prompt,
         "generation_raw": last_raw,
         "parse_ok": gen is not None,

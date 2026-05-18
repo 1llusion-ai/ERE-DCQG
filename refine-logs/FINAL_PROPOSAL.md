@@ -70,7 +70,7 @@
 | ---------- | ---------- |
 | **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
 | **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
-| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
+| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and making at least one inference. |
 
 - **Impact:** Aligns the method more naturally with FairytaleQA's explicit/implicit distinction and CrossQG-style difficulty control while keeping evidence necessity auditable.
 
@@ -116,7 +116,7 @@ The connection between evidence-inference load and question difficulty is ground
 | ---------- | ---------- |
 | **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
 | **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
-| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
+| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and making at least one inference. |
 
 ### Why This Is Timely
 
@@ -170,7 +170,7 @@ Stage 1: Evidence Audit Pipeline (offline, one-time, ~$30 API)
   Label mapping:
     Easy:   answer directly found + one necessary evidence sentence
     Medium: single-sentence simple inference OR direct answer requiring multiple necessary evidence sentences
-    Hard:   answer not directly found + multiple necessary evidence sentences + complex/multi-step reasoning
+    Hard:   answer not directly found + multiple necessary evidence sentences
     ↓
   Human validation: 200 samples, 2 annotators, Cohen's κ
   Coverage report: % with valid consistent labels
@@ -258,7 +258,7 @@ Sentence is confirmed necessary if response is "no" or "partial."
 |-------|-----------|-------------------|
 | Easy | Answer directly found AND \|req\|=1 | Single-sentence explicit answer extraction |
 | Medium | Answer not directly found AND \|req\|=1 with simple inference; OR answer directly found AND \|req\|≥2 | Single-sentence implicit reasoning or simple multi-sentence synthesis |
-| Hard | Answer not directly found AND \|req\|≥2 AND complex implicit or multi-step reasoning | Multi-evidence integration plus higher inference demand |
+| Hard | Answer not directly found AND \|req\|≥2 | Multi-evidence integration with implicit answer acquisition |
 
 **Expected yield:** to be re-estimated after re-labeling under the revised two-dimensional definition. Medium should increase because single-sentence implicit reasoning no longer collapses into Easy.
 

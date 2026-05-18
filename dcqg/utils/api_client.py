@@ -49,7 +49,8 @@ def call_api(prompt, system="", temperature=0.1, max_tokens=150, model=None, tim
 
 def call_openai_compatible(prompt, api_url, api_key, model, max_tokens=300,
                            temperature=0.0, timeout=90, json_mode=True,
-                           system=None):
+                           system=None, enable_thinking=None,
+                           thinking_budget=None):
     """API call with explicit endpoint config. Raises on failure."""
     if not api_key:
         raise RuntimeError("API key is empty. Check your .env configuration.")
@@ -73,6 +74,10 @@ def call_openai_compatible(prompt, api_url, api_key, model, max_tokens=300,
     }
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
+    if enable_thinking is not None:
+        payload["enable_thinking"] = bool(enable_thinking)
+    if thinking_budget is not None:
+        payload["thinking_budget"] = int(thinking_budget)
 
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(api_url, data=data, headers=headers, method="POST")

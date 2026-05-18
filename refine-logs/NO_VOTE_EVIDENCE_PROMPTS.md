@@ -105,7 +105,19 @@ Target answer: to save the princess so he could marry her .
 Output:
 {"section_sufficient":"yes","selected_evidence_sentences":[0,1,2,3],"answer_directly_found":"no","reasoning_level":"complex","evidence_reason":"The answer is not directly stated. S0 gives the reward, S1 links the brother to the promise, S2 gives his action, and S3 confirms the rescue outcome."}
 
-Example 5: insufficient context
+Example 5: quoted speech boundaries
+Context:
+  [S0] the boy said , " i lost the brass key . "
+  [S1] " i searched the garden until sunset . "
+  [S2] " then you cannot open the gate , " replied the queen .
+  [S3] the gate remained shut until morning .
+QA:
+Question: why could the boy not open the gate ?
+Target answer: he had lost the brass key .
+Output:
+{"section_sufficient":"yes","selected_evidence_sentences":[0],"answer_directly_found":"yes","reasoning_level":"direct","evidence_reason":"S0 is a complete quoted sentence with local attribution and directly states that the boy lost the brass key. S1 is a separate quoted sentence from the same speech turn, and S2 is a different speaker's reply; neither is necessary for the target answer."}
+
+Example 6: insufficient context
 Context:
   [S0] silverwhite went through the city and asked why everyone was unhappy .
   [S1] they said the oldest princess would be taken away in the morning .
@@ -209,7 +221,16 @@ Target answer: to save the princess so he could marry her .
 Output:
 {"sufficient":"yes","answer_directly_found":"no","reasoning_level":"complex","reasoning":"The target answer is not directly stated. S0 gives the reward, S1 links the brother to the promise, S2 gives his action, and S3 confirms the rescue outcome."}
 
-Example E: not sufficient
+Example E: sufficient, quoted speech
+Context:
+  [S0] the boy said , " i lost the brass key . "
+QA:
+Question: why could the boy not open the gate ?
+Target answer: he had lost the brass key .
+Output:
+{"sufficient":"yes","answer_directly_found":"yes","reasoning_level":"direct","reasoning":"S0 is a complete quoted sentence with local attribution and directly states that the boy lost the brass key."}
+
+Example F: not sufficient
 Context:
   [S2] but this they did not know , and hence sold the ring for a small sum .
 QA:

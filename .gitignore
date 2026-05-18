@@ -2,3 +2,13 @@
 .env
 .env.*
 !.env.example
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local Claude settings
+.claude/settings.local.json
+
+# Outputs
+outputs/

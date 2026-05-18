@@ -3,7 +3,9 @@
 Pipeline:
   1. Single full-context selector.
   2. Blind verifier using selected evidence only.
-  3. Stateless leave-one-out checks with no voting.
+  3. Default: annotation-assist output. Blind verifier is an auxiliary
+     priority signal, not a hard filter. Legacy auto-label mode can still run
+     leave-one-out checks.
 """
 
 import argparse
@@ -59,6 +61,37 @@ def parse_args():
     parser.add_argument("--model", default=None)
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument(
+        "--selector_enable_thinking",
+        action="store_true",
+        help="Pass enable_thinking=true for selector API calls.",
+    )
+    parser.add_argument(
+        "--verifier_disable_thinking",
+        action="store_true",
+        help="Pass enable_thinking=false for Blind/Removal verifier API calls.",
+    )
+    parser.add_argument(
+        "--thinking_budget",
+        type=int,
+        default=None,
+        help="Optional thinking_budget for selector API calls when thinking is enabled.",
+    )
+    parser.add_argument(
+        "--selector_only",
+        action="store_true",
+        help="Run only the selector stage and skip Blind/Removal verification.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["annotation_assist", "auto_labels"],
+        default="annotation_assist",
+        help=(
+            "annotation_assist keeps selector-valid rows for human review and "
+            "uses Blind Verifier only as priority; auto_labels reproduces the "
+            "old blind-filter + removal-verifier behavior."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -136,16 +169,61 @@ def run_verifier(candidates, auditor, output_path, resume):
 
 def write_summary(output_dir, selector_path, verification_path, labels_path,
                   auditor, records, total_implicit_records, sample_mode,
-                  sample_seed):
+                  sample_seed, mode, selector_only=False):
     selector_rows = read_jsonl(selector_path) if os.path.exists(selector_path) else []
     verification_rows = (
         read_jsonl(verification_path) if os.path.exists(verification_path) else []
     )
-    labels = [r for r in verification_rows if r.get("difficulty_label") != "Invalid"]
-    write_jsonl(labels_path, labels)
+    if selector_only:
+        labels = []
+    elif mode == "annotation_assist":
+        labels = [
+            r for r in verification_rows
+            if r.get("annotation_priority") != "discard"
+            and r.get("suggested_difficulty_label", r.get("difficulty_label"))
+            != "Invalid"
+        ]
+    else:
+        labels = [
+            r for r in verification_rows
+            if r.get("difficulty_label") != "Invalid"
+        ]
+    if selector_only:
+        if os.path.exists(labels_path):
+            os.remove(labels_path)
+    else:
+        write_jsonl(labels_path, labels)
+
+    api_calls = auditor.call_counts()
+    selector_raws = {
+        row.get("selector_raw", "")
+        for row in selector_rows
+        if row.get("selector_raw")
+    }
+    inferred_selector_calls = len(selector_raws)
+    inferred_sufficiency_calls = sum(
+        1 for row in verification_rows if row.get("sufficiency_raw")
+    )
+    inferred_removal_calls = sum(
+        len(row.get("removal_checks") or []) for row in verification_rows
+    )
+    api_calls = {
+        "selector_calls": max(
+            api_calls.get("selector_calls", 0), inferred_selector_calls
+        ),
+        "sufficiency_calls": max(
+            api_calls.get("sufficiency_calls", 0), inferred_sufficiency_calls
+        ),
+        "removal_calls": max(
+            api_calls.get("removal_calls", 0), inferred_removal_calls
+        ),
+    }
+    api_calls["total_calls"] = sum(api_calls.values())
 
     summary = {
         "timestamp": _timestamp(),
+        "mode": mode,
+        "selector_only": selector_only,
         "output_dir": output_dir,
         "num_input_records": len(records),
         "total_implicit_records": total_implicit_records,
@@ -157,19 +235,42 @@ def write_summary(output_dir, selector_path, verification_path, labels_path,
         "selector_count": len(selector_rows),
         "verified_count": len(verification_rows),
         "label_count": len(labels),
+        "annotation_priority": dict(
+            Counter(r.get("annotation_priority", "?") for r in verification_rows)
+        ),
         "selector_difficulty": dict(
             Counter(r.get("selector_difficulty", "Invalid") for r in selector_rows)
+        ),
+        "blind_sufficiency": dict(
+            Counter(r.get("evidence_set_sufficient", "?") for r in verification_rows)
         ),
         "verification_status": dict(
             Counter(r.get("verification_status", "?") for r in verification_rows)
         ),
         "final_difficulty": dict(
-            Counter(r.get("difficulty_label", "Invalid") for r in labels)
+            Counter(
+                r.get("suggested_difficulty_label", r.get("difficulty_label", "Invalid"))
+                for r in labels
+            )
         ),
-        "invalid_count": sum(
-            1 for r in verification_rows if r.get("difficulty_label") == "Invalid"
+        "invalid_count": (
+            sum(
+                1 for r in selector_rows
+                if r.get("selector_difficulty", "Invalid") == "Invalid"
+            )
+            if selector_only else
+            sum(
+                1 for r in verification_rows
+                if r.get("annotation_priority") == "discard"
+                or r.get("difficulty_label") == "Invalid"
+            )
         ),
-        "api_calls": auditor.call_counts(),
+        "thinking_config": {
+            "selector_enable_thinking": auditor.selector_enable_thinking,
+            "verifier_enable_thinking": auditor.verifier_enable_thinking,
+            "thinking_budget": auditor.thinking_budget,
+        },
+        "api_calls": api_calls,
     }
 
     summary_path = os.path.join(output_dir, "pipeline_summary.json")
@@ -183,8 +284,13 @@ def write_summary(output_dir, selector_path, verification_path, labels_path,
     print(f"Input records:    {summary['num_input_records']}")
     print(f"Selector dist:    {summary['selector_difficulty']}")
     print(f"Statuses:         {summary['verification_status']}")
-    print(f"Final labels:     {summary['label_count']} {summary['final_difficulty']}")
+    label_name = (
+        "Annotation rows" if mode == "annotation_assist" else "Final labels"
+    )
+    print(f"{label_name}: {summary['label_count']} {summary['final_difficulty']}")
+    print(f"Priority:         {summary['annotation_priority']}")
     print(f"Invalid:          {summary['invalid_count']}")
+    print(f"Thinking config:  {summary['thinking_config']}")
     print(f"API calls:        {summary['api_calls']}")
     print(f"Summary saved:    {summary_path}")
     print("=" * 70)
@@ -208,6 +314,14 @@ def main():
     print(f"Batch size:     {args.batch_size}")
     print(f"Timeout:        {args.timeout}s")
     print(f"Resume:         {args.resume}")
+    print(f"Mode:           {args.mode}")
+    print(f"Selector only:  {args.selector_only}")
+    print(
+        "Thinking:       "
+        f"selector={True if args.selector_enable_thinking else None}, "
+        f"verifier={False if args.verifier_disable_thinking else None}, "
+        f"budget={args.thinking_budget}"
+    )
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -231,22 +345,37 @@ def main():
         batch_size=args.batch_size,
         model=model,
         timeout=args.timeout,
+        use_removal_verifier=(args.mode == "auto_labels"),
+        blind_filter=(args.mode == "auto_labels"),
+        selector_enable_thinking=True if args.selector_enable_thinking else None,
+        verifier_enable_thinking=False if args.verifier_disable_thinking else None,
+        thinking_budget=args.thinking_budget,
     )
 
     selector_path = os.path.join(args.output_dir, "selector_candidates.jsonl")
     verification_path = os.path.join(args.output_dir, "blind_verification.jsonl")
-    labels_path = os.path.join(args.output_dir, "labels_implicit.jsonl")
+    labels_name = (
+        "annotation_candidates.jsonl"
+        if args.mode == "annotation_assist"
+        else "labels_implicit.jsonl"
+    )
+    labels_path = os.path.join(args.output_dir, labels_name)
 
     candidates = run_selector(
         implicit, auditor, selector_path, args.batch_size, args.resume
     )
-    verified = run_verifier(candidates, auditor, verification_path, args.resume)
-    if len(verified) != len(candidates):
-        print(f"WARNING: verified {len(verified)} of {len(candidates)} candidates")
+    if args.selector_only:
+        if not args.resume and os.path.exists(verification_path):
+            os.remove(verification_path)
+    else:
+        verified = run_verifier(candidates, auditor, verification_path, args.resume)
+        if len(verified) != len(candidates):
+            print(f"WARNING: verified {len(verified)} of {len(candidates)} candidates")
 
     write_summary(
         args.output_dir, selector_path, verification_path, labels_path,
-        auditor, implicit, total_implicit_records, args.sample_mode, args.seed
+        auditor, implicit, total_implicit_records, args.sample_mode, args.seed,
+        args.mode, selector_only=args.selector_only
     )
 
 

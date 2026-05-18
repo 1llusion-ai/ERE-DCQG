@@ -1,6 +1,6 @@
 # DCQG Project Status
 
-**Last updated:** 2026-05-12
+**Last updated:** 2026-05-16
 **Status:** Stage 1 story-matched evaluation implemented. Smoke test passed (5 stories, 15 candidates, 60 generations). CrossQG evaluation pipeline now supports two selection modes: balanced (original) and story_matched (each story contributes equal Easy/Med/Hard). Story-matched, retry/budget, and similarity diagnostics added to report. Next: full story-matched run with 106 stories, then inspect results before Stage 2/3.
 
 **Maintenance rule:** Update this file whenever path sampling/filtering, question generation, question filtering, evaluation, baselines, or main experiment outputs change. Future diagnosis must start from trace logs and JSONL examples, not from aggregate numbers alone.
@@ -1068,7 +1068,7 @@ CrossQG-style difficulty control.
 | ---------- | ---------- |
 | **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
 | **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
-| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
+| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and making at least one inference. |
 
 **Rationale:**
 - The previous definition made single-sentence implicit reasoning collapse into
@@ -1076,8 +1076,9 @@ CrossQG-style difficulty control.
 - The revised definition has two axes: answer acquisition mode (directly found
   vs. inferred) and necessary evidence scope (single sentence vs. multiple
   sentences).
-- This should increase Medium coverage while keeping Hard reserved for cases
-  that require both multi-evidence synthesis and complex/multi-step reasoning.
+- This should increase Medium coverage while keeping Hard aligned with the
+  CrossQG-style intuition that implicit answers requiring multiple evidence
+  sentences are difficult, even when the reasoning operation is simple.
 
 **Files updated:**
 - `refine-logs/FINAL_PROPOSAL.md` now uses the revised definition in the
@@ -1088,3 +1089,419 @@ CrossQG-style difficulty control.
 - Runtime prompts and label-mapping code have not yet been changed in this
   update. Before the next pilot, synchronize selector/verifier prompts and
   `classify_difficulty()` with the revised definition.
+
+---
+
+## 25. No-Vote Evidence Pilot with Revised Definition (2026-05-16)
+
+**Goal:** Validate the revised two-dimensional difficulty definition in the
+no-vote evidence audit path before generating larger training data.
+
+**Runtime changes now applied:**
+- `dcqg/difficulty/definitions.py` is the canonical difficulty-definition
+  source of truth.
+- `dcqg/path/no_vote_evidence.py` uses separate frozen prompts for:
+  Selector, Blind Verifier, and Removal Verifier.
+- Selector outputs evidence ids plus `answer_directly_found` and
+  `reasoning_level`; it does not receive Easy/Medium/Hard definitions.
+- Blind Verifier output sufficiency plus the same directness/reasoning
+  diagnostics. In the current human-in-the-loop plan, this is an annotation
+  priority signal, not a hard filter.
+- Removal Verifier is no longer part of the default data-construction path. It
+  remains available only in legacy `auto_labels` mode.
+- Selector uses `/think`; Blind Verifier and Removal Verifier use `/no_think`.
+
+**Command:**
+
+```powershell
+python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/no_vote_500_newdef_qwen3_32b --implicit_limit 500 --sample_mode first --batch_size 5 --model Qwen/Qwen3-32B --timeout 300
+```
+
+**Results after directness + evidence-scope mapping:**
+- Selector candidates: 500 total = Easy 168, Medium 126, Hard 166,
+  Invalid 40.
+- Final retained labels after blind/removal verification: 274 total = Easy 109,
+  Medium 92, Hard 73.
+- Invalid after verification: 226.
+- Verification statuses: ok 274, insufficient selected evidence 186,
+  selector invalid/empty 40.
+- API calls: 857 total = selector 101, sufficiency 460, removal 296.
+
+**Diagnostics:**
+- Blind Verifier parse failures/timeouts: 2 total.
+- Removal Verifier parse failures/timeouts: 0.
+- Final evidence-size distribution among retained labels: 183 one-sentence,
+  71 two-sentence, 12 three-sentence, 5 four-sentence, 2 five-sentence,
+  1 six-sentence.
+- Final directness distribution among retained labels: direct=yes 127,
+  direct=no 147.
+- `reasoning_level` is retained only as a diagnostic field in this run; it is
+  not used for Easy/Medium/Hard label mapping.
+- Removal checks: 459 total, keep 397, drop 62.
+
+**Interpretation:**
+- The revised definition substantially increases final Medium/Hard coverage
+  compared with the previous random-500 no-vote pilot.
+- The main filter is Blind Verifier strictness: 186/500 selected candidates
+  were rejected as insufficient under evidence-only verification.
+- Some cases still need manual audit because directness may be debatable. Example:
+  `the-one-handed-girl`, question "how did the girl feel after she got her hand
+  back?", answer `happy`, evidence says "from sheer joy"; Verifier marked
+  `answer_directly_found=no`, making the final label Hard. This should be
+  manually reviewed because "joy" may be a close paraphrase of "happy."
+
+**Next checks before full scale:**
+- Manually inspect at least 50 retained examples, stratified by final
+  Easy/Medium/Hard, focusing on directness decisions.
+- Separately count API/parse failures in future summaries so they are not
+  treated as real model judgments.
+- Decide whether final Hard=73/500 is enough for the training-data pilot or
+  whether we need Hard-oriented sampling/augmentation.
+
+**Human review export:**
+- Added `scripts/export_evidence_labels_for_review.py` to export verified
+  evidence labels into a spreadsheet-friendly CSV with blank human annotation
+  columns.
+- Updated `scripts/run_evidence_no_vote_pilot.py` default mode to
+  `annotation_assist`: Selector-valid examples are kept for human review;
+  Blind Verifier sets `annotation_priority=high/repair/discard`; Removal
+  Verifier is skipped.
+- For the existing 500-run, priority distribution from `blind_verification.jsonl`
+  is: high 274, repair 186, discard 40.
+- Re-exported 100 balanced review examples to
+  `outputs/runs/no_vote_500_newdef_qwen3_32b/human_review_100.csv`.
+- Export distribution: Easy 34, Medium 33, Hard 33.
+- Export priority mix: high 68, repair 32.
+- Added `scripts/translate_review_csv.py` to add Chinese helper columns for
+  annotation only. The translated columns are not used for training data.
+- Translated the 100-row review CSV to
+  `outputs/runs/no_vote_500_newdef_qwen3_32b/human_review_100_zh.csv`.
+  Added `difficulty_hint_zh`, `evidence_context_zh`, and `qa_zh`.
+- Added `scripts/create_review_workbook.py` to produce an Excel/WPS-friendly
+  `.xlsx` review sheet with dropdowns for `human_valid`,
+  `human_difficulty_label`, and `human_answer_directly_found`.
+- Created `outputs/runs/no_vote_500_newdef_qwen3_32b/human_review_100_zh.xlsx`.
+
+---
+
+## 26. FairytaleQA Story Sentence Splitter (2026-05-16)
+
+**Goal:** Reduce the effect of FairytaleQA's overly-fragmented tokenized sentence
+boundaries on evidence-count difficulty labeling by replacing the old regex-based
+`_split_sentences()` with a speech-attribution-aware `_split_story_sentences()`.
+
+**What changed:**
+- `dcqg/path/fairytale_evidence_audit.py`: new `_split_story_sentences(text)` that
+  keeps direct speech together with its speech-verb attribution (`said`, `asked`,
+  `replied`, etc.). The old `_split_sentences()` is kept as a compatibility alias
+  pointing to the new implementation.
+- `dcqg/path/no_vote_evidence.py`: imports and calls `_split_story_sentences`
+  directly for Selector, Blind Verifier, and Removal Verifier context construction.
+- `scripts/export_evidence_labels_for_review.py`: uses `_split_story_sentences` so
+  human reviewers see the same sentence numbering as the models.
+
+**Status:** New splitter implemented, compiled, and inspected. 30-sample inspection
+report at `outputs/debug/fairytale_sentence_splitter_30.md`.
+
+**Latest inspection results (30 implicit QA pairs, seed=42):**
+- 19/30 samples changed (sentence count differs from old regex splitter)
+- 357 (old) -> 298 (new) total sentences
+- 11/30 samples unchanged (no speech quotes or simple structure)
+
+**Issues fixed / guarded:**
+1. Single-quote speech support (with contraction avoidance for `'s`, `n't`, `'ll`, etc.)
+2. Adjacent different speakers no longer merge into one long sentence.
+3. Closing quotes at sentence start moved back to previous sentence (cleanup pass 1)
+4. Sentences no longer start with `;`, `:`, `,` (cleanup pass 1)
+5. `!`/`?` inside matched double and single quotes no longer split the quoted
+   speech prematurely.
+6. Greedy quote pairing was replaced with conservative local quote pairing so
+   ordinary narrative sentences are not swallowed into one long sentence.
+7. Dialect apostrophes such as `lickin ' her` and `an ' how` are no longer treated
+   as single-quote dialogue boundaries.
+
+**Inspection notes:** The previously problematic samples 15, 17, 19, 21, 24, 26,
+and 30 were rechecked in `outputs/debug/fairytale_sentence_splitter_30.md`. The
+remaining tradeoff is intentionally conservative: some quoted multi-sentence
+speech remains one sentence-like speech turn, but ordinary narrative chains are
+not collapsed.
+
+**100-sample local inspection (seed=42):**
+- Report: `outputs/debug/fairytale_sentence_splitter_100.md`
+- 66/100 samples changed.
+- 1122 (old) -> 899 (new) total sentences.
+- Automated boundary checks found no new-split sentence starting with `;`, `:`,
+  or `,`, no adjacent empty quote artifact, and no isolated quote sentence.
+- The only two long flagged sentences were complete quoted speech turns, not
+  collapsed narrative chains.
+
+**100-item Selector + Blind Verifier pilot with new splitter:**
+- Output: `outputs/runs/no_vote_100_storysplit_qwen3_32b/`
+- Command: `python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/no_vote_100_storysplit_qwen3_32b --implicit_limit 100 --sample_mode first --batch_size 5 --model Qwen/Qwen3-32B --timeout 300 --mode annotation_assist`
+- Selector candidates: 100 total = Easy 38, Medium 22, Hard 26, Invalid 14.
+- Blind Verifier statuses: blind_sufficient 52, needs_human_repair 34,
+  selector_invalid_or_empty 14.
+- Annotation rows: 86 total = Easy 27, Medium 31, Hard 28.
+- Annotation priority: high 52, repair 34, discard 14.
+- API calls: 92 total = selector 6, sufficiency 86, removal 0.
+- Boundary artifact check on selector/verifier/annotation outputs found no
+  selected/context sentence starting with `;`, `:`, or `,`, no isolated quote
+  sentence, and no quote-then-punctuation artifact.
+
+**Next:** export these annotation candidates into the bilingual human-review
+format and manually check whether the new splitter makes evidence-count labels
+more natural.
+
+**Human-review export:**
+- Exported all 86 annotation rows to:
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b/human_review_86_storysplit.csv`
+  and
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b/human_review_86_storysplit_zh.csv`.
+- Created dropdown-friendly workbook:
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b/human_review_86_storysplit_zh.xlsx`.
+- Removed the previous `difficulty_hint_zh`/difficulty-definition helper column.
+- Added `full_context_qa` near the front of the review table.
+- Front review columns now include: model label, `full_context_qa`, evidence ids,
+  English evidence, Chinese evidence, English QA, Chinese QA, and human
+  annotation fields.
+
+**DeepSeek-V3 selector-only comparison:**
+- Output: `outputs/runs/selector_100_storysplit_deepseek_v3/`
+- Command: `python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/selector_100_storysplit_deepseek_v3 --implicit_limit 100 --sample_mode first --batch_size 5 --model deepseek-ai/DeepSeek-V3 --timeout 300 --mode annotation_assist --selector_only`
+- Selector-only support was added to `scripts/run_evidence_no_vote_pilot.py`
+  with `--selector_only`, which skips Blind/Removal verification.
+- DeepSeek-V3 Selector candidates: 100 total = Easy 22, Medium 34, Hard 36,
+  Invalid 8.
+- Parse success: 100/100.
+- Evidence-size distribution: one-sentence 30, two-sentence 37,
+  three-sentence 17, four-sentence 2, five-sentence 4, six-sentence 2,
+  empty/invalid 8.
+- Directness distribution: direct=yes 48, direct=no 52.
+- Compared with the Qwen3-32B new-splitter Selector run on the same first 100
+  items (Easy 38, Medium 22, Hard 26, Invalid 14), DeepSeek-V3 produced fewer
+  Easy/Invalid labels and more Medium/Hard labels.
+- Pairwise selector-label agreement between Qwen3-32B and DeepSeek-V3 was
+  52/100.
+
+**Splitter refinement after human-review spot check:**
+- Human review found that a closing quoted speech turn followed by fresh
+  narrative could still be merged when the next narrative sentence contained a
+  speech/thought verb later in the sentence. Example from `three-dogs`:
+  the old man's explanation ending in `trolls . "` was merged with `thereupon
+  they parted , and the youth thought that fortune had indeed favored him .`
+- Updated `_has_speech_attribution_after_quote()` in
+  `dcqg/path/fairytale_evidence_audit.py` to accept only short, local
+  post-quote attribution. It now stops at comma/semicolon/colon/sentence
+  punctuation after ordinary words and treats `thereupon` as a narrative
+  continuation starter, while preserving local forms such as `" ... " said the
+  boy .`, `" ... " the old man said .`, and `" ... " thought the youth .`.
+- Target check now splits the affected QA as:
+  `[S8] but as he left he said : "... trolls . "` and
+  `[S9] thereupon they parted , and the youth thought that fortune had indeed
+  favored him .`
+- Re-ran local inspection reports:
+  `outputs/debug/fairytale_sentence_splitter_30.md` still reports 19/30 changed,
+  357 old sentences -> 298 new sentences; `outputs/debug/fairytale_sentence_splitter_100.md`
+  now reports 65/100 changed, 1122 old sentences -> 900 new sentences.
+- Verification: `python -m py_compile dcqg/path/fairytale_evidence_audit.py
+  dcqg/path/no_vote_evidence.py scripts/inspect_fairytale_sentence_splitter.py
+  scripts/run_evidence_no_vote_pilot.py` passed. A train-implicit boundary scan
+  found no empty sentences, no sentence starting with `;`, `:`, or `,`, and no
+  isolated quote-only sentence. Some pre-existing nested quote starts such as
+  `''' yes ...` remain in unrelated stories and are not addressed by this
+  targeted refinement.
+- Note: the existing exported review files under
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b/` were produced with the
+  previous splitter and should be regenerated before further human annotation if
+  sentence IDs must match the refined splitter exactly.
+
+**Splitter rule update after second human-review pass:**
+- Human review of `outputs/debug/fairytale_sentence_splitter_100.md` showed that
+  the prior splitter still over-merged multi-sentence quoted speech turns. The
+  working rules are now:
+  1. one complete quoted sentence stays with local `said`/`asked`/`cried`
+     attribution;
+  2. multi-sentence quoted speech is split at complete sentence boundaries;
+  3. post-quote narrative or another character's response starts a new sentence;
+  4. different speakers should not be placed in the same sentence.
+- Updated `dcqg/path/fairytale_evidence_audit.py` accordingly:
+  quote-internal punctuation is no longer fully suppressed; only one-sentence
+  quotes stay merged with attribution. Post-quote attribution is now accepted
+  only for verb-first or simple pronoun-first local forms, which prevents cases
+  like `"..." the maiden said that...` from being merged into the previous
+  speaker's quote.
+- Added handling for `....`/ellipsis-like punctuation as a sentence boundary and
+  normalized attached double quotes such as `him--"snakeberry`.
+- Strengthened cleanup so quote balancing uses the same context-aware apostrophe
+  logic as the splitter; dialect forms such as `lickin ' her` no longer disturb
+  quote movement. Adjacent quote-token artifacts are normalized across sentence
+  boundaries.
+- For readability, when a multi-sentence quoted speech turn is split internally,
+  each resulting sentence is rendered with balanced quote marks rather than
+  leaving only the first sentence with an opening quote and only the last with a
+  closing quote.
+- Re-ran local inspection reports:
+  `outputs/debug/fairytale_sentence_splitter_30.md` now reports 12/30 changed,
+  357 old sentences -> 336 new sentences; `outputs/debug/fairytale_sentence_splitter_100.md`
+  now reports 45/100 changed, 1122 old sentences -> 1050 new sentences.
+- Additional validation on both seed-42 implicit 100 and first implicit 100 found
+  no empty sentences, no sentence starting with `;`, `:`, or `,`, no isolated
+  quote-only sentence, no adjacent quote-token artifact, no ellipsis merge, and
+  no sentence longer than 120 tokens. First implicit 100 now reports 45/100
+  changed, 1219 old sentences -> 1123 new sentences.
+- Verification: `python -m py_compile dcqg/path/fairytale_evidence_audit.py
+  dcqg/path/no_vote_evidence.py scripts/inspect_fairytale_sentence_splitter.py
+  scripts/run_evidence_no_vote_pilot.py` passed.
+
+**Qwen3 true-thinking no-vote rerun with quote few-shot:**
+- Motivation: The earlier Qwen3-32B no-vote runs used `/think` in the selector
+  system prompt but did not pass an API-level thinking parameter. They should be
+  treated as prompt-level `/think` runs, not confirmed API-level thinking runs.
+- Runtime changes:
+  - `dcqg/utils/api_client.py` now supports optional `enable_thinking` and
+    `thinking_budget` payload fields.
+  - `scripts/run_evidence_no_vote_pilot.py` now exposes
+    `--selector_enable_thinking`, `--verifier_disable_thinking`, and
+    `--thinking_budget`.
+  - `dcqg/path/no_vote_evidence.py` now passes selector/verifier thinking
+    settings through to `call_openai_compatible`.
+  - Selector and Blind Verifier few-shot prompts now include a quoted-speech
+    boundary example showing that a complete quoted sentence with local
+    attribution is one evidence sentence, a following quoted sentence remains a
+    separate sentence, and another speaker's reply is not merged into the same
+    evidence sentence.
+- Output: `outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2/`
+- Command:
+
+```powershell
+python -u -m scripts.run_evidence_no_vote_pilot --split train --output_dir outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2 --implicit_limit 100 --sample_mode first --batch_size 5 --model Qwen/Qwen3-32B --timeout 300 --mode annotation_assist --selector_enable_thinking --verifier_disable_thinking
+```
+
+- Run note: The run was interrupted after 80 selector rows and resumed with the
+  same command plus `--resume`. `pipeline_summary.json` was regenerated after
+  fixing resumed-run API-call inference.
+- Thinking config recorded in summary: selector `enable_thinking=true`;
+  verifier `enable_thinking=false`; `thinking_budget=None`.
+- Selector candidates: 100 total = Easy 39, Medium 24, Hard 26, Invalid 11.
+- Selector parse success: 100/100.
+- Selector evidence-size distribution: empty/invalid 11, one-sentence 50,
+  two-sentence 27, three-sentence 11, five-sentence 1.
+- Blind Verifier statuses: blind_sufficient 58, needs_human_repair 31,
+  selector_invalid_or_empty 11.
+- Annotation rows: 89 total = Easy 26, Medium 34, Hard 29.
+- Annotation priority: high 58, repair 31, discard 11.
+- API-call accounting after resume inference: selector 20, sufficiency 89,
+  removal 0, total 109.
+- Raw selector outputs contained no returned `<think>` tags, so the provider
+  appears not to expose hidden reasoning text even when `enable_thinking=true`.
+- Human-review export:
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2/human_review_89_storysplit_think_fewshot_v2.csv`,
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2/human_review_89_storysplit_think_fewshot_v2_zh.csv`,
+  and dropdown workbook
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2/human_review_89_storysplit_think_fewshot_v2_zh.xlsx`.
+  The Chinese export has 89 rows, includes `evidence_context_zh` and `qa_zh`,
+  and intentionally omits `difficulty_hint_zh`.
+
+**Full implicit train no-vote run and Label Studio export:**
+- Full implicit-only run completed in:
+  `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/`.
+- Input records: 2166 train implicit QA pairs; Selector rows: 2166;
+  Blind Verifier rows: 2166; annotation rows: 1968; discard/invalid: 198.
+- Selector distribution: Easy 798, Medium 513, Hard 657, Invalid 198.
+- Final annotation distribution: Easy 685, Medium 573, Hard 710.
+- Blind Verifier statuses: blind_sufficient 1122, needs_human_repair 846,
+  selector_invalid_or_empty 198.
+- API calls: selector 437, sufficiency 1968, removal 0, total 2405.
+- Added `scripts/export_label_studio_tasks.py` and
+  `label_studio/evidence_review_config.xml` for Label Studio annotation.
+- Exported full implicit review CSV:
+  `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/human_review_1968_full_implicit.csv`.
+- Exported Label Studio tasks:
+  `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/label_studio_tasks_1968_full_implicit.json`
+  and 89-row smoke import
+  `outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2/label_studio_tasks_89.json`.
+
+**Explicit train review sample:**
+- Motivation: train split has 6382 explicit QA pairs, which are mostly direct
+  lookup/Easy and would overwhelm the manually reviewed implicit set if kept
+  whole.
+- Added `scripts/build_explicit_review_sample.py` to sample explicit items with:
+  attribute-proportional quotas, at most one QA per `(story_name, story_section)`,
+  and a per-story cap.
+- Updated `dcqg/path/self_consistency.py` explicit labels to carry the same
+  review/export fields as no-vote annotation rows (`answer`,
+  `annotation_priority`, directness, selected evidence ids, and FairytaleQA
+  metadata).
+- Command:
+
+```powershell
+python -m scripts.build_explicit_review_sample --split train --output_dir outputs/runs/explicit_600_section_stratified_seed42 --n 600 --seed 42 --max_per_story 5
+```
+
+- Output: `outputs/runs/explicit_600_section_stratified_seed42/`.
+- Sampled 600 explicit rows from 6382 total, covering 203 stories and 600 unique
+  story sections.
+- Attribute distribution: action 225, causal relationship 125, character 85,
+  outcome resolution 67, setting 49, feeling 33, prediction 16.
+- Scope distribution: local 569, summary 31.
+- Generated files:
+  `explicit_sample_600_records.jsonl`,
+  `labels_explicit_sample_600.jsonl`,
+  `human_review_600_explicit.csv`,
+  `label_studio_tasks_600_explicit.json`, and `sample_summary.json`.
+- Note: explicit labels are automatic Easy/direct suggestions; human annotation
+  should still verify QA validity, sentence split quality, and evidence ids.
+
+**DeepSeek-V3 full-section Chinese translation for Label Studio:**
+- Motivation: The previous Chinese helper export translated only the suggested
+  evidence and QA fields. During human annotation, suggested evidence can be
+  wrong, so annotators also need the full story section in Chinese while keeping
+  the original English fields as the training source of truth.
+- Updated `scripts/translate_review_csv.py`:
+  - default model is now `deepseek-ai/DeepSeek-V3`;
+  - full story-section translation is enabled by default and written to
+    `full_context_zh`;
+  - `--resume` preserves completed rows;
+  - `--batch_size`, `--max_batch_chars`, `--timeout`, `--retries`, and
+    `--skip_full_context` control long-context translation behavior;
+  - batches that return incomplete JSON fields are now retried and then split
+    recursively before failing.
+- Added `scripts/run_review_translation_job.py` for sharded translation:
+  it splits a review CSV into independent shards, runs translation with
+  per-shard resume files, merges the translated CSV, and exports Label Studio
+  JSON tasks. This was used to avoid one shared output file and make the
+  full-section translation recoverable.
+- Updated `scripts/export_label_studio_tasks.py` and
+  `label_studio/evidence_review_config.xml` so Label Studio tasks include and
+  display `full_context_zh` under "complete context Chinese helper".
+- Translation command pattern used for the full implicit set:
+
+```powershell
+python -u -m scripts.run_review_translation_job --input outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/human_review_1968_full_implicit.csv --output outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/human_review_1968_full_implicit_zh_fullctx.csv --tasks_output outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/label_studio_tasks_1968_full_implicit_zh_fullctx.json --model deepseek-ai/DeepSeek-V3 --shards 4 --batch_size 12 --max_batch_chars 18000 --timeout 900 --retries 1 --no_difficulty_hint
+```
+
+- Translation command pattern used for the explicit sample:
+
+```powershell
+python -u -m scripts.run_review_translation_job --input outputs/runs/explicit_600_section_stratified_seed42/human_review_600_explicit.csv --output outputs/runs/explicit_600_section_stratified_seed42/human_review_600_explicit_zh_fullctx.csv --tasks_output outputs/runs/explicit_600_section_stratified_seed42/label_studio_tasks_600_explicit_zh_fullctx.json --model deepseek-ai/DeepSeek-V3 --shards 4 --batch_size 12 --max_batch_chars 18000 --timeout 900 --retries 1 --no_difficulty_hint
+```
+
+- Full implicit annotation import is ready:
+  `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/label_studio_tasks_1968_full_implicit_zh_fullctx.json`.
+  The translated CSV is
+  `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/human_review_1968_full_implicit_zh_fullctx.csv`.
+- Explicit annotation import is ready:
+  `outputs/runs/explicit_600_section_stratified_seed42/label_studio_tasks_600_explicit_zh_fullctx.json`.
+  The translated CSV is
+  `outputs/runs/explicit_600_section_stratified_seed42/human_review_600_explicit_zh_fullctx.csv`.
+- Verification after translation:
+  - implicit: 1968 CSV rows, 1968 Label Studio tasks, zero rows missing
+    `full_context_zh`, `evidence_context_zh`, or `qa_zh`;
+  - explicit: 600 CSV rows, 600 Label Studio tasks, zero rows missing
+    `full_context_zh`, `evidence_context_zh`, or `qa_zh`;
+  - no `translate_review_csv` or `run_review_translation_job` Python processes
+    remained after completion.
+- Current manual annotation pool prepared for Label Studio is 2568 tasks:
+  1968 implicit annotation-assist rows plus 600 explicit section-stratified
+  rows. The earlier 89-row smoke annotation export is not part of this new
+  production import.

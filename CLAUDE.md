@@ -54,7 +54,7 @@ The primary codebase is the `dcqg/` package. Do not depend on `event_qg/`; it is
 - `dcqg/difficulty/data.py`: training data construction for classifier.
 - `dcqg/difficulty/reranker.py`: DifficultyReranker for generation-time selection.
 - `dcqg/path/no_vote_evidence.py`: No-Vote evidence audit pipeline (Selector → Blind Verifier → Removal Verifier).
-- `dcqg/path/fairytale_evidence_audit.py`: `_split_sentences()` utility and old FairytaleEvidenceAuditor.
+- `dcqg/path/fairytale_evidence_audit.py`: `_split_story_sentences()` utility, `_split_sentences()` compatibility alias, and old FairytaleEvidenceAuditor.
 - `dcqg/path/answer_grounded_evidence.py`: answer-grounded evidence planner + validator.
 - `dcqg/graph/narrative_graph.py`: narrative evidence graph extraction for QG.
 - `dcqg/generation/fairytale_qg.py`: 4 QG methods (Direct, ICL, SelfRefine, Ours).

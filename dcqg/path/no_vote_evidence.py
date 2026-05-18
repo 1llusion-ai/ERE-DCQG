@@ -1,7 +1,8 @@
 """No-vote evidence selection and blind verification for FairytaleQA.
 
 Stage 1 selects a complete minimal evidence set from the full section.
-Stage 2 verifies sufficiency and necessity using only selected evidence.
+Stage 2 verifies sufficiency using only selected evidence. By default, this
+verification is an annotation-priority signal, not a hard filter.
 
 All prompts use frozen canonical text — do not paraphrase, shorten, or rewrite.
 """
@@ -9,7 +10,7 @@ All prompts use frozen canonical text — do not paraphrase, shorten, or rewrite
 import json
 import re
 
-from dcqg.path.fairytale_evidence_audit import _split_sentences
+from dcqg.path.fairytale_evidence_audit import _split_story_sentences, _check_split_anomalies
 from dcqg.utils.api_client import call_openai_compatible
 from dcqg.utils.config import get_api_config
 
@@ -69,7 +70,19 @@ Target answer: to save the princess so he could marry her .
 Output:
 {"section_sufficient":"yes","selected_evidence_sentences":[0,1,2,3],"answer_directly_found":"no","reasoning_level":"complex","evidence_reason":"The answer is not directly stated. S0 gives the reward, S1 links the brother to the promise, S2 gives his action, and S3 confirms the rescue outcome."}
 
-Example 5: insufficient context
+Example 5: quoted speech boundaries
+Context:
+  [S0] the boy said , " i lost the brass key . "
+  [S1] " i searched the garden until sunset . "
+  [S2] " then you cannot open the gate , " replied the queen .
+  [S3] the gate remained shut until morning .
+QA:
+Question: why could the boy not open the gate ?
+Target answer: he had lost the brass key .
+Output:
+{"section_sufficient":"yes","selected_evidence_sentences":[0],"answer_directly_found":"yes","reasoning_level":"direct","evidence_reason":"S0 is a complete quoted sentence with local attribution and directly states that the boy lost the brass key. S1 is a separate quoted sentence from the same speech turn, and S2 is a different speaker's reply; neither is necessary for the target answer."}
+
+Example 6: insufficient context
 Context:
   [S0] silverwhite went through the city and asked why everyone was unhappy .
   [S1] they said the oldest princess would be taken away in the morning .
@@ -140,7 +153,16 @@ Target answer: to save the princess so he could marry her .
 Output:
 {"sufficient":"yes","answer_directly_found":"no","reasoning_level":"complex","reasoning":"The target answer is not directly stated. S0 gives the reward, S1 links the brother to the promise, S2 gives his action, and S3 confirms the rescue outcome."}
 
-Example E: not sufficient
+Example E: sufficient, quoted speech
+Context:
+  [S0] the boy said , " i lost the brass key . "
+QA:
+Question: why could the boy not open the gate ?
+Target answer: he had lost the brass key .
+Output:
+{"sufficient":"yes","answer_directly_found":"yes","reasoning_level":"direct","reasoning":"S0 is a complete quoted sentence with local attribution and directly states that the boy lost the brass key."}
+
+Example F: not sufficient
 Context:
   [S2] but this they did not know , and hence sold the ring for a small sum .
 QA:
@@ -306,7 +328,7 @@ def build_selector_prompt(records):
     """
     parts = []
     for idx, record in enumerate(records, start=1):
-        sentences = _split_sentences(record.get("story_section", ""))
+        sentences = _split_story_sentences(record.get("story_section", ""))
         sent_lines = "\n".join(
             f"  [S{i}] {sentence}" for i, sentence in enumerate(sentences)
         )
@@ -462,7 +484,9 @@ class NoVoteEvidenceAuditor:
     """Single-selector plus blind verifier with no self-consistency voting."""
 
     def __init__(self, batch_size=10, model=None, timeout=120,
-                 selector_retries=1):
+                 selector_retries=1, use_removal_verifier=False,
+                 blind_filter=False, selector_enable_thinking=None,
+                 verifier_enable_thinking=None, thinking_budget=None):
         cfg = get_api_config()
         self.api_url = cfg["SILICONFLOW_API_URL"]
         self.api_key = cfg["SILICONFLOW_API_KEY"]
@@ -470,6 +494,11 @@ class NoVoteEvidenceAuditor:
         self.batch_size = batch_size
         self.timeout = timeout
         self.selector_retries = selector_retries
+        self.use_removal_verifier = use_removal_verifier
+        self.blind_filter = blind_filter
+        self.selector_enable_thinking = selector_enable_thinking
+        self.verifier_enable_thinking = verifier_enable_thinking
+        self.thinking_budget = thinking_budget
         self.selector_calls = 0
         self.sufficiency_calls = 0
         self.removal_calls = 0
@@ -495,6 +524,8 @@ class NoVoteEvidenceAuditor:
                         "/think\n"
                         "You are an expert evidence selector. Return only JSON."
                     ),
+                    enable_thinking=self.selector_enable_thinking,
+                    thinking_budget=self.thinking_budget,
                     timeout=self.timeout,
                 )
                 assessments = parse_selector_response(raw, records)
@@ -506,7 +537,8 @@ class NoVoteEvidenceAuditor:
 
         results = []
         for idx, record in enumerate(records):
-            sentences = _split_sentences(record.get("story_section", ""))
+            sentences = _split_story_sentences(record.get("story_section", ""))
+            split_issues = _check_split_anomalies(sentences)
             candidate = {
                 "story_name": record.get("story_name", ""),
                 "story_section": record.get("story_section", ""),
@@ -519,6 +551,8 @@ class NoVoteEvidenceAuditor:
                 "ex_or_im": record.get("ex_or_im", ""),
                 "split": record.get("split", ""),
                 "num_sentences_in_section": len(sentences),
+                "split_anomalies": split_issues,
+                "needs_manual_check": bool(split_issues),
                 "selector_raw": raw,
                 "selector_parse_ok": parse_ok,
                 "selector_model": self.model,
@@ -582,6 +616,7 @@ class NoVoteEvidenceAuditor:
                     "/no_think\n"
                     "You are a blind evidence verifier. Return only JSON."
                 ),
+                enable_thinking=self.verifier_enable_thinking,
                 timeout=self.timeout,
             )
         except Exception as exc:
@@ -606,6 +641,7 @@ class NoVoteEvidenceAuditor:
                     "/no_think\n"
                     "You are a blind evidence verifier. Return only JSON."
                 ),
+                enable_thinking=self.verifier_enable_thinking,
                 timeout=self.timeout,
             )
         except Exception as exc:
@@ -615,7 +651,7 @@ class NoVoteEvidenceAuditor:
         return parsed
 
     def verify_candidate(self, candidate):
-        sentences = _split_sentences(candidate.get("story_section", ""))
+        sentences = _split_story_sentences(candidate.get("story_section", ""))
         selected = list(candidate.get("selected_evidence_sentences", []))
         answer = _answer_text(candidate)
         question = candidate.get("question", "")
@@ -625,6 +661,7 @@ class NoVoteEvidenceAuditor:
 
         if candidate.get("section_sufficient") != "yes" or not selected:
             result.update({
+                "annotation_priority": "discard",
                 "evidence_set_sufficient": "no",
                 "sufficiency_reason": "selector_invalid_or_empty",
                 "removal_checks": [],
@@ -632,6 +669,7 @@ class NoVoteEvidenceAuditor:
                 "num_required_sentences": 0,
                 "final_answer_directly_found": "no",
                 "final_reasoning_level": "unknown",
+                "suggested_difficulty_label": "Invalid",
                 "difficulty_label": "Invalid",
                 "verification_status": "selector_invalid_or_empty",
             })
@@ -650,15 +688,45 @@ class NoVoteEvidenceAuditor:
             "sufficiency_raw": suff["raw"],
         })
 
-        if suff["sufficient"] != "yes":
+        if suff["sufficient"] != "yes" and self.blind_filter:
             result.update({
+                "annotation_priority": "discard",
                 "removal_checks": [],
                 "required_evidence_sentences": [],
                 "num_required_sentences": 0,
                 "final_answer_directly_found": "no",
                 "final_reasoning_level": "unknown",
+                "suggested_difficulty_label": "Invalid",
                 "difficulty_label": "Invalid",
                 "verification_status": "insufficient_selected_evidence",
+            })
+            return result
+
+        if not self.use_removal_verifier:
+            if suff["sufficient"] == "yes":
+                current_direct = suff["answer_directly_found"]
+                current_reasoning_level = suff["reasoning_level"]
+                annotation_priority = "high"
+                verification_status = "blind_sufficient"
+            else:
+                current_direct = candidate.get("answer_directly_found", "no")
+                current_reasoning_level = candidate.get(
+                    "reasoning_level", "unknown"
+                )
+                annotation_priority = "repair"
+                verification_status = "needs_human_repair"
+
+            difficulty = _difficulty_from_ids(selected, current_direct)
+            result.update({
+                "annotation_priority": annotation_priority,
+                "removal_checks": [],
+                "required_evidence_sentences": selected,
+                "num_required_sentences": len(selected),
+                "final_answer_directly_found": current_direct,
+                "final_reasoning_level": current_reasoning_level,
+                "suggested_difficulty_label": difficulty,
+                "difficulty_label": difficulty,
+                "verification_status": verification_status,
             })
             return result
 
@@ -710,11 +778,13 @@ class NoVoteEvidenceAuditor:
 
         difficulty = _difficulty_from_ids(current, current_direct)
         result.update({
+            "annotation_priority": "high",
             "removal_checks": removal_checks,
             "required_evidence_sentences": current,
             "num_required_sentences": len(current),
             "final_answer_directly_found": current_direct,
             "final_reasoning_level": current_reasoning_level,
+            "suggested_difficulty_label": difficulty,
             "difficulty_label": difficulty,
             "verification_status": "ok" if difficulty != "Invalid" else "empty_after_removal",
         })

@@ -1,0 +1,107 @@
+<View>
+  <Style>
+    .ls-block {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 12px;
+      margin: 10px 0;
+      background: #fafafa;
+    }
+    .ls-main-text {
+      white-space: pre-wrap;
+      line-height: 1.45;
+      font-size: 14px;
+    }
+  </Style>
+
+  <Header value="证据与难度人工标注"/>
+
+  <View className="ls-block">
+    <Header value="模型建议"/>
+    <Text name="model_suggestion" value="$model_suggestion" className="ls-main-text"/>
+  </View>
+
+  <View className="ls-block">
+    <Header value="完整上下文与问答"/>
+    <Text name="context" value="$full_context_qa" className="ls-main-text"/>
+  </View>
+
+  <View className="ls-block">
+    <Header value="完整上下文中文辅助"/>
+    <Text name="full_context_zh" value="$full_context_zh" className="ls-main-text"/>
+  </View>
+
+  <View className="ls-block">
+    <Header value="模型建议证据句"/>
+    <Text name="evidence_context" value="$evidence_context" className="ls-main-text"/>
+  </View>
+
+  <View className="ls-block">
+    <Header value="中文辅助信息"/>
+    <Text name="evidence_context_zh" value="$evidence_context_zh" className="ls-main-text"/>
+    <Text name="qa_zh" value="$qa_zh" className="ls-main-text"/>
+  </View>
+
+  <View className="ls-block">
+    <Header value="人工标注"/>
+
+    <Header value="0. 句子切分是否基本正确？"/>
+    <Choices name="human_sentence_split_ok" toName="context" choice="single" required="true" showInLine="true">
+      <Choice value="yes"/>
+      <Choice value="no"/>
+      <Choice value="unclear"/>
+    </Choices>
+
+    <Header value="如果分句有误，请记录问题和建议修正"/>
+    <TextArea
+      name="human_sentence_split_notes"
+      toName="context"
+      rows="2"
+      placeholder="例如：S3 应拆成两句；S7/S8 应合并；正确证据应为拆分后的第一句。"
+    />
+
+    <View visibleWhen="choice-selected" whenTagName="human_sentence_split_ok" whenChoiceValue="yes">
+      <Header value="1. 这个 QA 是否有效，并且能从给出的上下文中回答？"/>
+      <Choices name="human_valid" toName="context" choice="single" required="true" showInLine="true">
+        <Choice value="yes"/>
+        <Choice value="no"/>
+        <Choice value="unclear"/>
+      </Choices>
+
+      <View visibleWhen="choice-selected" whenTagName="human_valid" whenChoiceValue="yes">
+        <Header value="2. 人工判断的难度标签是什么？"/>
+        <Choices name="human_difficulty_label" toName="context" choice="single" required="true" showInLine="true">
+          <Choice value="Easy"/>
+          <Choice value="Medium"/>
+          <Choice value="Hard"/>
+          <Choice value="Unclear"/>
+          <Choice value="Invalid"/>
+        </Choices>
+
+        <Header value="3. 答案是否能在文本中直接找到？"/>
+        <Choices name="human_answer_directly_found" toName="context" choice="single" required="true" showInLine="true">
+          <Choice value="yes"/>
+          <Choice value="no"/>
+          <Choice value="unclear"/>
+        </Choices>
+
+        <Header value="4. 哪些句子编号是必要证据？"/>
+        <TextArea
+          name="human_evidence_ids"
+          toName="context"
+          required="true"
+          rows="1"
+          placeholder="填写句子编号，例如 [3] 或 [3,5,10]"
+        />
+      </View>
+    </View>
+
+    <Header value="5. 备注"/>
+    <TextArea
+      name="human_notes"
+      toName="context"
+      rows="3"
+      placeholder="可选：说明为什么无效、替代证据句编号、歧义点等"
+    />
+  </View>
+</View>

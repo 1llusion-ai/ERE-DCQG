@@ -1,0 +1,50 @@
+======================================================================
+No-Vote Evidence Pilot
+======================================================================
+Split:          train
+Output dir:     outputs/runs/selector_100_storysplit_deepseek_v3
+Model:          deepseek-ai/DeepSeek-V3
+Implicit limit: 100
+Sample mode:    first
+Sample seed:    n/a
+Batch size:     5
+Timeout:        300s
+Resume:         False
+Mode:           annotation_assist
+Selector only:  True
+Loaded implicit records: 100 (total available: 2166)
+Selector: 100 items, batch_size=5, start=0
+  Selector: 5/100 {'Medium': 3, 'Hard': 1, 'Invalid': 1} (21.0s)
+  Selector: 10/100 {'Medium': 3, 'Easy': 1, 'Hard': 1} (20.7s)
+  Selector: 15/100 {'Medium': 4, 'Easy': 1} (20.7s)
+  Selector: 20/100 {'Medium': 4, 'Hard': 1} (21.4s)
+  Selector: 25/100 {'Hard': 1, 'Invalid': 1, 'Easy': 1, 'Medium': 2} (20.4s)
+  Selector: 30/100 {'Hard': 4, 'Easy': 1} (23.0s)
+  Selector: 35/100 {'Medium': 2, 'Hard': 3} (20.3s)
+  Selector: 40/100 {'Hard': 4, 'Easy': 1} (19.4s)
+  Selector: 45/100 {'Hard': 2, 'Medium': 1, 'Invalid': 2} (21.9s)
+  Selector: 50/100 {'Hard': 3, 'Medium': 2} (19.0s)
+  Selector: 55/100 {'Invalid': 1, 'Medium': 1, 'Easy': 1, 'Hard': 2} (17.0s)
+  Selector: 60/100 {'Easy': 2, 'Hard': 2, 'Invalid': 1} (21.4s)
+  Selector: 65/100 {'Medium': 1, 'Hard': 2, 'Easy': 2} (23.1s)
+  Selector: 70/100 {'Easy': 3, 'Medium': 2} (19.2s)
+  Selector: 75/100 {'Medium': 3, 'Easy': 1, 'Hard': 1} (26.0s)
+  Selector: 80/100 {'Hard': 1, 'Medium': 1, 'Easy': 3} (27.5s)
+  Selector: 85/100 {'Hard': 4, 'Medium': 1} (21.1s)
+  Selector: 90/100 {'Hard': 2, 'Easy': 2, 'Medium': 1} (45.9s)
+  Selector: 95/100 {'Hard': 2, 'Easy': 1, 'Medium': 2} (17.2s)
+  Selector: 100/100 {'Easy': 2, 'Invalid': 2, 'Medium': 1} (17.3s)
+
+======================================================================
+NO-VOTE PILOT SUMMARY
+======================================================================
+Output dir:       outputs/runs/selector_100_storysplit_deepseek_v3
+Input records:    100
+Selector dist:    {'Medium': 34, 'Hard': 36, 'Invalid': 8, 'Easy': 22}
+Statuses:         {}
+Annotation rows: 0 {}
+Priority:         {}
+Invalid:          0
+API calls:        {'selector_calls': 20, 'sufficiency_calls': 0, 'removal_calls': 0, 'total_calls': 20}
+Summary saved:    outputs/runs/selector_100_storysplit_deepseek_v3\pipeline_summary.json
+======================================================================

@@ -1,0 +1,48 @@
+You are a blind evidence verifier for narrative reading comprehension.
+
+Your task is to decide whether the provided evidence sentences alone are sufficient to justify the target answer.
+
+Verifier examples:
+
+Example A (sufficient):
+Context:
+  [S1] it was a lucky ring , and whoever owned it always had enough to live on .
+  [S2] but this they did not know , and hence sold the ring for a small sum .
+
+QA:
+Question: why did the man and his wife sell the ring for a small sum ?
+Target answer: they did not know that it was a lucky ring .
+Output:
+{"sufficient":"yes","reasoning":"S1 identifies the ring as lucky, and S2 states they sold it because they did not know this."}
+
+Example B (not sufficient):
+Context:
+  [S2] but this they did not know , and hence sold the ring for a small sum .
+
+QA:
+Question: why did the man and his wife sell the ring for a small sum ?
+Target answer: they did not know that it was a lucky ring .
+Output:
+{"sufficient":"no","reasoning":"S2 says they did not know this, but without S1 the evidence does not show that this refers to the ring being lucky."}
+
+Context:
+  [S1] it was a lucky ring , and whoever owned it always had enough to live on .
+  [S2] but this they did not know , and hence sold the ring for a small sum .
+
+QA:
+Question: why did the man and his wife sell the ring for a small sum ?
+Target answer: they did not know that it was a lucky ring .
+
+Requirements:
+1. Use only the evidence sentences in Context.
+2. The full story is not available.
+3. Treat the target answer as a claim to verify, not as evidence.
+4. If the evidence is enough to justify the target answer, output sufficient="yes".
+5. If key information is missing or ambiguous, output sufficient="no".
+6. Return only valid JSON.
+
+Output format:
+{
+  "sufficient": "yes" or "no",
+  "reasoning": "one short explanation"
+}

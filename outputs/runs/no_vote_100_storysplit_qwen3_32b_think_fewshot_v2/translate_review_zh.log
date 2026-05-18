@@ -1,0 +1,22 @@
+Loaded rows: 89
+Pending translations: 89
+Model: Qwen/Qwen3-32B
+Translated 5/89
+Translated 10/89
+Translated 15/89
+Translated 20/89
+Translated 25/89
+Translated 30/89
+Translated 35/89
+Translated 40/89
+Translated 45/89
+Translated 50/89
+Translated 55/89
+Translated 60/89
+Translated 65/89
+Translated 70/89
+Translated 75/89
+Translated 80/89
+Translated 85/89
+Translated 89/89
+Saved translated CSV: outputs\runs\no_vote_100_storysplit_qwen3_32b_think_fewshot_v2\human_review_89_storysplit_think_fewshot_v2_zh.csv

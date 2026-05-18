@@ -1,0 +1,47 @@
+======================================================================
+No-Vote Evidence Pilot
+======================================================================
+Split:          train
+Output dir:     outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2
+Model:          Qwen/Qwen3-32B
+Implicit limit: 100
+Sample mode:    first
+Sample seed:    n/a
+Batch size:     5
+Timeout:        300s
+Resume:         True
+Mode:           annotation_assist
+Selector only:  False
+Thinking:       selector=True, verifier=False, budget=None
+Loaded implicit records: 100 (total available: 2166)
+Selector: 100 items, batch_size=5, start=80
+  Selector: 85/100 {'Hard': 2, 'Easy': 3} (32.8s)
+  Selector: 90/100 {'Medium': 2, 'Hard': 1, 'Easy': 2} (28.2s)
+  Selector: 95/100 {'Medium': 3, 'Hard': 1, 'Easy': 1} (26.5s)
+  Selector: 100/100 {'Medium': 2, 'Invalid': 2, 'Hard': 1} (33.9s)
+Verifier: 100 items, start=0
+  Verifier: 10/100 label=Medium status=needs_human_repair (2.5s)
+  Verifier: 20/100 label=Medium status=needs_human_repair (2.7s)
+  Verifier: 30/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 40/100 label=Medium status=blind_sufficient (2.7s)
+  Verifier: 50/100 label=Hard status=blind_sufficient (2.6s)
+  Verifier: 60/100 label=Hard status=needs_human_repair (2.3s)
+  Verifier: 70/100 label=Hard status=blind_sufficient (2.5s)
+  Verifier: 80/100 label=Easy status=blind_sufficient (2.3s)
+  Verifier: 90/100 label=Easy status=blind_sufficient (1.9s)
+  Verifier: 100/100 label=Hard status=needs_human_repair (2.3s)
+
+======================================================================
+NO-VOTE PILOT SUMMARY
+======================================================================
+Output dir:       outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2
+Input records:    100
+Selector dist:    {'Invalid': 11, 'Hard': 26, 'Medium': 24, 'Easy': 39}
+Statuses:         {'selector_invalid_or_empty': 11, 'blind_sufficient': 58, 'needs_human_repair': 31}
+Annotation rows: 89 {'Hard': 29, 'Medium': 34, 'Easy': 26}
+Priority:         {'discard': 11, 'high': 58, 'repair': 31}
+Invalid:          11
+Thinking config:  {'selector_enable_thinking': True, 'verifier_enable_thinking': False, 'thinking_budget': None}
+API calls:        {'selector_calls': 4, 'sufficiency_calls': 89, 'removal_calls': 0, 'total_calls': 93}
+Summary saved:    outputs/runs/no_vote_100_storysplit_qwen3_32b_think_fewshot_v2\pipeline_summary.json
+======================================================================

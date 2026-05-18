@@ -1,0 +1,22 @@
+Loaded rows: 86
+Pending translations: 86
+Model: Qwen/Qwen3-32B
+Translated 5/86
+Translated 10/86
+Translated 15/86
+Translated 20/86
+Translated 25/86
+Translated 30/86
+Translated 35/86
+Translated 40/86
+Translated 45/86
+Translated 50/86
+Translated 55/86
+Translated 60/86
+Translated 65/86
+Translated 70/86
+Translated 75/86
+Translated 80/86
+Translated 85/86
+Translated 86/86
+Saved translated CSV: outputs\runs\no_vote_100_storysplit_qwen3_32b\human_review_86_storysplit_zh.csv

@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-05-16 01:39:53",
+  "output_dir": "outputs\\runs\\pilot_500_no_vote_qwen3_32b_fewshot_think_seed42_v1",
+  "num_input_records": 500,
+  "total_implicit_records": 2166,
+  "sample_mode": "random",
+  "sample_seed": 42,
+  "selector_path": "outputs\\runs\\pilot_500_no_vote_qwen3_32b_fewshot_think_seed42_v1\\selector_candidates.jsonl",
+  "verification_path": "outputs\\runs\\pilot_500_no_vote_qwen3_32b_fewshot_think_seed42_v1\\blind_verification.jsonl",
+  "labels_path": "outputs\\runs\\pilot_500_no_vote_qwen3_32b_fewshot_think_seed42_v1\\labels_implicit.jsonl",
+  "selector_count": 500,
+  "verified_count": 500,
+  "label_count": 198,
+  "selector_difficulty": {
+    "Hard": 43,
+    "Medium": 163,
+    "Invalid": 85,
+    "Easy": 209
+  },
+  "verification_status": {
+    "insufficient_selected_evidence": 217,
+    "ok": 198,
+    "selector_invalid_or_empty": 85
+  },
+  "final_difficulty": {
+    "Hard": 5,
+    "Medium": 39,
+    "Easy": 154
+  },
+  "invalid_count": 302,
+  "api_calls": {
+    "selector_calls": 102,
+    "sufficiency_calls": 415,
+    "removal_calls": 187,
+    "total_calls": 704
+  }
+}

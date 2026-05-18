@@ -1,0 +1,33 @@
+{
+  "timestamp": "2026-05-16 17:54:33",
+  "mode": "annotation_assist",
+  "selector_only": true,
+  "output_dir": "outputs/runs/selector_100_storysplit_deepseek_v3",
+  "num_input_records": 100,
+  "total_implicit_records": 2166,
+  "sample_mode": "first",
+  "sample_seed": null,
+  "selector_path": "outputs/runs/selector_100_storysplit_deepseek_v3\\selector_candidates.jsonl",
+  "verification_path": "outputs/runs/selector_100_storysplit_deepseek_v3\\blind_verification.jsonl",
+  "labels_path": "outputs/runs/selector_100_storysplit_deepseek_v3\\annotation_candidates.jsonl",
+  "selector_count": 100,
+  "verified_count": 0,
+  "label_count": 0,
+  "annotation_priority": {},
+  "selector_difficulty": {
+    "Medium": 34,
+    "Hard": 36,
+    "Invalid": 8,
+    "Easy": 22
+  },
+  "blind_sufficiency": {},
+  "verification_status": {},
+  "final_difficulty": {},
+  "invalid_count": 8,
+  "api_calls": {
+    "selector_calls": 20,
+    "sufficiency_calls": 0,
+    "removal_calls": 0,
+    "total_calls": 20
+  }
+}

@@ -1,0 +1,8 @@
+Loaded rows: 1968
+Pending translations: 1958
+Model: deepseek-ai/DeepSeek-V3
+Include full context: True
+Max tokens: 12000
+Batch size: 12
+Max batch source chars: 18000
+Translated 12/1958 (batch 1/194, rows 12)

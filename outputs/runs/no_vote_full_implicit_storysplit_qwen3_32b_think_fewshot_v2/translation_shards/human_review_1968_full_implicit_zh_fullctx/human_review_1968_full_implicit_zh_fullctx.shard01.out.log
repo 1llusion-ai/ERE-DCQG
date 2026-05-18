@@ -1,0 +1,65 @@
+Loaded rows: 492
+Pending translations: 492
+Model: deepseek-ai/DeepSeek-V3
+Include full context: True
+Max tokens: 12000
+Batch size: 12
+Max batch source chars: 18000
+Translated 10/492 (batch 1/50, rows 10)
+Translated 22/492 (batch 2/50, rows 12)
+Translated 34/492 (batch 3/50, rows 12)
+Translated 43/492 (batch 4/50, rows 9)
+Translated 50/492 (batch 5/50, rows 7)
+Translated 61/492 (batch 6/50, rows 11)
+Translated 68/492 (batch 7/50, rows 7)
+Translated 79/492 (batch 8/50, rows 11)
+Translated 85/492 (batch 9/50, rows 6)
+Translated 95/492 (batch 10/50, rows 10)
+Translated 107/492 (batch 11/50, rows 12)
+Loaded rows: 492
+Pending translations: 385
+Model: deepseek-ai/DeepSeek-V3
+Include full context: True
+Max tokens: 12000
+Batch size: 12
+Max batch source chars: 18000
+Translated 12/385 (batch 1/39, rows 12)
+Translated 24/385 (batch 2/39, rows 12)
+Translated 35/385 (batch 3/39, rows 11)
+Translated 44/385 (batch 4/39, rows 9)
+Translated 56/385 (batch 5/39, rows 12)
+Translated 67/385 (batch 6/39, rows 11)
+Translated 76/385 (batch 7/39, rows 9)
+Translated 88/385 (batch 8/39, rows 12)
+Translated 99/385 (batch 9/39, rows 11)
+Translated 110/385 (batch 10/39, rows 11)
+Translated 121/385 (batch 11/39, rows 11)
+Translated 133/385 (batch 12/39, rows 12)
+Translated 142/385 (batch 13/39, rows 9)
+Translated 150/385 (batch 14/39, rows 8)
+Translated 161/385 (batch 15/39, rows 11)
+Translated 173/385 (batch 16/39, rows 12)
+Translated 184/385 (batch 17/39, rows 11)
+Translated 196/385 (batch 18/39, rows 12)
+Translated 208/385 (batch 19/39, rows 12)
+Translated 220/385 (batch 20/39, rows 12)
+Translated 232/385 (batch 21/39, rows 12)
+Translated 244/385 (batch 22/39, rows 12)
+Translated 255/385 (batch 23/39, rows 11)
+Translated 267/385 (batch 24/39, rows 12)
+Translated 277/385 (batch 25/39, rows 10)
+Translated 288/385 (batch 26/39, rows 11)
+Translated 293/385 (batch 27/39, rows 5)
+Translated 299/385 (batch 28/39, rows 6)
+Translated 308/385 (batch 29/39, rows 9)
+Translated 314/385 (batch 30/39, rows 6)
+Translated 323/385 (batch 31/39, rows 9)
+Translated 332/385 (batch 32/39, rows 9)
+Translated 342/385 (batch 33/39, rows 10)
+Translated 354/385 (batch 34/39, rows 12)
+Translated 365/385 (batch 35/39, rows 11)
+Translated 372/385 (batch 36/39, rows 7)
+Translated 377/385 (batch 37/39, rows 5)
+Translated 383/385 (batch 38/39, rows 6)
+Translated 385/385 (batch 39/39, rows 2)
+Saved translated CSV: outputs\runs\no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\translation_shards\human_review_1968_full_implicit_zh_fullctx\human_review_1968_full_implicit_zh_fullctx.shard01.output.csv

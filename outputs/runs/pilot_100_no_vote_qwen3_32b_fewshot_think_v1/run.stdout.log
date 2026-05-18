@@ -1,0 +1,56 @@
+======================================================================
+No-Vote Evidence Pilot
+======================================================================
+Split:          train
+Output dir:     outputs\runs\pilot_100_no_vote_qwen3_32b_fewshot_think_v1
+Model:          Qwen/Qwen3-32B
+Implicit limit: 100
+Batch size:     5
+Timeout:        300s
+Resume:         False
+Loaded implicit records: 100
+Selector: 100 items, batch_size=5, start=0
+  Selector: 5/100 {'Invalid': 2, 'Medium': 2, 'Hard': 1} (25.8s)
+  Selector: 10/100 {'Easy': 2, 'Invalid': 2, 'Hard': 1} (28.7s)
+  Selector: 15/100 {'Easy': 5} (35.8s)
+  Selector: 20/100 {'Easy': 2, 'Medium': 3} (54.7s)
+  Selector: 25/100 {'Medium': 4, 'Easy': 1} (40.9s)
+  Selector: 30/100 {'Medium': 2, 'Easy': 2, 'Invalid': 1} (26.2s)
+  Selector: 35/100 {'Invalid': 4, 'Easy': 1} (41.0s)
+  Selector: 40/100 {'Invalid': 2, 'Easy': 2, 'Medium': 1} (43.9s)
+  Selector: 45/100 {'Easy': 4, 'Invalid': 1} (18.4s)
+  Selector: 50/100 {'Medium': 3, 'Easy': 2} (22.3s)
+  Selector: 55/100 {'Invalid': 1, 'Easy': 2, 'Medium': 2} (32.9s)
+  Selector: 60/100 {'Easy': 2, 'Invalid': 3} (28.1s)
+  Selector: 65/100 {'Hard': 1, 'Easy': 2, 'Medium': 2} (17.7s)
+  Selector: 70/100 {'Easy': 3, 'Medium': 1, 'Hard': 1} (40.7s)
+  Selector: 75/100 {'Easy': 5} (51.5s)
+  Selector: 80/100 {'Easy': 4, 'Medium': 1} (44.1s)
+  Selector: 85/100 {'Hard': 1, 'Medium': 2, 'Easy': 2} (30.6s)
+  Selector: 90/100 {'Medium': 3, 'Invalid': 1, 'Easy': 1} (21.9s)
+  Selector: 95/100 {'Easy': 3, 'Hard': 1, 'Medium': 1} (30.6s)
+  Selector: 100/100 {'Medium': 2, 'Invalid': 2, 'Easy': 1} (32.9s)
+Verifier: 100 items, start=0
+  Verifier: 10/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 20/100 label=Invalid status=insufficient_selected_evidence (1.5s)
+  Verifier: 30/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 40/100 label=Invalid status=insufficient_selected_evidence (1.6s)
+  Verifier: 50/100 label=Invalid status=insufficient_selected_evidence (1.3s)
+  Verifier: 60/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 70/100 label=Medium status=ok (9.0s)
+  Verifier: 80/100 label=Easy status=ok (1.5s)
+  Verifier: 90/100 label=Easy status=ok (1.6s)
+  Verifier: 100/100 label=Invalid status=insufficient_selected_evidence (1.6s)
+
+======================================================================
+NO-VOTE PILOT SUMMARY
+======================================================================
+Output dir:       outputs\runs\pilot_100_no_vote_qwen3_32b_fewshot_think_v1
+Input records:    100
+Selector dist:    {'Invalid': 19, 'Medium': 29, 'Hard': 6, 'Easy': 46}
+Statuses:         {'selector_invalid_or_empty': 19, 'insufficient_selected_evidence': 44, 'ok': 37}
+Final labels:     37 {'Hard': 1, 'Easy': 30, 'Medium': 6}
+Invalid:          63
+API calls:        {'selector_calls': 21, 'sufficiency_calls': 81, 'removal_calls': 31, 'total_calls': 133}
+Summary saved:    outputs\runs\pilot_100_no_vote_qwen3_32b_fewshot_think_v1\pipeline_summary.json
+======================================================================

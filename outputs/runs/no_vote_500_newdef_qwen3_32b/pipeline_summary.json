@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-05-16 07:20:06",
+  "output_dir": "outputs/runs/no_vote_500_newdef_qwen3_32b",
+  "num_input_records": 500,
+  "total_implicit_records": 2166,
+  "sample_mode": "first",
+  "sample_seed": null,
+  "selector_path": "outputs/runs/no_vote_500_newdef_qwen3_32b\\selector_candidates.jsonl",
+  "verification_path": "outputs/runs/no_vote_500_newdef_qwen3_32b\\blind_verification.jsonl",
+  "labels_path": "outputs/runs/no_vote_500_newdef_qwen3_32b\\labels_implicit.jsonl",
+  "selector_count": 500,
+  "verified_count": 500,
+  "label_count": 274,
+  "selector_difficulty": {
+    "Medium": 126,
+    "Hard": 166,
+    "Invalid": 40,
+    "Easy": 168
+  },
+  "verification_status": {
+    "insufficient_selected_evidence": 186,
+    "ok": 274,
+    "selector_invalid_or_empty": 40
+  },
+  "final_difficulty": {
+    "Hard": 73,
+    "Medium": 92,
+    "Easy": 109
+  },
+  "invalid_count": 226,
+  "api_calls": {
+    "selector_calls": 101,
+    "sufficiency_calls": 460,
+    "removal_calls": 296,
+    "total_calls": 857
+  }
+}

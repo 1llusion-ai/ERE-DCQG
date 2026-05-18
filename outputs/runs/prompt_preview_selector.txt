@@ -1,0 +1,100 @@
+You are an expert evidence selector for narrative QA.
+
+For each QA pair, select the smallest COMPLETE set of story-section sentences
+that is sufficient to justify the target answer.
+
+Few-shot examples from FairytaleQA:
+
+Example 1 (Easy):
+Context:
+  [S0] then she bade him mount her palfrey again , and they rode on .
+  [S1] the ferny road was not so bonnie all the way as it had been at first , however .
+  [S2] for they had not ridden along it very far before it led them into a narrow ravine , which seemed to go right down under the earth , where there was no ray of light to guide them , and where the air was dank and heavy .
+  [S3] there was a sound of rushing water everywhere , and at last the grey palfrey plunged right into it ; and it crept up , cold and chill , first over thomas's feet , and then over his knees .
+  [S4] his courage had been slowly ebbing ever since he had been parted from the daylight , but now he gave himself up for lost ; for it seemed to him certain that his strange companion and he would never come safe to their journey's end .
+  [S5] he fell forward in a kind of swoon ; and , if it had not been that he had tight hold of the fairy's ash-grey gown , i warrant he had fallen from his seat , and had been drowned .
+  [S6] but all things , be they good or bad , pass in time , and at last the darkness began to lighten , and the light grew stronger , until they were back in broad sunshine .
+QA:
+Question: what did thomas do to keep himself from falling off the palfrey ?
+Target answer: held onto the fairy's ash-grey gown .
+Output:
+{"section_sufficient":"yes","selected_evidence_sentences":[5],"evidence_reason":"S5 directly states that Thomas avoided falling because he had tight hold of the fairy's gown."}
+
+Example 2 (Medium):
+Context:
+  [S0] once upon a time there was a man and his wife and they had a ring of gold .
+  [S1] it was a lucky ring , and whoever owned it always had enough to live on .
+  [S2] but this they did not know , and hence sold the ring for a small sum .
+  [S3] but no sooner was the ring gone than they began to grow poorer and poorer , and at last did not know when they would get their next meal .
+QA:
+Question: why did the man and his wife sell the ring for a small sum ?
+Target answer: they did not know that it was a lucky ring .
+Output:
+{"section_sufficient":"yes","selected_evidence_sentences":[1,2],"evidence_reason":"S1 identifies what they did not know, and S2 states that this ignorance caused them to sell the ring."}
+
+Example 3 (Hard):
+Context:
+  [S0] on the third morning the giant went off again with his goats .
+  [S1] " to-day you must go to the devil , and fetch me his tribute , " said he to the king's son .
+  [S2] " when you have done that , you may rest for the remainder of the time , for you have come to a kind master , and you might as well know it , " and with that he went off .
+  [S3] " you may be a kind master , " said the king's son .
+  [S4] " yet you hand over some pretty mean jobs to me in spite of it , but i think i'll look after your master girl a bit .
+  [S5] you claim that she belongs to you , but perhaps , in spite of it , she may tell me what to do , " and with that he went in to her .
+  [S6] and when the master girl asked him what the giant had given him to do that day , he told her he must go to the devil and fetch a tribute .
+  [S7] " but how will you go about it ?
+  [S8] " asked the master girl .
+  [S9] " you will have to tell me that , " said the king's son , " for i have never been to the devil's place .
+  [S10] even though i knew the way there , i still would not know how much to ask for .
+  [S11] " " i will tell you what you must do , " said the master girl .
+  [S12] " you must go to the rock behind the pasture , and take the club that is lying there , and strike the rock with it .
+  [S13] then one will come out whose eyes flash fire , and you must tell him your business .
+  [S14] and if he asks how much you want , you must tell him as much as you can carry .
+  [S15] "
+QA:
+Question: why did the king's son go to the master girl ?
+Target answer: he did not know how much to ask for .
+Output:
+{"section_sufficient":"yes","selected_evidence_sentences":[5,9,10],"evidence_reason":"S5 states that he went to her for help, S9 shows he needed instructions, and S10 gives the specific reason in the target answer."}
+
+Example 4 (Invalid):
+Context:
+  [S0] silverwhite went though the city and inquired as to the cause of all the unhappiness he saw .
+  [S1] they answered : " you must have come from far away , since you do not know that the king and queen were in danger of being drowned at sea .
+  [S2] he had to promise to give up their three daughters in order to escape .
+  [S3] to-morrow morning the sea-troll is coming to carry off the oldest princess .
+  [S4] " this news pleased silverwhite , for he saw a fine opportunity to wealth and fame , should fortune favor him .
+QA:
+Question: what will silverwhite do next ?
+Target answer: save the eldest princess .
+Output:
+{"section_sufficient":"no","selected_evidence_sentences":[],"evidence_reason":"The section suggests an opportunity but does not contain enough evidence that Silverwhite will save the eldest princess."}
+
+--- QA Pair 1 ---
+Story: demo-story
+Context:
+  [S0] A girl opened the door.
+  [S1] She found a ring.
+  [S2] She gave the ring to the king.
+
+QA:
+Question: what did the girl give to the king ?
+Target answer: the ring
+
+Requirements:
+1. Use only the numbered sentences in Context.
+2. Treat the target answer as a claim to verify, not as evidence.
+3. Select all and only the sentences needed to justify the target answer.
+4. If the Context is insufficient, set section_sufficient="no" and selected_evidence_sentences=[].
+5. Return only valid JSON.
+
+Return ONLY a JSON object:
+{
+  "assessments": [
+    {
+      "qa_id": 1,
+      "section_sufficient": "yes",
+      "selected_evidence_sentences": [1, 2],
+      "evidence_reason": "short explanation"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+======================================================================
+No-Vote Evidence Pilot
+======================================================================
+Split:          train
+Output dir:     outputs/runs/no_vote_100_storysplit_qwen3_32b
+Model:          Qwen/Qwen3-32B
+Implicit limit: 100
+Sample mode:    first
+Sample seed:    n/a
+Batch size:     5
+Timeout:        300s
+Resume:         True
+Mode:           annotation_assist
+Loaded implicit records: 100 (total available: 2166)
+Selector: 100 items, batch_size=5, start=70
+  Selector: 75/100 {'Easy': 3, 'Hard': 2} (35.5s)
+  Selector: 80/100 {'Easy': 4, 'Hard': 1} (33.5s)
+  Selector: 85/100 {'Hard': 2, 'Easy': 2, 'Medium': 1} (122.0s)
+  Selector: 90/100 {'Medium': 1, 'Easy': 3, 'Hard': 1} (31.0s)
+  Selector: 95/100 {'Hard': 1, 'Medium': 3, 'Easy': 1} (24.2s)
+  Selector: 100/100 {'Medium': 1, 'Invalid': 2, 'Easy': 1, 'Hard': 1} (37.8s)
+Verifier: 100 items, start=0
+  Verifier: 10/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 20/100 label=Medium status=needs_human_repair (2.2s)
+  Verifier: 30/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 40/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 50/100 label=Invalid status=selector_invalid_or_empty (0.0s)
+  Verifier: 60/100 label=Hard status=needs_human_repair (2.0s)
+  Verifier: 70/100 label=Easy status=blind_sufficient (3.0s)
+  Verifier: 80/100 label=Easy status=blind_sufficient (2.6s)
+  Verifier: 90/100 label=Easy status=blind_sufficient (3.3s)
+  Verifier: 100/100 label=Hard status=needs_human_repair (2.5s)
+
+======================================================================
+NO-VOTE PILOT SUMMARY
+======================================================================
+Output dir:       outputs/runs/no_vote_100_storysplit_qwen3_32b
+Input records:    100
+Selector dist:    {'Invalid': 14, 'Hard': 26, 'Medium': 22, 'Easy': 38}
+Statuses:         {'selector_invalid_or_empty': 14, 'blind_sufficient': 52, 'needs_human_repair': 34}
+Annotation rows: 86 {'Hard': 28, 'Medium': 31, 'Easy': 27}
+Priority:         {'discard': 14, 'high': 52, 'repair': 34}
+Invalid:          14
+API calls:        {'selector_calls': 6, 'sufficiency_calls': 86, 'removal_calls': 0, 'total_calls': 92}
+Summary saved:    outputs/runs/no_vote_100_storysplit_qwen3_32b\pipeline_summary.json
+======================================================================

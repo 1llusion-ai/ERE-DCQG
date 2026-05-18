@@ -1,0 +1,63 @@
+Loaded rows: 492
+Pending translations: 492
+Model: deepseek-ai/DeepSeek-V3
+Include full context: True
+Max tokens: 12000
+Batch size: 12
+Max batch source chars: 18000
+Translated 7/492 (batch 1/46, rows 7)
+Translated 14/492 (batch 2/46, rows 7)
+Translated 21/492 (batch 3/46, rows 7)
+Translated 26/492 (batch 4/46, rows 5)
+Translated 33/492 (batch 5/46, rows 7)
+Translated 45/492 (batch 6/46, rows 12)
+Translated 57/492 (batch 7/46, rows 12)
+Translated 66/492 (batch 8/46, rows 9)
+Translated 77/492 (batch 9/46, rows 11)
+Translated 89/492 (batch 10/46, rows 12)
+Loaded rows: 492
+Pending translations: 403
+Model: deepseek-ai/DeepSeek-V3
+Include full context: True
+Max tokens: 12000
+Batch size: 12
+Max batch source chars: 18000
+Batch of 12 failed on attempt 1; retrying: Missing translation fields: ['EV1567:missing_item']
+Batch of 12 failed after retries; splitting into 6 and 6.
+Translated 12/403 (batch 1/36, rows 12)
+Translated 19/403 (batch 2/36, rows 7)
+Translated 27/403 (batch 3/36, rows 8)
+Translated 34/403 (batch 4/36, rows 7)
+Translated 46/403 (batch 5/36, rows 12)
+Translated 58/403 (batch 6/36, rows 12)
+Translated 69/403 (batch 7/36, rows 11)
+Translated 78/403 (batch 8/36, rows 9)
+Translated 90/403 (batch 9/36, rows 12)
+Translated 102/403 (batch 10/36, rows 12)
+Translated 111/403 (batch 11/36, rows 9)
+Translated 119/403 (batch 12/36, rows 8)
+Translated 128/403 (batch 13/36, rows 9)
+Translated 140/403 (batch 14/36, rows 12)
+Translated 152/403 (batch 15/36, rows 12)
+Translated 164/403 (batch 16/36, rows 12)
+Translated 176/403 (batch 17/36, rows 12)
+Translated 188/403 (batch 18/36, rows 12)
+Translated 200/403 (batch 19/36, rows 12)
+Translated 212/403 (batch 20/36, rows 12)
+Translated 224/403 (batch 21/36, rows 12)
+Translated 236/403 (batch 22/36, rows 12)
+Translated 248/403 (batch 23/36, rows 12)
+Translated 260/403 (batch 24/36, rows 12)
+Translated 272/403 (batch 25/36, rows 12)
+Translated 284/403 (batch 26/36, rows 12)
+Translated 296/403 (batch 27/36, rows 12)
+Translated 308/403 (batch 28/36, rows 12)
+Translated 320/403 (batch 29/36, rows 12)
+Translated 332/403 (batch 30/36, rows 12)
+Translated 344/403 (batch 31/36, rows 12)
+Translated 356/403 (batch 32/36, rows 12)
+Translated 368/403 (batch 33/36, rows 12)
+Translated 380/403 (batch 34/36, rows 12)
+Translated 392/403 (batch 35/36, rows 12)
+Translated 403/403 (batch 36/36, rows 11)
+Saved translated CSV: outputs\runs\no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\translation_shards\human_review_1968_full_implicit_zh_fullctx\human_review_1968_full_implicit_zh_fullctx.shard03.output.csv

@@ -1,0 +1,48 @@
+{
+  "timestamp": "2026-05-16 20:05:55",
+  "mode": "annotation_assist",
+  "selector_only": false,
+  "output_dir": "outputs/runs/no_vote_100_qwen3_32b",
+  "num_input_records": 100,
+  "total_implicit_records": 2166,
+  "sample_mode": "first",
+  "sample_seed": null,
+  "selector_path": "outputs/runs/no_vote_100_qwen3_32b\\selector_candidates.jsonl",
+  "verification_path": "outputs/runs/no_vote_100_qwen3_32b\\blind_verification.jsonl",
+  "labels_path": "outputs/runs/no_vote_100_qwen3_32b\\annotation_candidates.jsonl",
+  "selector_count": 100,
+  "verified_count": 100,
+  "label_count": 87,
+  "annotation_priority": {
+    "repair": 30,
+    "high": 57,
+    "discard": 13
+  },
+  "selector_difficulty": {
+    "Hard": 26,
+    "Easy": 32,
+    "Medium": 29,
+    "Invalid": 13
+  },
+  "blind_sufficiency": {
+    "no": 43,
+    "yes": 57
+  },
+  "verification_status": {
+    "needs_human_repair": 30,
+    "blind_sufficient": 57,
+    "selector_invalid_or_empty": 13
+  },
+  "final_difficulty": {
+    "Hard": 30,
+    "Easy": 25,
+    "Medium": 32
+  },
+  "invalid_count": 13,
+  "api_calls": {
+    "selector_calls": 21,
+    "sufficiency_calls": 87,
+    "removal_calls": 0,
+    "total_calls": 108
+  }
+}

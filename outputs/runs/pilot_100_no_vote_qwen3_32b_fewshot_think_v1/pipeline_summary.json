@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-05-15 23:19:28",
+  "output_dir": "outputs\\runs\\pilot_100_no_vote_qwen3_32b_fewshot_think_v1",
+  "num_input_records": 100,
+  "selector_path": "outputs\\runs\\pilot_100_no_vote_qwen3_32b_fewshot_think_v1\\selector_candidates.jsonl",
+  "verification_path": "outputs\\runs\\pilot_100_no_vote_qwen3_32b_fewshot_think_v1\\blind_verification.jsonl",
+  "labels_path": "outputs\\runs\\pilot_100_no_vote_qwen3_32b_fewshot_think_v1\\labels_implicit.jsonl",
+  "selector_count": 100,
+  "verified_count": 100,
+  "label_count": 37,
+  "selector_difficulty": {
+    "Invalid": 19,
+    "Medium": 29,
+    "Hard": 6,
+    "Easy": 46
+  },
+  "verification_status": {
+    "selector_invalid_or_empty": 19,
+    "insufficient_selected_evidence": 44,
+    "ok": 37
+  },
+  "final_difficulty": {
+    "Hard": 1,
+    "Easy": 30,
+    "Medium": 6
+  },
+  "invalid_count": 63,
+  "api_calls": {
+    "selector_calls": 21,
+    "sufficiency_calls": 81,
+    "removal_calls": 31,
+    "total_calls": 133
+  }
+}

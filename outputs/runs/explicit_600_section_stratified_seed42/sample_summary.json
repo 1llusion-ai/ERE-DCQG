@@ -1,0 +1,104 @@
+{
+  "total_explicit_records": 6382,
+  "sample_count": 600,
+  "unique_stories": 203,
+  "unique_sections": 600,
+  "attribute_distribution": {
+    "action": 225,
+    "outcome resolution": 67,
+    "character": 85,
+    "causal relationship": 125,
+    "prediction": 16,
+    "feeling": 33,
+    "setting": 49
+  },
+  "scope_distribution": {
+    "local": 569,
+    "summary": 31
+  },
+  "top_story_counts": [
+    [
+      "the-fairies-of-merlin-crag",
+      5
+    ],
+    [
+      "the-coming-of-finn",
+      5
+    ],
+    [
+      "adventures-of-kintaro-golden-boy",
+      5
+    ],
+    [
+      "master-girl",
+      5
+    ],
+    [
+      "lasse-my-thrall",
+      5
+    ],
+    [
+      "the-three-crowns",
+      5
+    ],
+    [
+      "the-elfin-knight",
+      5
+    ],
+    [
+      "the-adventures-of-gilla-na-chreck-an-gour",
+      5
+    ],
+    [
+      "gold-tree-and-silver-tree",
+      5
+    ],
+    [
+      "the-one-handed-girl",
+      5
+    ],
+    [
+      "the-man-with-his-leg-tied-up",
+      5
+    ],
+    [
+      "murtough-and-the-witch-woman",
+      5
+    ],
+    [
+      "the-seal-catcher-and-the-merman",
+      5
+    ],
+    [
+      "the-winning-of-olwen",
+      5
+    ],
+    [
+      "the-red-swan",
+      5
+    ],
+    [
+      "three-dogs",
+      5
+    ],
+    [
+      "king-kojata",
+      5
+    ],
+    [
+      "the-rich-brother-and-the-poor-brother",
+      5
+    ],
+    [
+      "strong-desire-and-the-red-sorcerer",
+      5
+    ],
+    [
+      "east-of-sun-and-west-of-moon",
+      5
+    ]
+  ],
+  "labels_path": "outputs\\runs\\explicit_600_section_stratified_seed42\\labels_explicit_sample_600.jsonl",
+  "review_csv_path": "outputs\\runs\\explicit_600_section_stratified_seed42\\human_review_600_explicit.csv",
+  "label_studio_tasks_path": "outputs\\runs\\explicit_600_section_stratified_seed42\\label_studio_tasks_600_explicit.json"
+}

@@ -1,0 +1,53 @@
+{
+  "timestamp": "2026-05-17 09:32:02",
+  "mode": "annotation_assist",
+  "selector_only": false,
+  "output_dir": "outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2",
+  "num_input_records": 2166,
+  "total_implicit_records": 2166,
+  "sample_mode": "first",
+  "sample_seed": null,
+  "selector_path": "outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\\selector_candidates.jsonl",
+  "verification_path": "outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\\blind_verification.jsonl",
+  "labels_path": "outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\\annotation_candidates.jsonl",
+  "selector_count": 2166,
+  "verified_count": 2166,
+  "label_count": 1968,
+  "annotation_priority": {
+    "repair": 846,
+    "high": 1122,
+    "discard": 198
+  },
+  "selector_difficulty": {
+    "Medium": 513,
+    "Hard": 657,
+    "Easy": 798,
+    "Invalid": 198
+  },
+  "blind_sufficiency": {
+    "no": 1044,
+    "yes": 1122
+  },
+  "verification_status": {
+    "needs_human_repair": 846,
+    "blind_sufficient": 1122,
+    "selector_invalid_or_empty": 198
+  },
+  "final_difficulty": {
+    "Medium": 573,
+    "Hard": 710,
+    "Easy": 685
+  },
+  "invalid_count": 198,
+  "thinking_config": {
+    "selector_enable_thinking": true,
+    "verifier_enable_thinking": false,
+    "thinking_budget": null
+  },
+  "api_calls": {
+    "selector_calls": 437,
+    "sufficiency_calls": 1968,
+    "removal_calls": 0,
+    "total_calls": 2405
+  }
+}

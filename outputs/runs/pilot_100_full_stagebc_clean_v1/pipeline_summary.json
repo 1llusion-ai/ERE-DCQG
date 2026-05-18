@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-05-15 21:51:19",
+  "output_dir": "outputs/runs/pilot_100_full_stagebc_clean_v1",
+  "stage_a_runs": 3,
+  "stage_a_paths": [
+    "outputs/runs/pilot_100_full/stage_a_run_1.jsonl",
+    "outputs/runs/pilot_100_full/stage_a_run_2.jsonl",
+    "outputs/runs/pilot_100_full/stage_a_run_3.jsonl"
+  ],
+  "stage_b_path": "outputs/runs/pilot_100_full_stagebc_clean_v1\\stage_b_verification.jsonl",
+  "skip_stage_b": false,
+  "implicit_path": "outputs/runs/pilot_100_full_stagebc_clean_v1\\labels_implicit.jsonl",
+  "explicit_path": "outputs/runs/pilot_100_full_stagebc_clean_v1\\labels_explicit.jsonl",
+  "merged_path": "outputs/runs/pilot_100_full_stagebc_clean_v1\\train_dataset.jsonl",
+  "implicit_count": 66,
+  "implicit_difficulty": {
+    "Easy": 48,
+    "Hard": 2,
+    "Medium": 16
+  },
+  "explicit_count": 6382,
+  "explicit_difficulty": {
+    "Easy": 6382
+  },
+  "merged_count": 6445,
+  "merged_difficulty": {
+    "Easy": 6427,
+    "Hard": 2,
+    "Medium": 16
+  },
+  "implicit_mean_agreement": 0.839,
+  "implicit_unanimous": 34,
+  "implicit_majority": 32,
+  "implicit_split": 0
+}

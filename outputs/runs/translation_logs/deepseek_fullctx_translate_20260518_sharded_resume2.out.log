@@ -1,0 +1,24 @@
+Launched shard human_review_1968_full_implicit_zh_fullctx.shard00.input.csv: pid=5240
+Launched shard human_review_1968_full_implicit_zh_fullctx.shard01.input.csv: pid=23692
+Launched shard human_review_1968_full_implicit_zh_fullctx.shard02.input.csv: pid=16316
+Launched shard human_review_1968_full_implicit_zh_fullctx.shard03.input.csv: pid=20396
+Shard pid=5240 exited with code 0
+Shard pid=23692 exited with code 0
+Shard pid=20396 exited with code 0
+Shard pid=16316 exited with code 0
+Merged 1968 rows into outputs\runs\no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\human_review_1968_full_implicit_zh_fullctx.csv
+Loaded 1968 rows from outputs\runs\no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\human_review_1968_full_implicit_zh_fullctx.csv
+Wrote 1968 Label Studio tasks to outputs\runs\no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\label_studio_tasks_1968_full_implicit_zh_fullctx.json
+Saved Label Studio tasks to outputs\runs\no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2\label_studio_tasks_1968_full_implicit_zh_fullctx.json
+Launched shard human_review_600_explicit_zh_fullctx.shard00.input.csv: pid=13548
+Launched shard human_review_600_explicit_zh_fullctx.shard01.input.csv: pid=6000
+Launched shard human_review_600_explicit_zh_fullctx.shard02.input.csv: pid=8152
+Launched shard human_review_600_explicit_zh_fullctx.shard03.input.csv: pid=9528
+Shard pid=6000 exited with code 0
+Shard pid=8152 exited with code 0
+Shard pid=13548 exited with code 0
+Shard pid=9528 exited with code 0
+Merged 600 rows into outputs\runs\explicit_600_section_stratified_seed42\human_review_600_explicit_zh_fullctx.csv
+Loaded 600 rows from outputs\runs\explicit_600_section_stratified_seed42\human_review_600_explicit_zh_fullctx.csv
+Wrote 600 Label Studio tasks to outputs\runs\explicit_600_section_stratified_seed42\label_studio_tasks_600_explicit_zh_fullctx.json
+Saved Label Studio tasks to outputs\runs\explicit_600_section_stratified_seed42\label_studio_tasks_600_explicit_zh_fullctx.json

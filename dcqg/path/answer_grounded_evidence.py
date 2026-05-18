@@ -12,7 +12,10 @@ import time
 from dcqg.utils.api_client import call_openai_compatible
 from dcqg.utils.config import get_api_config
 from dcqg.generation.parser import parse_json_response
-from dcqg.difficulty.definitions import difficulty_definition
+from dcqg.difficulty.definitions import (
+    difficulty_definition,
+    evidence_definitions_block,
+)
 
 
 # ── Sentence splitting ────────────────────────────────────────────
@@ -59,7 +62,7 @@ def build_answer_grounded_evidence_prompt(story_name, story_section, target_answ
         "Hard": (
             "Plan for a HARD question:\n"
             "- Identify at least 2 required evidence sentences, preferably 3+ when the story supports it.\n"
-            "- The plan must require complex implicit reasoning or multi-step reasoning across sentences.\n"
+            "- The plan must require at least one inference across multiple evidence sentences.\n"
             "- Suitable forms include aggregation, comparison, temporal/causal chaining, separated-event resolution, or tracking multiple entities.\n"
             "- Set answer_sentence_alone_sufficient=no or partial.\n"
             "- If the answer is directly found, or only one sentence is needed, set target_difficulty_feasible=no or partial.\n"
@@ -91,6 +94,9 @@ difficulty whose answer is the target answer.
 "{target_answer}"
 
 ## Target Difficulty: {target_difficulty}
+
+Evidence Definition:
+{evidence_definitions_block()}
 
 Difficulty Definition:
 {difficulty_definition(target_difficulty)}

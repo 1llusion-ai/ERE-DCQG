@@ -12,6 +12,7 @@ import re
 from dcqg.path.fairytale_evidence_audit import _split_sentences
 from dcqg.utils.api_client import call_openai_compatible
 from dcqg.utils.config import get_api_config
+from dcqg.difficulty.definitions import evidence_definitions_block
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -84,7 +85,7 @@ Output:
 SELECTOR_REQUIREMENTS = """Requirements:
 1. Use only the numbered sentences in Context.
 2. Treat the target answer as a claim to verify, not as evidence.
-3. Select all and only the necessary evidence sentences.
+3. Select the minimal evidence set: all and only the evidence sentences needed to justify the target answer.
 4. Do not include background sentences unless removing them would make the answer unsupported, ambiguous, or require guessing.
 5. Set answer_directly_found="yes" only when the target answer or a close paraphrase is directly present in the selected evidence.
 6. Set reasoning_level as:
@@ -322,9 +323,10 @@ def build_selector_prompt(records):
     qa_block = "\n\n".join(parts)
 
     return f"""You are an expert evidence selector for narrative reading comprehension.
-Your task is to select the smallest complete set of necessary evidence sentences that justifies the target answer.
+Your task is to select the minimal evidence set for the target answer.
 
-A necessary evidence sentence is a sentence that must be available for a reader to justify the target answer. If removing the sentence would make the answer unsupported, ambiguous, or require guessing, the sentence is necessary.
+Evidence Definitions:
+{evidence_definitions_block()}
 
 {SELECTOR_FEW_SHOTS}
 
@@ -372,7 +374,8 @@ def build_blind_verifier_prompt(question, answer, evidence_items):
     return f"""You are a blind evidence verifier for narrative reading comprehension.
 Your task is to decide whether the provided evidence sentences alone are sufficient to justify the target answer.
 
-A necessary evidence sentence is a sentence that must be available for a reader to justify the target answer. If removing the sentence would make the answer unsupported, ambiguous, or require guessing, the sentence is necessary.
+Evidence Definitions:
+{evidence_definitions_block()}
 
 {BLIND_VERIFIER_FEW_SHOTS}
 
@@ -409,7 +412,8 @@ def build_removal_verifier_prompt(question, answer, evidence_items):
     return f"""You are a blind evidence verifier for narrative reading comprehension.
 Your task is to decide whether the remaining evidence sentences are still sufficient to justify the target answer after one candidate evidence sentence has been removed.
 
-A necessary evidence sentence is a sentence that must be available for a reader to justify the target answer. If removing the sentence would make the answer unsupported, ambiguous, or require guessing, the sentence is necessary.
+Evidence Definitions:
+{evidence_definitions_block()}
 
 {REMOVAL_VERIFIER_FEW_SHOTS}
 

@@ -4,33 +4,55 @@ All prompts, classifiers, and evaluation must use the definitions below
 verbatim. Never paraphrase, shorten, or rewrite them.
 
 Definition framework:
-  1. Answer acquisition: directly found in the text vs. inferred.
-  2. Evidence scope: one necessary sentence vs. multiple necessary sentences.
+  1. Minimal evidence set: the smallest sentence set needed to answer and justify.
+  2. Answer acquisition: directly found in the text vs. inferred.
+  3. Evidence scope: one evidence sentence vs. multiple evidence sentences.
 
 These definitions are consistent with classify_difficulty() in
 fairytale_evidence_audit.py.
 """
 
 
+MINIMAL_EVIDENCE_SET_DEFINITION = (
+    "A minimal evidence set is the smallest set of sentences from which a "
+    "reader can correctly answer the question and justify the target answer."
+)
+
+EVIDENCE_SENTENCE_DEFINITION = (
+    "An evidence sentence is any sentence in the minimal evidence set. Each "
+    "evidence sentence is necessary: removing it would make the question "
+    "unanswerable, ambiguous, or no longer justified."
+)
+
+
 DIFFICULTY_DEFINITIONS = {
     "Easy": (
-        "The answer can be directly found in the text; obtaining the "
-        "answer requires relying on only one necessary evidence sentence."
+        "The answer can be directly found in the text; the minimal evidence "
+        "set contains one evidence sentence."
     ),
     "Medium": (
-        "Case 1: The answer cannot be directly found in the text; obtaining "
-        "the answer requires relying on one necessary evidence sentence and "
-        "making a simple inference. Case 2: The answer can be directly found "
-        "in the text; however, obtaining the answer requires synthesizing "
-        "information from multiple necessary evidence sentences."
+        "Case 1: The answer cannot be directly found in the text; the "
+        "minimal evidence set contains one evidence sentence and requires a "
+        "simple inference. Case 2: The answer can be directly found in the "
+        "text; however, the minimal evidence set contains multiple evidence "
+        "sentences."
     ),
     "Hard": (
-        "The answer cannot be directly found in the text; obtaining the "
-        "answer requires synthesizing information from multiple necessary "
-        "evidence sentences and performing complex implicit reasoning or "
-        "multi-step reasoning."
+        "The answer cannot be directly found in the text; the minimal "
+        "evidence set contains multiple evidence sentences and requires at "
+        "least one inference."
     ),
 }
+
+
+def evidence_definitions_block():
+    """Return the canonical evidence-set and evidence-sentence definitions."""
+    return (
+        "Minimal Evidence Set:\n"
+        f"{MINIMAL_EVIDENCE_SET_DEFINITION}\n\n"
+        "Evidence Sentence:\n"
+        f"{EVIDENCE_SENTENCE_DEFINITION}"
+    )
 
 
 def difficulty_definition(level):
@@ -52,4 +74,3 @@ def difficulty_definitions_block():
     for level in ["Easy", "Medium", "Hard"]:
         lines.append(f"{level}:\n{DIFFICULTY_DEFINITIONS[level]}")
     return "\n\n".join(lines)
-

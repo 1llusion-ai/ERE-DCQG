@@ -20,7 +20,10 @@ from pathlib import Path
 from dcqg.utils.jsonl import read_jsonl, write_jsonl
 from dcqg.utils.config import get_api_config
 from dcqg.utils.api_client import call_openai_compatible
-from dcqg.difficulty.definitions import difficulty_definitions_block
+from dcqg.difficulty.definitions import (
+    difficulty_definitions_block,
+    evidence_definitions_block,
+)
 
 
 INPUT_DIR = "outputs/runs/baseline_alignment_pilot"
@@ -162,6 +165,10 @@ def build_difficulty_prompt(item):
 ## Expected answer
 "{answer}"
 
+## Evidence Definitions
+
+{evidence_definitions_block()}
+
 ## Difficulty Definitions
 
 {difficulty_definitions_block()}
@@ -177,7 +184,7 @@ Think from the solver's perspective: the solver does NOT know the expected answe
 
 Determine:
 - Is the answer directly stated in the context, or must it be inferred?
-- How many sentences are necessary evidence for the answer?
+- What is the size of the minimal evidence set needed for the answer?
 - What type of reasoning connects the evidence to the answer?
 
 Reply as a single JSON object with exactly these fields:
@@ -193,7 +200,7 @@ Reply as a single JSON object with exactly these fields:
 Guidelines:
 - predicted_difficulty: Easy, Medium, or Hard (per the definitions above)
 - answer_directly_found: "yes" if the answer or a close paraphrase is directly stated in the context, "no" if it must be inferred
-- num_required_sentences: number of context sentences that are necessary evidence for the answer (1, 2, 3, ...)
+- num_required_sentences: number of context sentences in the minimal evidence set for the answer (1, 2, 3, ...)
 - reasoning_type: "direct" (answer directly stated, no inference), "simple_inference" (one inference step from a single sentence), "simple_synthesis" (combining multiple directly stated facts), or "complex_multi_step" (multi-step reasoning, causal/temporal chaining, or implicit reasoning across multiple sentences)
 - answerable: can the question be answered from this context? "yes", "partial", or "no"
 - reason: one sentence explanation"""

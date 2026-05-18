@@ -20,6 +20,7 @@ from dcqg.generation.parser import parse_json_response
 from dcqg.question_filter.grammar import grammar_filter
 from dcqg.difficulty.definitions import (
     difficulty_definition,
+    evidence_definitions_block,
 )
 
 
@@ -151,8 +152,8 @@ DIFFICULTY_FOCUS = {
         "focus_key": "direct_answer",
         "label": "single-sentence explicit answer",
         "strategy": (
-            "Ask about a fact whose answer is directly found in one necessary evidence sentence. "
-            "Use only that necessary sentence; no inference or synthesis should be needed. "
+            "Ask about a fact whose answer is directly found from a minimal evidence set of one sentence. "
+            "Use only that evidence sentence; no inference or synthesis should be needed. "
             "ONLY these question forms (FORCED): "
             "Who [did/said/saw X]? "
             "What did X [do/say/see/have]? "
@@ -192,7 +193,7 @@ DIFFICULTY_FOCUS = {
             "BAD: 'What did [character] do?' (answerable from 1 sentence — NOT Hard) "
             "BAD: 'Who did X?' (direct fact, not chain-dependent — NOT Hard) "
             "BAD: 'Where did X happen?' (single-sentence lookup — NOT Hard) "
-            "The question must require multiple necessary evidence sentences and complex implicit or multi-step reasoning. "
+            "The question must require a minimal evidence set with multiple sentences and complex implicit or multi-step reasoning. "
             "Removing bridge evidence should make the answer ambiguous or wrong."
         ),
         "example_question": "Why did the huntsman return with a boar's heart instead of the princess's?",
@@ -639,6 +640,7 @@ def build_direct_prompt(story_section, target_answer, difficulty):
     """Direct QG: context + target answer + difficulty definition. No graph, no examples."""
     ctx = _format_story_context(story_section)
     diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
 
     return f"""Your task is to generate one question-answer pair according to the following context, target answer, and target difficulty.
 
@@ -652,14 +654,16 @@ Target Difficulty:
 {difficulty}
 
 Requirements:
-1. Difficulty Definition:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
 {diff_def}
-2. The generated question must naturally have the target answer as its answer.
-3. The question must be answerable using only the context.
-4. The answer must be clear, concrete, and well-justified based on the context.
-5. Do not mention the target answer directly in the question.
-6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-7. Output exactly one JSON object, nothing else.
+3. The generated question must naturally have the target answer as its answer.
+4. The question must be answerable using only the context.
+5. The answer must be clear, concrete, and well-justified based on the context.
+6. Do not mention the target answer directly in the question.
+7. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+8. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -672,6 +676,7 @@ def build_direct_no_answer_prompt(story_section, difficulty):
     """
     ctx = _format_story_context(story_section)
     diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
 
     return f"""Your task is to generate one question-answer pair according to the following context and target difficulty.
 
@@ -682,13 +687,15 @@ Target Difficulty:
 {difficulty}
 
 Requirements:
-1. Difficulty Definition:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
 {diff_def}
-2. You must choose a specific, concrete answer from the context.
-3. The question must be answerable using only the context.
-4. The answer must be clear, concrete, and well-justified based on the context.
-5. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-6. Output exactly one JSON object, nothing else.
+3. You must choose a specific, concrete answer from the context.
+4. The question must be answerable using only the context.
+5. The answer must be clear, concrete, and well-justified based on the context.
+6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+7. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -698,6 +705,7 @@ def build_icl_prompt(story_section, target_answer, difficulty):
     """ICL QG: context + target answer + difficulty definition + examples. No graph."""
     ctx = _format_story_context(story_section)
     diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
     examples = NARRATIVE_ICL_EXAMPLES.get(difficulty, NARRATIVE_ICL_EXAMPLES["Hard"])
 
     return f"""Your task is to generate one question-answer pair according to the following context, target answer, and target difficulty.
@@ -715,14 +723,16 @@ Target Difficulty:
 {difficulty}
 
 Requirements:
-1. Difficulty Definition:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
 {diff_def}
-2. The generated question must naturally have the target answer as its answer.
-3. The question must be answerable using only the context.
-4. The answer must be clear, concrete, and well-justified based on the context.
-5. Do not mention the target answer directly in the question.
-6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-7. Output exactly one JSON object, nothing else.
+3. The generated question must naturally have the target answer as its answer.
+4. The question must be answerable using only the context.
+5. The answer must be clear, concrete, and well-justified based on the context.
+6. Do not mention the target answer directly in the question.
+7. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+8. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -744,6 +754,7 @@ def build_self_refine_prompt(initial_question, initial_answer, story_section,
     """
     ctx = _format_story_context(story_section)
     diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
     previous_qa = json.dumps(
         {"question": initial_question, "answer": initial_answer},
         ensure_ascii=False,
@@ -764,16 +775,18 @@ Target Difficulty:
 {difficulty}
 
 Requirements:
-1. Difficulty Definition:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
 {diff_def}
-2. Reflect on whether the previous generated QA satisfies the target answer and target difficulty.
-3. Regenerate one better question-answer pair.
-4. The regenerated question must naturally have the target answer as its answer.
-5. The question must be answerable using only the context.
-6. The answer must be clear, concrete, and well-justified based on the context.
-7. Do not mention the target answer directly in the question.
-8. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-9. Output exactly one JSON object, nothing else.
+3. Reflect on whether the previous generated QA satisfies the target answer and target difficulty.
+4. Regenerate one better question-answer pair.
+5. The regenerated question must naturally have the target answer as its answer.
+6. The question must be answerable using only the context.
+7. The answer must be clear, concrete, and well-justified based on the context.
+8. Do not mention the target answer directly in the question.
+9. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+10. Output exactly one JSON object, nothing else.
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -803,6 +816,7 @@ def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
     # comes from the selected evidence graph, not from hiding story sentences.
     ctx = _format_story_context(story_section)
     diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
     graph_str = _format_graph_for_prompt(prompt_nodes, prompt_edges)
 
     prompt_lines = [
@@ -818,15 +832,17 @@ def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
         difficulty,
         "",
         "Requirements:",
-        "1. Difficulty Definition:",
+        "1. Evidence Definition:",
+        evidence_defs,
+        "2. Difficulty Definition:",
         diff_def,
-        "2. The generated question must naturally have the target answer as its answer.",
-        "3. The question must be answerable using only the context.",
-        "4. The answer must be clear, concrete, and well-justified based on the context.",
-        "5. Do not mention the target answer directly in the question.",
-        "6. The question must start with a question word (Who/What/Where/When/Why/How) and end with '?'.",
-        "7. Use the selected evidence graph as the planning scaffold.",
-        "8. Output exactly one JSON object, nothing else.",
+        "3. The generated question must naturally have the target answer as its answer.",
+        "4. The question must be answerable using only the context.",
+        "5. The answer must be clear, concrete, and well-justified based on the context.",
+        "6. Do not mention the target answer directly in the question.",
+        "7. The question must start with a question word (Who/What/Where/When/Why/How) and end with '?'.",
+        "8. Use the selected evidence graph as the planning scaffold.",
+        "9. Output exactly one JSON object, nothing else.",
         "",
         "Selected Evidence Graph:",
         graph_str,
@@ -852,6 +868,7 @@ def build_repair_prompt(story_section, target_answer, difficulty, focus_key,
     # selected graph policy is preserved separately below.
     ctx = _format_story_context(story_section)
     diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
     graph_str = _format_graph_for_prompt(prompt_nodes, prompt_edges) if prompt_nodes else "None"
 
     return f"""Your task is to repair one question-answer pair according to the following context, target answer, and target difficulty.
@@ -866,14 +883,16 @@ Target Difficulty:
 {difficulty}
 
 Requirements:
-1. Difficulty Definition:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
 {diff_def}
-2. The repaired question must naturally have the target answer as its answer.
-3. The question must be answerable using only the context.
-4. Do not mention the target answer directly in the question.
-5. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
-6. Use the selected evidence graph as the planning scaffold.
-7. Output exactly one JSON object, nothing else.
+3. The repaired question must naturally have the target answer as its answer.
+4. The question must be answerable using only the context.
+5. Do not mention the target answer directly in the question.
+6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+7. Use the selected evidence graph as the planning scaffold.
+8. Output exactly one JSON object, nothing else.
 
 Selected Evidence Graph:
 {graph_str}
@@ -1198,11 +1217,11 @@ def _self_check_ours(question, story_section, target_answer, focus_key=None,
 
     # Difficulty-aware sentence count check
     if difficulty == "Easy":
-        sentence_check = "2. Is the answer directly found in one necessary evidence sentence?"
+        sentence_check = "2. Is the answer directly found from a minimal evidence set of one sentence?"
     elif difficulty == "Medium":
-        sentence_check = "2. Is this either one-sentence simple inference, or direct synthesis across multiple necessary evidence sentences?"
+        sentence_check = "2. Is this either one-sentence simple inference, or direct synthesis across a minimal evidence set with multiple sentences?"
     else:  # Hard
-        sentence_check = "2. Is the answer not directly found, requiring multiple necessary evidence sentences plus complex implicit or multi-step reasoning?"
+        sentence_check = "2. Is the answer not directly found, requiring a minimal evidence set with multiple sentences plus complex implicit or multi-step reasoning?"
 
     # Graph policy compliance check
     policy_check = ""
@@ -1535,6 +1554,7 @@ def difficulty_evidence_judge(question, story_section, target_answer, difficulty
         }
 
     ctx = _format_story_context(story_section)
+    evidence_defs = evidence_definitions_block()
 
     prompt = f"""You are a reading-comprehension difficulty judge. Evaluate the question below.
 
@@ -1544,6 +1564,10 @@ Story:
 Question: "{question}"
 Expected answer: "{target_answer}"
 
+## Evidence Definitions
+
+{evidence_defs}
+
 ## Difficulty Definition
 
 {difficulty_definition(difficulty)}
@@ -1552,13 +1576,13 @@ Expected answer: "{target_answer}"
 
 Determine the difficulty of this question following the definition above. Use two factors:
 1. Whether the expected answer or a close paraphrase is directly found in the story.
-2. The minimum number of necessary evidence sentences a reader must use.
+2. The size of the minimal evidence set a reader must use.
 
 Step 1: Find the sentence that most directly contains, paraphrases, or implies the expected answer.
 Step 2: Decide answer_directly_found:
 - "yes": the expected answer or a close paraphrase is directly present in the text.
 - "no": the expected answer must be inferred.
-Step 3: Identify the minimum necessary evidence sentences.
+Step 3: Identify the minimal evidence set.
 Step 4: For each additional sentence needed, explain WHY it is needed (motivation, context, cause, disambiguation, etc.).
 
 IMPORTANT: Be precise about both directness and evidence count. Apply the difficulty definition exactly as given.

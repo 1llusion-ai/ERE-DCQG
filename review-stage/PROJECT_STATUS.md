@@ -1070,16 +1070,16 @@ CrossQG-style difficulty control.
 
 | Difficulty | Definition |
 | ---------- | ---------- |
-| **Easy** | The answer can be directly found in the text; obtaining the answer requires relying on only one necessary evidence sentence. |
-| **Medium** | **Case 1:** The answer cannot be directly found in the text; obtaining the answer requires relying on one necessary evidence sentence and making a simple inference. **Case 2:** The answer can be directly found in the text; however, obtaining the answer requires synthesizing information from multiple necessary evidence sentences. |
-| **Hard** | The answer cannot be directly found in the text; obtaining the answer requires synthesizing information from multiple necessary evidence sentences and performing complex implicit reasoning or multi-step reasoning. |
+| **Easy** | The answer can be directly found in the text; the minimal evidence set contains one evidence sentence. |
+| **Medium** | **Case 1:** The answer cannot be directly found in the text; the minimal evidence set contains one evidence sentence and requires a simple inference. **Case 2:** The answer can be directly found in the text; however, the minimal evidence set contains multiple evidence sentences. |
+| **Hard** | The answer cannot be directly found in the text; the minimal evidence set contains multiple evidence sentences and requires at least one inference. |
 
 **Rationale:**
 - The previous definition made single-sentence implicit reasoning collapse into
   Easy, which underused FairytaleQA's explicit/implicit signal.
 - The revised definition has two axes: answer acquisition mode (directly found
-  vs. inferred) and necessary evidence scope (single sentence vs. multiple
-  sentences).
+  vs. inferred) and minimal evidence scope (single evidence sentence vs.
+  multiple evidence sentences).
 - This should increase Medium coverage while keeping Hard reserved for cases
   that require both multi-evidence synthesis and complex/multi-step reasoning.
 
@@ -1089,6 +1089,38 @@ CrossQG-style difficulty control.
   novelty statement.
 
 **Implementation note:**
-- Runtime prompts and label-mapping code have not yet been changed in this
-  update. Before the next pilot, synchronize selector/verifier prompts and
-  `classify_difficulty()` with the revised definition.
+- Runtime prompts, selectors, verifiers, judges, and Label Studio config now
+  use the shared canonical evidence definition below.
+
+---
+
+## 25. Canonical Minimal Evidence Definition (2026-05-18)
+
+**Goal:** Make the evidence-sentence concept explicit, compact, and shared by
+annotation, generation, baseline prompts, and judge prompts.
+
+**Canonical definitions:**
+
+- Minimal evidence set: the smallest set of sentences from which a reader can
+  correctly answer the question and justify the target answer.
+- Evidence sentence: any sentence in the minimal evidence set. Each evidence
+  sentence is necessary: removing it would make the question unanswerable,
+  ambiguous, or no longer justified.
+
+**Runtime changes:**
+- `dcqg/difficulty/definitions.py` now defines both the minimal-evidence-set
+  block and the Easy/Medium/Hard definitions from that block.
+- Direct, ICL, SelfRefine, Ours, and the no-target-answer Direct prompt now all
+  receive the same evidence definition. Ours still differs by receiving the
+  selected evidence graph.
+- Difficulty judges, independent difficulty-eval scripts, answer-grounded
+  planning, and no-vote selector/verifier prompts now use the same evidence
+  definition.
+- `label_studio/evidence_review_config.xml` displays the concise Chinese
+  definition for annotators before the annotation questions.
+
+**Reportable conclusion:**
+- The project definition is now: first identify the minimal evidence set, then
+  assign difficulty by answer acquisition mode and minimal-evidence-set size.
+  This preserves the two-dimensional definition while avoiding ad-hoc special
+  cases for pronouns, adjacent sentences, or speaker turns.

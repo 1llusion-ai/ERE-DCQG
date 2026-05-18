@@ -27,7 +27,10 @@ if _project_root not in sys.path:
 from dcqg.utils.jsonl import read_jsonl, write_jsonl
 from dcqg.utils.config import get_api_config
 from dcqg.utils.api_client import call_openai_compatible
-from dcqg.difficulty.definitions import difficulty_definitions_block
+from dcqg.difficulty.definitions import (
+    difficulty_definitions_block,
+    evidence_definitions_block,
+)
 
 VALID_DIFFICULTIES = {"Easy", "Medium", "Hard"}
 
@@ -85,6 +88,10 @@ def build_difficulty_prompt(item: dict) -> str:
 
 ## Answer
 {answer}
+
+## Evidence Definitions
+
+{evidence_definitions_block()}
 
 ## Difficulty Definitions
 

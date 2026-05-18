@@ -1124,3 +1124,61 @@ annotation, generation, baseline prompts, and judge prompts.
   assign difficulty by answer acquisition mode and minimal-evidence-set size.
   This preserves the two-dimensional definition while avoiding ad-hoc special
   cases for pronouns, adjacent sentences, or speaker turns.
+
+---
+
+## 26. Baseline Target-Answer Ablation Pilot (2026-05-18)
+
+**Question:** Does giving baselines a fixed target answer make it harder to
+generate questions matching the requested Easy/Medium/Hard difficulty?
+
+**Code update:**
+- `dcqg/generation/fairytale_qg.py` now includes no-target-answer variants for
+  ICL and SelfRefine, matching the existing Direct no-target-answer mode.
+- `scripts/run_qg_mode_pilot.py` now runs Direct, ICL, and SelfRefine across
+  `with_answer` and `no_answer` modes on the same story sections and target
+  difficulties, with resumable JSONL output.
+
+**Pilot run:**
+
+```powershell
+python -m scripts.run_qg_mode_pilot `
+  --max_stories 3 `
+  --seed 42 `
+  --retries 1 `
+  --skip_quality_judge `
+  --output_dir outputs/runs/qg_mode_pilot_baselines_3_seed42_target_answer_ablation
+```
+
+**Output:**
+- `outputs/runs/qg_mode_pilot_baselines_3_seed42_target_answer_ablation/results.jsonl`
+- `outputs/runs/qg_mode_pilot_baselines_3_seed42_target_answer_ablation/comparison.md`
+- `outputs/runs/qg_mode_pilot_baselines_3_seed42_target_answer_ablation/summary.json`
+
+**Small-sample results:** 3 validation stories x 3 difficulties x 3 methods x
+2 modes = 54 generations. Quality judge was intentionally skipped; difficulty
+judge was run.
+
+| Method | Mode | Parse OK | Difficulty Match |
+|---|---|---:|---:|
+| Direct | with_answer | 9/9 | 6/9 |
+| Direct | no_answer | 7/9 | 4/9 |
+| ICL | with_answer | 8/9 | 6/9 |
+| ICL | no_answer | 7/9 | 3/9 |
+| SelfRefine | with_answer | 6/9 | 4/9 |
+| SelfRefine | no_answer | 5/9 | 3/9 |
+
+**Initial interpretation:**
+- On this small sample, fixed target answers did not appear to hurt difficulty
+  matching. They improved parse rate and difficulty match for all three
+  baseline families.
+- No-target-answer generation was good at Easy but weak for Medium/Hard:
+  Medium match was 1/9 overall, and Hard match was 2/9 overall.
+- The pilot is too small for a paper claim. It is useful as a direction check:
+  the concern that target answers inherently prevent difficulty control is not
+  supported by this first sample.
+
+**Next check before deciding final baseline contract:**
+- Run the same script on a larger story sample, then add quality judging for
+  the stronger mode. If the pattern holds, keep target-answer-conditioned
+  baselines for fair comparison with answer-grounded generation and reranking.

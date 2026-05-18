@@ -738,9 +738,47 @@ Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
 
 
+def build_icl_no_answer_prompt(story_section, difficulty):
+    """ICL QG without target answer: context + difficulty definition + examples."""
+    ctx = _format_story_context(story_section)
+    diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
+    examples = NARRATIVE_ICL_EXAMPLES.get(difficulty, NARRATIVE_ICL_EXAMPLES["Hard"])
+
+    return f"""Your task is to generate one question-answer pair according to the following context and target difficulty.
+
+Examples of {difficulty} question-answer pairs:
+{examples}
+
+Context:
+{ctx}
+
+Target Difficulty:
+{difficulty}
+
+Requirements:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
+{diff_def}
+3. You must choose a specific, concrete answer from the context.
+4. The question must be answerable using only the context.
+5. The answer must be clear, concrete, and well-justified based on the context.
+6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+7. Output exactly one JSON object, nothing else.
+
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""
+
+
 def build_self_refine_gen_prompt(story_section, target_answer, difficulty):
     """SelfRefine step 1: generate initial question (same as Direct)."""
     return build_direct_prompt(story_section, target_answer, difficulty)
+
+
+def build_self_refine_gen_no_answer_prompt(story_section, difficulty):
+    """SelfRefine step 1 without target answer (same as DirectNoAnswer)."""
+    return build_direct_no_answer_prompt(story_section, difficulty)
 
 
 def build_self_refine_prompt(initial_question, initial_answer, story_section,
@@ -790,6 +828,45 @@ Requirements:
 
 Output Format:
 {{"question": "...", "answer": "{target_answer}", "reasoning_type": "direct|chain|cross_sentence"}}"""
+
+
+def build_self_refine_no_answer_prompt(initial_question, initial_answer,
+                                       story_section, difficulty):
+    """SelfRefine step 2 without a fixed target answer."""
+    ctx = _format_story_context(story_section)
+    diff_def = difficulty_definition(difficulty)
+    evidence_defs = evidence_definitions_block()
+    previous_qa = json.dumps(
+        {"question": initial_question, "answer": initial_answer},
+        ensure_ascii=False,
+    )
+
+    return f"""Your task is to regenerate one question-answer pair according to the following context and target difficulty.
+
+Context:
+{ctx}
+
+Previous Generated QA:
+{previous_qa}
+
+Target Difficulty:
+{difficulty}
+
+Requirements:
+1. Evidence Definition:
+{evidence_defs}
+2. Difficulty Definition:
+{diff_def}
+3. Reflect on whether the previous generated QA satisfies the target difficulty and is answerable from the context.
+4. Regenerate one better question-answer pair.
+5. You may keep the previous answer or choose a clearer, more difficulty-appropriate answer from the context.
+6. The question must be answerable using only the context.
+7. The answer must be clear, concrete, and well-justified based on the context.
+8. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
+9. Output exactly one JSON object, nothing else.
+
+Output Format:
+{{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""
 
 
 def build_ours_prompt(story_section, target_answer, difficulty, nodes, edges,
@@ -1109,6 +1186,52 @@ def generate_icl(story_section, target_answer, difficulty, max_retries=2):
     }, max_retries + 1
 
 
+def generate_icl_no_answer(story_section, difficulty, max_retries=2):
+    """Generate QA pair using ICL examples without a fixed target answer."""
+    question = ""
+    answer = ""
+    reason = "unknown"
+    gen = None
+    last_prompt = ""
+    last_raw = ""
+
+    for attempt in range(max_retries + 1):
+        prompt = build_icl_no_answer_prompt(story_section, difficulty)
+        temp = 0.1 + min(attempt * 0.1, 0.3)
+        raw = _call_llm(prompt, temperature=temp)
+        last_prompt = prompt
+        last_raw = raw
+
+        if _is_degenerate(raw):
+            reason = "degenerate output"
+            continue
+
+        gen = _parse_json(raw)
+        if gen:
+            question = gen.get("question", "")
+            answer = gen.get("answer", "")
+        ok, reason = _validate_question(question, "")
+        if ok and answer:
+            return {
+                "generated_question": question,
+                "generated_answer": answer,
+                "method": "ICLNoAnswer",
+                "generation_prompt": prompt,
+                "generation_raw": raw,
+                "parse_ok": True,
+            }, 1 + attempt
+
+    return {
+        "generated_question": question,
+        "generated_answer": answer,
+        "method": "ICLNoAnswer",
+        "generation_prompt": last_prompt,
+        "generation_raw": last_raw,
+        "parse_ok": gen is not None,
+        "generation_error": reason,
+    }, max_retries + 1
+
+
 def generate_self_refine(story_section, target_answer, difficulty, max_retries=1):
     """Generate question using CrossQG-style SelfRefine.
 
@@ -1181,6 +1304,85 @@ def generate_self_refine(story_section, target_answer, difficulty, max_retries=1
         "parse_ok": gen is not None,
         "generation_error": None if ok else reason,
         "self_refine_initial_question": question,
+        "self_refine_initial_raw": gen_raw,
+        "self_refine_prompt": refine_prompt,
+        "self_refine_raw": refine_raw,
+        "self_refine_parse_ok": refine_parse_ok,
+    }, 1 + max_retries
+
+
+def generate_self_refine_no_answer(story_section, difficulty, max_retries=1):
+    """Generate QA pair using SelfRefine without a fixed target answer."""
+    gen_prompt = build_self_refine_gen_no_answer_prompt(story_section, difficulty)
+    gen_raw = _call_llm(gen_prompt)
+
+    if _is_degenerate(gen_raw):
+        return {
+            "generated_question": "",
+            "generated_answer": "",
+            "method": "SelfRefineNoAnswer",
+            "generation_prompt": gen_prompt,
+            "generation_raw": gen_raw,
+            "parse_ok": False,
+            "generation_error": "degenerate initial output",
+        }, 1
+
+    gen = _parse_json(gen_raw)
+    question = gen.get("question", "") if gen else ""
+    initial_answer = gen.get("answer", "") if gen else ""
+
+    if not question or not initial_answer:
+        return {
+            "generated_question": question,
+            "generated_answer": initial_answer,
+            "method": "SelfRefineNoAnswer",
+            "generation_prompt": gen_prompt,
+            "generation_raw": gen_raw,
+            "parse_ok": False,
+            "generation_error": "initial generation failed",
+        }, 1
+
+    final_question = question
+    final_answer = initial_answer
+    final_raw = gen_raw
+    final_prompt = gen_prompt
+    refine_prompt = ""
+    refine_raw = ""
+    refine_parse_ok = False
+
+    for _attempt in range(max_retries):
+        refine_prompt = build_self_refine_no_answer_prompt(
+            question, initial_answer, story_section, difficulty
+        )
+        refine_raw = _call_llm(refine_prompt)
+
+        if _is_degenerate(refine_raw):
+            continue
+
+        refine_gen = _parse_json(refine_raw)
+        refine_parse_ok = refine_gen is not None
+        refined_q = refine_gen.get("question", "") if refine_gen else ""
+        refined_a = refine_gen.get("answer", "") if refine_gen else ""
+        ok, reason = _validate_question(refined_q, "")
+        if ok and refined_a:
+            final_question = refined_q
+            final_answer = refined_a
+            final_raw = refine_raw
+            final_prompt = refine_prompt
+            break
+
+    ok, reason = _validate_question(final_question, "")
+
+    return {
+        "generated_question": final_question,
+        "generated_answer": final_answer,
+        "method": "SelfRefineNoAnswer",
+        "generation_prompt": final_prompt,
+        "generation_raw": final_raw,
+        "parse_ok": gen is not None,
+        "generation_error": None if ok and final_answer else reason,
+        "self_refine_initial_question": question,
+        "self_refine_initial_answer": initial_answer,
         "self_refine_initial_raw": gen_raw,
         "self_refine_prompt": refine_prompt,
         "self_refine_raw": refine_raw,

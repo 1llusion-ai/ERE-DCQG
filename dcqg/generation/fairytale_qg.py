@@ -505,24 +505,29 @@ def select_graph_substructure(nodes, edges, difficulty, target_answer):
 
 NARRATIVE_ICL_EXAMPLES = {
     "Easy": """Example:
-Story: The princess lived in a small castle by the river. Every morning she walked along the water.
-Target answer: "by the river"
-Output: {"question": "Where did the princess live?", "answer": "by the river", "reasoning_type": "direct"}""",
+Story: [S0] The princess lived in a small castle by the river. [S1] Every morning she walked along the water.
+Target answer: "in a small castle by the river"
+Output: {"question": "Where did the princess live?", "answer": "in a small castle by the river", "reasoning_type": "direct"}""",
 
-    "Medium": """Example:
-Story: [S0] The king announced a contest. [S1] The bravest knight would win the princess's hand. [S2] Sir Arthur volunteered first.
-Target answer: "Sir Arthur"
-Output: {"question": "Who was the first to volunteer after the king announced the contest?", "answer": "Sir Arthur", "reasoning_type": "chain"}""",
-
-    "Hard": """Example 1:
-Story: [S0] The queen was jealous of the princess's beauty. [S1] She ordered a huntsman to take the princess into the forest. [S2] The huntsman could not bring himself to harm her. [S3] He returned with a boar's heart instead.
-Target answer: "he could not bring himself to harm her"
-Output: {"question": "Why did the huntsman return with a boar's heart instead of the princess's?", "answer": "he could not bring himself to harm her", "reasoning_type": "cross_sentence"}
+    "Medium": """Example 1:
+Story: [S0] The child pulled his cloak tighter, and his teeth chattered all morning. [S1] His sister ran ahead down the road.
+Target answer: "he was cold"
+Output: {"question": "How did the child feel that morning?", "answer": "he was cold", "reasoning_type": "chain"}
 
 Example 2:
-Story: [S0] The princes learned that the youth had saved the princesses. [S1] A great jealousy took possession of them. [S2] They took counsel together how to get the better of the youth. [S3] They suddenly threw themselves on the youth and strangled him.
-Target answer: "they were jealous of the youth"
-Output: {"question": "Why did the princes suddenly attack their comrade who had saved the princesses?", "answer": "they were jealous of the youth", "reasoning_type": "cross_sentence"}""",
+Story: [S0] The king announced a contest. [S1] The bravest knight would win the princess's hand. [S2] Sir Arthur volunteered first.
+Target answer: "Sir Arthur"
+Output: {"question": "Who was the first to volunteer for the king's contest?", "answer": "Sir Arthur", "reasoning_type": "cross_sentence"}""",
+
+    "Hard": """Example 1:
+Story: [S0] The queen locked the garden gate before sunrise. [S1] The gardener found the key missing from its hook. [S2] Without anyone opening the gate, no one could water the roses. [S3] By evening, every rose had withered.
+Target answer: "because the locked gate kept anyone from watering the roses"
+Output: {"question": "Why had every rose withered by evening?", "answer": "because the locked gate kept anyone from watering the roses", "reasoning_type": "cross_sentence"}
+
+Example 2:
+Story: [S0] The old soldier promised to guard the bridge until the prince returned. [S1] At midnight he heard the prince's horn from the forest. [S2] He left the bridge to follow the sound. [S3] While the bridge was empty, the robbers crossed it.
+Target answer: "because the soldier left his post after hearing the prince's horn"
+Output: {"question": "Why were the robbers able to cross the bridge?", "answer": "because the soldier left his post after hearing the prince's horn", "reasoning_type": "cross_sentence"}""",
 }
 
 

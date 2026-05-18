@@ -1110,7 +1110,7 @@ annotation, generation, baseline prompts, and judge prompts.
 **Runtime changes:**
 - `dcqg/difficulty/definitions.py` now defines both the minimal-evidence-set
   block and the Easy/Medium/Hard definitions from that block.
-- Direct, ICL, SelfRefine, Ours, and the no-target-answer Direct prompt now all
+- Direct, ICL, SelfRefine, Ours, and no-target-answer baseline prompts now all
   receive the same evidence definition. Ours still differs by receiving the
   selected evidence graph.
 - Difficulty judges, independent difficulty-eval scripts, answer-grounded
@@ -1135,6 +1135,10 @@ generate questions matching the requested Easy/Medium/Hard difficulty?
 **Code update:**
 - `dcqg/generation/fairytale_qg.py` now includes no-target-answer variants for
   ICL and SelfRefine, matching the existing Direct no-target-answer mode.
+- ICL few-shot examples now follow the revised definition: Easy is direct
+  one-sentence evidence, Medium covers single-sentence inference and direct
+  multi-sentence evidence, and Hard requires inferred answers from multiple
+  evidence sentences.
 - `scripts/run_qg_mode_pilot.py` now runs Direct, ICL, and SelfRefine across
   `with_answer` and `no_answer` modes on the same story sections and target
   difficulties, with resumable JSONL output.

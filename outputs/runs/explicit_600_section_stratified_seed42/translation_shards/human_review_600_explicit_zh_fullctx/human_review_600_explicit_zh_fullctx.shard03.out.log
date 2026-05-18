@@ -1,0 +1,21 @@
+Loaded rows: 150
+Pending translations: 150
+Model: deepseek-ai/DeepSeek-V3
+Include full context: True
+Max tokens: 12000
+Batch size: 12
+Max batch source chars: 18000
+Translated 12/150 (batch 1/13, rows 12)
+Translated 24/150 (batch 2/13, rows 12)
+Translated 36/150 (batch 3/13, rows 12)
+Translated 48/150 (batch 4/13, rows 12)
+Translated 59/150 (batch 5/13, rows 11)
+Translated 71/150 (batch 6/13, rows 12)
+Translated 83/150 (batch 7/13, rows 12)
+Translated 95/150 (batch 8/13, rows 12)
+Translated 107/150 (batch 9/13, rows 12)
+Translated 119/150 (batch 10/13, rows 12)
+Translated 131/150 (batch 11/13, rows 12)
+Translated 143/150 (batch 12/13, rows 12)
+Translated 150/150 (batch 13/13, rows 7)
+Saved translated CSV: outputs\runs\explicit_600_section_stratified_seed42\translation_shards\human_review_600_explicit_zh_fullctx\human_review_600_explicit_zh_fullctx.shard03.output.csv

@@ -1,6 +1,5 @@
-"""Generation module: FairytaleQA QG methods, parsing, baselines."""
+"""Generation module: FairytaleQA QG methods and parsing."""
 from dcqg.generation.parser import generate_one, parse_json_response
-from dcqg.generation.baselines import load_or_create_sample
 from dcqg.generation.fairytale_qg import (
     generate_direct,
     generate_icl,
@@ -13,7 +12,6 @@ from dcqg.generation.fairytale_qg import (
 __all__ = [
     "generate_one",
     "parse_json_response",
-    "load_or_create_sample",
     "generate_direct",
     "generate_icl",
     "generate_self_refine",

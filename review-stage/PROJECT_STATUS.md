@@ -1,7 +1,7 @@
 # DCQG Project Status
 
-**Last updated:** 2026-05-12
-**Status:** Stage 1 story-matched evaluation implemented. Smoke test passed (5 stories, 15 candidates, 60 generations). CrossQG evaluation pipeline now supports two selection modes: balanced (original) and story_matched (each story contributes equal Easy/Med/Hard). Story-matched, retry/budget, and similarity diagnostics added to report. Next: full story-matched run with 106 stories, then inspect results before Stage 2/3.
+**Last updated:** 2026-05-18
+**Status:** Evidence audit pipeline (Stage A) complete on 2166 implicit train items. No-vote labeling pilots done (100, 500 items). CrossQG eval with story-matched selection smoke-tested. Legacy MAVEN-ERE code and outputs cleaned up. Next: implement Stage B (counterfactual verification) and Stage C (self-consistency), then classifier training.
 
 **Maintenance rule:** Update this file whenever path sampling/filtering, question generation, question filtering, evaluation, baselines, or main experiment outputs change. Future diagnosis must start from trace logs and JSONL examples, not from aggregate numbers alone.
 
@@ -9,43 +9,47 @@
 
 ## 1. Current Pipeline
 
-The project pipeline is organized around five main stages:
+The project pipeline is organized around four main stages:
 
 ```text
-MAVEN-ERE raw documents
-  -> Event relation graph
-  -> Path sampling and filtering
-  -> Question generation
-  -> Question filtering
-  -> Solver + Judge evaluation
-  -> Independent difficulty evaluation
+FairytaleQA train QA pairs (2166 implicit)
+  -> No-vote evidence labeling (Qwen3-32B: selector + blind verifier + removal verifier)
+  -> Human annotation (200 samples, 2 annotators, calibrate LLM labels)
+  -> Multi-task classifier training (DeBERTa, difficulty + evidence heads, 5-fold CV)
+  -> QG generation (4 methods: Direct, ICL, SelfRefine, Ours) + classifier reranking (K=5)
+  -> Human evaluation (100 samples, reranked vs K=1, blind)
 ```
 
-Current implementation lives in the new package:
+Current implementation lives in the `dcqg/` package:
 
 ```text
 dcqg/
-  graph/              event graph construction
-  path/               path sampling, answer extraction, diagnostics, LLM path filtering
-  generation/         PathQG-HardAware, prompts, repair, baselines
-  question_filter/    grammar, answer consistency, path coverage, shortcut, implicitness checks
-  evaluation/         solver, judge, metrics, reports
-  tracing/            full trace records and readable trace rendering
+  datasets/           FairytaleQA loader
+  graph/              narrative evidence graph construction
+  path/               evidence audit, counterfactual verification, self-consistency
+  generation/         FairytaleQA QG methods (Direct, ICL, SelfRefine, Ours) and parser
+  difficulty/         definitions, multi-task classifier, data, reranker
+  evaluation/         LLM judge, quality judge, evaluate_item
   utils/              config, API client, JSONL, text helpers
 scripts/              runnable stage scripts and experiment drivers
 ```
 
 Important repository rule:
 
-- `event_qg/` is legacy and should not be imported by the new framework.
 - Root `.env` is canonical.
 - `.env.example` should be safe for GitHub.
-- Data should be read from `data/raw/maven_ere/`.
+- FairytaleQA data is loaded from HuggingFace at runtime (no local data directory needed).
 - New experiment outputs should go under `outputs/runs/<run_name>/`.
 
 ---
 
-## 2. Current Main Claim Status
+## 2-15. Historical MAVEN-ERE Records (2026-04-30 to 2026-05-06)
+
+**Note:** Sections 2-15 document the MAVEN-ERE event-hop approach, which was superseded by the FairytaleQA evidence-necessity approach in May 2026. The MAVEN-ERE code, data, and outputs have been deleted. These sections are retained as research history only.
+
+---
+
+### 2. MAVEN-ERE Claim Status (historical)
 
 Supported by current experiments:
 
@@ -422,14 +426,14 @@ Trace should include:
 
 | Directory | Use |
 |---|---|
-| `outputs/runs/path_filter_strict_pilot/` | Main strict/relaxed path filtering pilot. |
-| `outputs/runs/qg_pilot_strict_29_v3/` | Stable small QG pilot after path coverage fix. |
-| `outputs/runs/qg_pilot_strict_100_per_level/` | All available strict paths QG pilot. |
-| `outputs/runs/baseline_alignment_pilot/` | Four-method baseline alignment on same 76 strict paths. |
-| `outputs/runs/independent_difficulty_eval_pilot/` | Independent difficulty and path dependency evaluation. |
-| `outputs/runs/hard_implicit_qg_pilot/` | Experimental implicit Hard prompt pilot. |
-| `outputs/archive/legacy_event_qg_outputs/` | Archived legacy outputs from old framework. |
-| `outputs/runs/evidence_necessity_audit_*/` | Evidence necessity audit outputs. |
+| `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/` | Full no-vote labeling on 1968 implicit items (main labeling output). |
+| `outputs/runs/explicit_600_section_stratified_seed42/` | Explicit 600-item labeling (section-stratified, seed=42). |
+| `outputs/runs/fairytale_evidence_audit_train_implicit_2166_20260511/` | Stage A evidence audit (2166 implicit, run 1). |
+| `outputs/runs/fairytale_evidence_audit_train_implicit_500_20260510/` | No-vote evidence pilot (500 random implicit). |
+| `outputs/runs/pilot_100_full/` | 100-item full Stage A/B/C pilot. |
+| `outputs/runs/fairytale_qg_crossqg_eval_20260511_v1/` | K=1 CrossQG baseline evaluation. |
+| `outputs/runs/fairytale_qg_crossqg_eval_20260512_story_matched_v1/` | Story-matched CrossQG evaluation. |
+| `outputs/runs/answer_grounded_evidence_audit_20260514_story_matched/` | Story-matched answer-grounded evidence audit. |
 
 ---
 
@@ -455,22 +459,22 @@ Do inspect trace logs before proposing fixes.
 
 ## 16. Current Next Action
 
-The immediate next action is:
+The main pipeline uses the **no-vote evidence labeling approach** (not Stage A/B/C):
 
 ```text
-1. Design evidence-role-aware QG prompts for narrative domain.
-2. Use implicit/causal/motivation QA pairs as Hard generation targets.
-3. Build QG pipeline that takes evidence-chain annotations and generates Hard questions.
-4. Target pool: 2166 implicit train QA pairs, 15.2% verified Hard rate.
+1. Run no-vote labeling on full 2166 implicit train items (Qwen3-32B, selector + blind verifier + removal verifier)
+2. Human annotation: 200 samples, 2 annotators, calibrate LLM labels
+3. Train multi-task DeBERTa classifier (difficulty + evidence heads, 5-fold CV)
+4. Experiment comparison: 4 QG methods x 4 conditions (K=1, K=5+classifier, K=5+LLM, K=5+random)
+5. Human evaluation: 100 samples (50 reranked + 50 K=1, blind)
 ```
 
-Commands:
+Completed so far:
+- No-vote pilot on 100 items (first-100): 37 retained = Easy 30, Medium 6, Hard 1
+- No-vote pilot on 500 items (random, seed=42): 198 retained = Easy 154, Medium 39, Hard 5
+- CrossQG eval smoke test (story-matched, 5 stories)
 
-```powershell
-# Already completed:
-python -m scripts.run_fairytale_evidence_audit --split validation --filter_implicit --limit 200 --output_dir outputs/runs/fairytale_evidence_audit_implicit_200_20260510
-python -m scripts.run_fairytale_evidence_audit --split train --filter_implicit --limit 500 --output_dir outputs/runs/fairytale_evidence_audit_train_implicit_500_20260510
-```
+See `refine-logs/EXPERIMENT_PLAN.md` for full experiment block definitions.
 
 ---
 

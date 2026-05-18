@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "E:\Anaconda\lib\runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "E:\Anaconda\lib\runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "W:\Projects\DCQG\scripts\translate_review_csv.py", line 430, in <module>
+    main()
+  File "W:\Projects\DCQG\scripts\translate_review_csv.py", line 414, in main
+    raise ValueError(
+ValueError: Missing translation for EV1567: ['evidence_context_zh', 'qa_zh', 'full_context_zh']

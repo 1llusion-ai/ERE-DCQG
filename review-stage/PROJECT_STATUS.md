@@ -1,7 +1,7 @@
 # DCQG Project Status
 
-**Last updated:** 2026-05-18
-**Status:** Evidence audit pipeline (Stage A) complete on 2166 implicit train items. No-vote labeling pilots done (100, 500 items). CrossQG eval with story-matched selection smoke-tested. Legacy MAVEN-ERE code and outputs cleaned up. Next: implement Stage B (counterfactual verification) and Stage C (self-consistency), then classifier training.
+**Last updated:** 2026-05-19
+**Status:** Evidence audit pipeline (Stage A) complete on 2166 implicit train items. No-vote labeling pilots done (100, 500 items). CrossQG eval with story-matched selection smoke-tested. Legacy MAVEN-ERE code and outputs cleaned up. DeBERTa-v3-base two-head classifier training scaffold and local virtual environment smoke tests are now in place. Next: finish human annotation, prepare merged classifier labels, then run full classifier CV on GPU/server.
 
 **Maintenance rule:** Update this file whenever path sampling/filtering, question generation, question filtering, evaluation, baselines, or main experiment outputs change. Future diagnosis must start from trace logs and JSONL examples, not from aggregate numbers alone.
 
@@ -1225,3 +1225,94 @@ methods x 2 modes = 180 generations. No difficulty or quality judge was run.
   generations.
 - Since no judges were run, this follow-up only compares generation stability
   and sample output behavior, not actual difficulty match.
+
+---
+
+## 27. DeBERTa Multi-Task Classifier Scaffold (2026-05-19)
+
+**Goal:** Prepare classifier training before the full human-labeled dataset is
+finished, so final training can move directly to a local GPU or server.
+
+**Implemented files:**
+- `dcqg/difficulty/data.py`: normalized data loading from Label Studio JSON,
+  JSONL, and CSV; human-label filtering; story-aware fold support; sentence
+  marker dataset construction.
+- `dcqg/difficulty/classifier.py`: one encoder backbone with two heads:
+  difficulty classification over `[CLS]` and evidence sentence detection over
+  `[Sx]` marker representations.
+- `scripts/prepare_classifier_data.py`: converts Label Studio exports into
+  normalized classifier JSONL.
+- `scripts/train_classifier.py`: cross-validation training entry point with
+  story-level splitting, resumable output artifacts, smoke-test mode, and
+  DeBERTa-v3-base default backbone.
+- `requirements-train.txt` and `scripts/setup_training_env.ps1`: isolated
+  Windows/server training environment setup.
+- `docs/deberta_multitask_training.md`: commands for data preparation, local
+  smoke tests, and full training.
+
+**Local environment status:**
+- Created `.venv-deberta`.
+- Installed stable CPU PyTorch `2.3.1+cpu`, Transformers `4.44.2`,
+  scikit-learn `1.5.2`, NumPy `1.26.4`, SentencePiece, and Protobuf.
+- The global Anaconda environment should not be used for classifier training:
+  it currently has NumPy/compiled-package conflicts affecting sklearn,
+  transformers, and datasets.
+
+**Validation runs:**
+
+1. Label Studio conversion on the 89-item pilot export:
+
+```powershell
+python -m scripts.prepare_classifier_data `
+  --input C:\Users\86156\Desktop\project-5-at-2026-05-18-01-50-3a294442.json `
+  --output outputs/runs/classifier_data_debug/annotated_89.normalized.jsonl
+```
+
+Result: 75 usable human-labeled training records retained.
+
+2. Tiny-backbone end-to-end training smoke:
+
+```powershell
+.\.venv-deberta\Scripts\python.exe -m scripts.train_classifier `
+  --smoke_test `
+  --device cpu `
+  --output_dir outputs/models/smoke_deberta_multitask
+```
+
+Result: completed 2-fold training and checkpoint saving.
+
+3. Label-Studio-data tiny-backbone debug training:
+
+```powershell
+.\.venv-deberta\Scripts\python.exe -m scripts.train_classifier `
+  --data_path outputs/runs/classifier_data_debug/annotated_89.normalized.jsonl `
+  --model_name hf-internal-testing/tiny-random-bert `
+  --split_strategy story `
+  --n_folds 2 `
+  --epochs 1 `
+  --batch_size 2 `
+  --device cpu `
+  --output_dir outputs/models/debug_annotated_89_tiny
+```
+
+Result: completed story-level 2-fold training on 75 human-labeled records.
+
+4. Real DeBERTa-v3-base minimal smoke:
+
+```powershell
+.\.venv-deberta\Scripts\python.exe -m scripts.train_classifier `
+  --smoke_test `
+  --smoke_model_name microsoft/deberta-v3-base `
+  --device cpu `
+  --max_length 128 `
+  --batch_size 1 `
+  --output_dir outputs/models/smoke_deberta_v3_base_multitask
+```
+
+Result: completed 2-fold, 1-epoch smoke training with
+`microsoft/deberta-v3-base` on CPU. Model size reported: 183.81M parameters.
+
+**Reportable conclusion:**
+- The classifier implementation and environment are now runnable locally.
+- Full DeBERTa-v3-base training should still be treated as a GPU/server job
+  because CPU training is slow, but the code path has been verified locally.

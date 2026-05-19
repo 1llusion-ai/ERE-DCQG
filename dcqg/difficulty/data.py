@@ -1,396 +1,512 @@
-"""Training data construction for multi-task DeBERTa classifier.
+"""Data utilities for the difficulty/evidence multi-task classifier.
 
-Prepares FairytaleQA training data with [S0]-[S30] sentence markers,
-evidence-focused truncation, and a PyTorch Dataset class for joint
-difficulty classification + evidence sentence detection.
+The classifier is trained on QA examples with numbered story-section
+sentences.  It predicts:
 
-Design note: torch is imported lazily so that pure-data helpers
-(add_sentence_markers, load_training_labels, etc.) work in environments
-where PyTorch is not installed.
+1. the human difficulty label: Easy / Medium / Hard;
+2. the minimal evidence sentence set as binary labels over ``[S0]`` markers.
+
+This module accepts both normalized JSONL records and Label Studio JSON
+exports, so the same code can be used during annotation and later on the
+server.
 """
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-from dcqg.path.fairytale_evidence_audit import _split_sentences
-from dcqg.utils.jsonl import read_jsonl
-
-if TYPE_CHECKING:
-    from typing import Any
+from typing import Any, Iterable
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+DIFFICULTY_LABELS: list[str] = ["Easy", "Medium", "Hard"]
+LABEL2ID: dict[str, int] = {label: idx for idx, label in enumerate(DIFFICULTY_LABELS)}
+ID2LABEL: dict[int, str] = {idx: label for label, idx in LABEL2ID.items()}
 
-MARKER_TOKENS: list[str] = [f"[S{i}]" for i in range(31)]
-"""Special tokens added to the DeBERTa tokenizer (max 31 sentences)."""
+DEFAULT_MAX_MARKERS = 64
+MARKER_TOKENS: list[str] = [f"[S{i}]" for i in range(DEFAULT_MAX_MARKERS)]
 
-_MAX_MARKERS = len(MARKER_TOKENS)  # 31
+_SENTENCE_LINE_RE = re.compile(r"^\s*\[S(?P<idx>\d+)\]\s*(?P<text>.*?)(?:\s*)$")
+_FULL_QA_RE = re.compile(
+    r"Full context:\s*(?P<context>.*?)(?:\n\s*\n\s*QA:\s*(?P<qa>.*))?\s*$",
+    re.DOTALL | re.IGNORECASE,
+)
+_QA_RE = re.compile(
+    r"Q:\s*(?P<question>.*?)(?:\n|$)\s*A:\s*(?P<answer>.*)\s*$",
+    re.DOTALL | re.IGNORECASE,
+)
 
 
-# ---------------------------------------------------------------------------
-# Deferred torch import
-# ---------------------------------------------------------------------------
+@dataclass(frozen=True)
+class LabelStudioAnnotation:
+    """Flat view of one Label Studio annotation result."""
+
+    values: dict[str, Any]
+    annotation_id: str | int | None = None
+
 
 def _get_torch():
-    """Import and return the ``torch`` module.
-
-    Raises ``ImportError`` with a helpful message when torch is absent.
-    """
     try:
         import torch
+
         return torch
     except ImportError as exc:
         raise ImportError(
             "PyTorch is required for DifficultyEvidenceDataset. "
-            "Install it with: pip install torch"
+            "Install the training environment first."
         ) from exc
 
 
-# ---------------------------------------------------------------------------
-# Sentence markers
-# ---------------------------------------------------------------------------
-
-def add_sentence_markers(text: str) -> tuple[str, list[str]]:
-    """Split *text* into sentences and prepend ``[Sn]`` markers.
-
-    Returns
-    -------
-    marked_text : str
-        ``"[S0] First sentence. [S1] Second sentence. ..."``
-    sentences : list[str]
-        ``["First sentence.", "Second sentence.", ...]``
-
-    At most :pydata:`_MAX_MARKERS` (31) sentences are kept; any beyond that
-    are silently discarded so marker indices stay in range.
-    """
-    sentences = _split_sentences(text)
-    sentences = sentences[:_MAX_MARKERS]
-
-    parts: list[str] = []
-    for idx, sent in enumerate(sentences):
-        parts.append(f"{MARKER_TOKENS[idx]} {sent}")
-
-    marked_text = " ".join(parts)
-    return marked_text, sentences
+def parse_sentence_ids(value: Any) -> list[int]:
+    """Parse sentence ids from ``[3, 5]``, ``S3,S5``, lists, or scalars."""
+    if value is None:
+        return []
+    if isinstance(value, (int, float)):
+        return [int(value)]
+    if isinstance(value, list):
+        ids: list[int] = []
+        for item in value:
+            ids.extend(parse_sentence_ids(item))
+        return sorted(set(ids))
+    text = str(value).strip()
+    if not text:
+        return []
+    ids = [int(match) for match in re.findall(r"\d+", text)]
+    return sorted(set(ids))
 
 
-# ---------------------------------------------------------------------------
-# Evidence-focused truncation
-# ---------------------------------------------------------------------------
-
-def evidence_focused_truncation(
-    sentences: list[str],
-    answer_sentence_ids: list[int],
-    evidence_sentence_ids: list[int],
-    bridge_sentence_ids: list[int],
-    max_sentences: int = _MAX_MARKERS,
-) -> list[int]:
-    """Select which sentence indices to keep when *len(sentences)* exceeds *max_sentences*.
-
-    Priority order (higher priority sentences are always included first):
-
-    1. **Answer sentences** -- indices in *answer_sentence_ids*.
-    2. **Required evidence** -- indices in *evidence_sentence_ids* that are not
-       already in the answer set.
-    3. **Bridge sentences** -- indices in *bridge_sentence_ids* not already
-       selected.
-    4. **Neighbours** -- indices within +/-2 of any already-selected index.
-    5. **Rest** -- remaining indices in document order.
-
-    Returns a **sorted** list of at most *max_sentences* indices.  If the
-    input already has <= *max_sentences* sentences, all indices are returned.
-    """
-    n = len(sentences)
-
-    if n <= max_sentences:
-        return list(range(n))
-
-    valid = set(range(n))
-
-    # Deduplicate and clamp to valid range.
-    answer_set = sorted(set(answer_sentence_ids) & valid)
-    evidence_set = sorted(set(evidence_sentence_ids) & valid)
-    bridge_set = sorted(set(bridge_sentence_ids) & valid)
-
-    selected: list[int] = []
-    selected_set: set[int] = set()
-
-    def _add(indices: list[int]) -> None:
-        for idx in indices:
-            if idx not in selected_set and len(selected) < max_sentences:
-                selected.append(idx)
-                selected_set.add(idx)
-
-    # Priority 1: answer sentences
-    _add(answer_set)
-
-    # Priority 2: required evidence (excluding already-added answer ids)
-    _add(evidence_set)
-
-    # Priority 3: bridge sentences
-    _add(bridge_set)
-
-    # Priority 4: neighbours (+/-2) of everything selected so far
-    if len(selected) < max_sentences:
-        neighbour_candidates: list[int] = []
-        for idx in list(selected):  # snapshot
-            for delta in (-2, -1, 1, 2):
-                nb = idx + delta
-                if nb in valid and nb not in selected_set:
-                    neighbour_candidates.append(nb)
-        # Deduplicate while preserving order
-        seen: set[int] = set()
-        unique_neighbours: list[int] = []
-        for nb in neighbour_candidates:
-            if nb not in seen:
-                seen.add(nb)
-                unique_neighbours.append(nb)
-        _add(sorted(unique_neighbours))
-
-    # Priority 5: rest in document order
-    if len(selected) < max_sentences:
-        rest = [i for i in range(n) if i not in selected_set]
-        _add(rest)
-
-    return sorted(selected)
+def parse_numbered_context(text: str) -> list[tuple[int, str]]:
+    """Return ``[(sentence_id, sentence_text), ...]`` from ``[Sx]`` lines."""
+    rows: list[tuple[int, str]] = []
+    for line in str(text or "").splitlines():
+        match = _SENTENCE_LINE_RE.match(line)
+        if not match:
+            continue
+        rows.append((int(match.group("idx")), match.group("text").strip()))
+    return rows
 
 
-# ---------------------------------------------------------------------------
-# JSONL loading and normalisation
-# ---------------------------------------------------------------------------
+def strip_context_from_full_context_qa(text: str) -> tuple[str, str]:
+    """Split a Label Studio ``full_context_qa`` field into context and QA text."""
+    raw = str(text or "").strip()
+    match = _FULL_QA_RE.match(raw)
+    if not match:
+        return raw, ""
+    context = (match.group("context") or "").strip()
+    qa = (match.group("qa") or "").strip()
+    return context, qa
 
-def _normalise_record(rec: dict) -> dict | None:
-    """Normalise a single training record.
 
-    Returns ``None`` when essential fields are missing.
-    """
-    story_section = rec.get("story_section", "")
-    if not story_section:
+def parse_qa_text(text: str) -> tuple[str, str]:
+    """Parse ``Q: ...`` / ``A: ...`` text."""
+    match = _QA_RE.search(str(text or "").strip())
+    if not match:
+        return "", ""
+    return match.group("question").strip(), match.group("answer").strip()
+
+
+def build_marked_context(sentences: list[tuple[int, str]]) -> str:
+    return "\n".join(f"[S{idx}] {sent}" for idx, sent in sentences)
+
+
+def add_sentence_markers(text: str, max_markers: int = DEFAULT_MAX_MARKERS) -> tuple[str, list[str]]:
+    """Backward-compatible helper returning marked text and sentence strings."""
+    numbered = parse_numbered_context(text)
+    if numbered:
+        kept = numbered[:max_markers]
+        return build_marked_context([(idx, sent) for idx, sent in kept]), [sent for _idx, sent in kept]
+
+    try:
+        from dcqg.path.fairytale_evidence_audit import _split_sentences
+
+        sentences = _split_sentences(str(text or ""))
+    except Exception:
+        sentences = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+
+    sentences = sentences[:max_markers]
+    rows = [(idx, sentence) for idx, sentence in enumerate(sentences)]
+    return build_marked_context(rows), sentences
+
+
+def build_classifier_input(question: str, answer: str, marked_context: str) -> str:
+    """Build the text consumed by DeBERTa."""
+    return (
+        f"Question: {question.strip()}\n"
+        f"Answer: {answer.strip()}\n"
+        "Context:\n"
+        f"{marked_context.strip()}"
+    ).strip()
+
+
+def _read_json_or_jsonl(path: Path) -> list[dict[str, Any]]:
+    if path.suffix.lower() == ".jsonl":
+        records: list[dict[str, Any]] = []
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    records.append(json.loads(line))
+        return records
+
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    if isinstance(data, dict):
+        return [data]
+    return []
+
+
+def _read_csv(path: Path) -> list[dict[str, Any]]:
+    with path.open(encoding="utf-8-sig", newline="") as f:
+        return [dict(row) for row in csv.DictReader(f)]
+
+
+def read_records(path: str | Path) -> list[dict[str, Any]]:
+    """Read JSON, JSONL, or CSV records."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(p)
+    if p.suffix.lower() == ".csv":
+        return _read_csv(p)
+    return _read_json_or_jsonl(p)
+
+
+def flatten_label_studio_annotation(task: dict[str, Any]) -> LabelStudioAnnotation | None:
+    """Return the latest non-cancelled annotation as ``from_name -> value``."""
+    annotations = task.get("annotations") or []
+    valid_annotations = [
+        ann for ann in annotations
+        if isinstance(ann, dict) and not ann.get("was_cancelled")
+    ]
+    if not valid_annotations:
         return None
 
-    # Difficulty label -- accept both field names used by different stages.
-    difficulty = rec.get("difficulty_label") or rec.get("final_difficulty") or ""
-    if difficulty not in ("Easy", "Medium", "Hard"):
+    annotation = valid_annotations[-1]
+    values: dict[str, Any] = {}
+    for result in annotation.get("result", []):
+        if not isinstance(result, dict):
+            continue
+        name = result.get("from_name")
+        value = result.get("value", {})
+        if not name:
+            continue
+        if "choices" in value:
+            choices = value.get("choices") or []
+            values[name] = choices[0] if choices else ""
+        elif "text" in value:
+            text = value.get("text") or []
+            values[name] = text[0] if text else ""
+        else:
+            values[name] = value
+    return LabelStudioAnnotation(values=values, annotation_id=annotation.get("id"))
+
+
+def _fallback_model_label(data: dict[str, Any]) -> tuple[str, list[int], str]:
+    difficulty = data.get("suggested_difficulty_label") or data.get("selector_difficulty") or ""
+    evidence_ids = parse_sentence_ids(
+        data.get("required_evidence_ids") or data.get("selector_evidence_ids")
+    )
+    direct = (
+        data.get("suggested_answer_directly_found")
+        or data.get("selector_answer_directly_found")
+        or ""
+    )
+    return str(difficulty), evidence_ids, str(direct)
+
+
+def normalize_training_record(
+    raw: dict[str, Any],
+    *,
+    allow_model_labels: bool = False,
+) -> dict[str, Any] | None:
+    """Normalize one raw record into the classifier training schema.
+
+    Label Studio records are included only when:
+    - sentence split is marked ``yes``;
+    - QA validity is marked ``yes``;
+    - difficulty is Easy/Medium/Hard;
+    - at least one evidence id is provided.
+
+    ``allow_model_labels`` is only for smoke tests or weakly supervised pilots.
+    Human-labeled training should keep it false.
+    """
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else raw
+    annotation = flatten_label_studio_annotation(raw) if "annotations" in raw else None
+
+    if annotation is not None:
+        ann = annotation.values
+        split_ok = str(ann.get("human_sentence_split_ok", "")).lower()
+        human_valid = str(ann.get("human_valid", "")).lower()
+        if split_ok and split_ok != "yes":
+            return None
+        if human_valid and human_valid != "yes":
+            return None
+        difficulty = str(ann.get("human_difficulty_label", ""))
+        evidence_ids = parse_sentence_ids(ann.get("human_evidence_ids", ""))
+        direct = str(ann.get("human_answer_directly_found", ""))
+        source = "label_studio_human"
+    elif allow_model_labels:
+        difficulty, evidence_ids, direct = _fallback_model_label(data)
+        source = "model_label"
+    else:
+        difficulty = str(
+            data.get("difficulty_label")
+            or data.get("final_difficulty")
+            or data.get("human_difficulty_label")
+            or ""
+        )
+        evidence_ids = parse_sentence_ids(
+            data.get("evidence_ids")
+            or data.get("required_evidence_sentences")
+            or data.get("human_evidence_ids")
+        )
+        direct = str(data.get("answer_directly_found") or "")
+        source = str(data.get("label_source") or "normalized")
+
+    if difficulty not in LABEL2ID:
+        return None
+    if not evidence_ids:
         return None
 
-    question = rec.get("question", "")
-    answer1 = rec.get("answer1", "")
-    if not question or not answer1:
+    context_numbered = str(
+        data.get("full_context_numbered") or data.get("context_numbered") or ""
+    ).strip()
+    full_context_qa = str(data.get("full_context_qa") or "").strip()
+    qa_text = str(data.get("qa") or "").strip()
+
+    if not context_numbered and full_context_qa:
+        context_numbered, qa_from_full = strip_context_from_full_context_qa(full_context_qa)
+        if not qa_text:
+            qa_text = qa_from_full
+
+    if not context_numbered:
+        story_section = str(data.get("story_section") or "").strip()
+        if story_section:
+            sentence_rows = parse_numbered_context(story_section)
+            if not sentence_rows:
+                sentence_rows = [(idx, sent.strip()) for idx, sent in enumerate(story_section.splitlines()) if sent.strip()]
+            context_numbered = build_marked_context(sentence_rows)
+
+    sentence_rows = parse_numbered_context(context_numbered)
+    if not sentence_rows and isinstance(data.get("sentences"), list):
+        sentence_rows = [
+            (int(item["id"]), str(item["text"]).strip())
+            for item in data["sentences"]
+            if isinstance(item, dict) and "id" in item and str(item.get("text", "")).strip()
+        ]
+    if not sentence_rows:
         return None
 
-    # Evidence / bridge lists -- may be absent in some data variants.
-    required = rec.get("required_evidence_sentences", [])
-    if not isinstance(required, list):
-        required = []
-    required = [int(x) for x in required if isinstance(x, (int, float))]
+    question = str(data.get("question") or "").strip()
+    answer = str(data.get("answer") or data.get("answer1") or "").strip()
+    if (not question or not answer) and qa_text:
+        question_from_qa, answer_from_qa = parse_qa_text(qa_text)
+        question = question or question_from_qa
+        answer = answer or answer_from_qa
 
-    bridge = rec.get("bridge_sentence_ids", [])
-    if not isinstance(bridge, list):
-        bridge = []
-    bridge = [int(x) for x in bridge if isinstance(x, (int, float))]
+    if not question or not answer:
+        return None
+
+    available_ids = {idx for idx, _ in sentence_rows}
+    evidence_ids = sorted(idx for idx in evidence_ids if idx in available_ids)
+    if not evidence_ids:
+        return None
 
     return {
-        "story_section": story_section,
-        "difficulty_label": difficulty,
-        "required_evidence_sentences": required,
-        "bridge_sentence_ids": bridge,
+        "sample_id": str(data.get("sample_id") or data.get("id") or ""),
+        "story_name": str(data.get("story_name") or ""),
+        "source_index": str(data.get("source_index") or data.get("sample_original_index") or ""),
+        "attribute": str(data.get("attribute") or ""),
+        "fairytale_scope": str(data.get("fairytale_scope") or data.get("local_or_sum") or ""),
+        "fairytale_explicitness": str(data.get("fairytale_explicitness") or data.get("ex_or_im") or ""),
         "question": question,
-        "answer1": answer1,
-        # Preserve optional metadata that callers may use.
-        "story_name": rec.get("story_name", ""),
-        "answer2": rec.get("answer2", ""),
-        "local_or_sum": rec.get("local_or_sum", ""),
-        "attribute": rec.get("attribute", ""),
-        "ex_or_im": rec.get("ex_or_im", ""),
+        "answer": answer,
+        "difficulty_label": difficulty,
+        "difficulty_id": LABEL2ID[difficulty],
+        "answer_directly_found": direct,
+        "evidence_ids": evidence_ids,
+        "context_numbered": build_marked_context(sentence_rows),
+        "sentences": [{"id": idx, "text": sent} for idx, sent in sentence_rows],
+        "label_source": source,
+        "annotation_id": annotation.annotation_id if annotation else None,
     }
 
 
 def load_training_labels(
     implicit_path: str,
     explicit_path: str | None = None,
-) -> list[dict]:
-    """Load and merge training labels from one or two JSONL files.
+    *,
+    allow_model_labels: bool = False,
+) -> list[dict[str, Any]]:
+    """Backward-compatible loader used by training scripts."""
+    paths = [implicit_path]
+    if explicit_path:
+        paths.append(explicit_path)
+    return load_training_records(paths, allow_model_labels=allow_model_labels)
 
-    Parameters
-    ----------
-    implicit_path : str
-        Path to the primary (implicit) training labels JSONL.
-    explicit_path : str, optional
-        Path to an additional (explicit) labels JSONL to merge.
 
-    Returns
-    -------
-    list[dict]
-        Normalised records.  Records with missing essential fields
-        (story_section, difficulty_label, question, answer1) are filtered out.
-    """
-    raw_records: list[dict] = read_jsonl(implicit_path)
+def load_training_records(
+    paths: str | Path | Iterable[str | Path],
+    *,
+    allow_model_labels: bool = False,
+) -> list[dict[str, Any]]:
+    """Load and normalize one or more training data files."""
+    if isinstance(paths, (str, Path)):
+        path_list = [paths]
+    else:
+        path_list = list(paths)
 
-    if explicit_path and Path(explicit_path).exists():
-        raw_records.extend(read_jsonl(explicit_path))
-
-    results: list[dict] = []
+    records: list[dict[str, Any]] = []
     skipped = 0
-    for rec in raw_records:
-        normalised = _normalise_record(rec)
-        if normalised is not None:
-            results.append(normalised)
-        else:
-            skipped += 1
+    for path in path_list:
+        for raw in read_records(path):
+            item = normalize_training_record(raw, allow_model_labels=allow_model_labels)
+            if item is None:
+                skipped += 1
+            else:
+                records.append(item)
 
-    if skipped:
-        logger.info(
-            "load_training_labels: kept %d records, skipped %d incomplete",
-            len(results),
-            skipped,
-        )
-
-    return results
+    logger.info("Loaded %d classifier records; skipped %d", len(records), skipped)
+    return records
 
 
-# ---------------------------------------------------------------------------
-# Stratified k-fold
-# ---------------------------------------------------------------------------
+def write_jsonl(records: Iterable[dict[str, Any]], path: str | Path) -> None:
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("w", encoding="utf-8") as f:
+        for record in records:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
 
 def create_stratified_folds(
-    records: list[dict],
+    records: list[dict[str, Any]],
     n_folds: int = 5,
     seed: int = 42,
+    *,
+    group_by_story: bool = False,
 ) -> list[tuple[list[int], list[int]]]:
-    """Create stratified k-fold splits by ``difficulty_label``.
+    """Create stratified folds, optionally keeping stories in one fold."""
+    if n_folds < 2:
+        raise ValueError("n_folds must be >= 2")
+    if len(records) < n_folds:
+        raise ValueError(f"Need at least {n_folds} records, got {len(records)}")
 
-    Uses :class:`sklearn.model_selection.StratifiedKFold`.
+    labels = [record["difficulty_label"] for record in records]
+    indices = list(range(len(records)))
 
-    Parameters
-    ----------
-    records : list[dict]
-        Each record must contain a ``difficulty_label`` key
-        (one of ``"Easy"``, ``"Medium"``, ``"Hard"``).
-    n_folds : int
-        Number of folds.
-    seed : int
-        Random seed for reproducibility.
+    if group_by_story:
+        from sklearn.model_selection import StratifiedGroupKFold
 
-    Returns
-    -------
-    list[tuple[list[int], list[int]]]
-        ``(train_indices, val_indices)`` per fold.
-    """
+        groups = [
+            record.get("story_name") or f"row-{idx}"
+            for idx, record in enumerate(records)
+        ]
+        splitter = StratifiedGroupKFold(
+            n_splits=n_folds,
+            shuffle=True,
+            random_state=seed,
+        )
+        return [
+            (train_idx.tolist(), val_idx.tolist())
+            for train_idx, val_idx in splitter.split(indices, labels, groups)
+        ]
+
     from sklearn.model_selection import StratifiedKFold
 
-    labels = [r["difficulty_label"] for r in records]
-    skf = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
-
-    folds: list[tuple[list[int], list[int]]] = []
-    # StratifiedKFold.split needs an array-like X; indices are fine.
-    dummy_x = list(range(len(records)))
-    for train_idx, val_idx in skf.split(dummy_x, labels):
-        folds.append((train_idx.tolist(), val_idx.tolist()))
-
-    return folds
+    splitter = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=seed)
+    return [
+        (train_idx.tolist(), val_idx.tolist())
+        for train_idx, val_idx in splitter.split(indices, labels)
+    ]
 
 
-# ---------------------------------------------------------------------------
-# PyTorch Dataset
-# ---------------------------------------------------------------------------
+def truncate_sentences_for_markers(
+    sentence_rows: list[tuple[int, str]],
+    evidence_ids: list[int],
+    max_markers: int,
+) -> tuple[list[tuple[int, str]], list[int], dict[int, int]]:
+    """Keep evidence and nearby context when a section exceeds max markers.
+
+    Returns remapped sentence rows with marker ids starting at 0, remapped
+    evidence ids, and ``old_id -> new_id``.
+    """
+    if len(sentence_rows) <= max_markers:
+        mapping = {old_id: pos for pos, (old_id, _) in enumerate(sentence_rows)}
+        remapped_rows = [(mapping[old_id], text) for old_id, text in sentence_rows]
+        remapped_evidence = sorted(mapping[idx] for idx in evidence_ids if idx in mapping)
+        return remapped_rows, remapped_evidence, mapping
+
+    available = [idx for idx, _ in sentence_rows]
+    available_set = set(available)
+    selected: list[int] = []
+    selected_set: set[int] = set()
+
+    def add(ids: Iterable[int]) -> None:
+        for idx in ids:
+            if idx in available_set and idx not in selected_set and len(selected) < max_markers:
+                selected.append(idx)
+                selected_set.add(idx)
+
+    add(evidence_ids)
+    for ev_id in evidence_ids:
+        add([ev_id - 2, ev_id - 1, ev_id + 1, ev_id + 2])
+    add(available)
+
+    selected_order = [idx for idx in available if idx in selected_set][:max_markers]
+    mapping = {old_id: new_id for new_id, old_id in enumerate(selected_order)}
+    text_by_id = dict(sentence_rows)
+    remapped_rows = [(mapping[old_id], text_by_id[old_id]) for old_id in selected_order]
+    remapped_evidence = sorted(mapping[idx] for idx in evidence_ids if idx in mapping)
+    return remapped_rows, remapped_evidence, mapping
+
 
 class DifficultyEvidenceDataset:
-    """PyTorch-compatible Dataset for multi-task difficulty + evidence classification.
-
-    Each item is a dict with the following tensors:
-
-    * ``input_ids``        -- ``LongTensor [max_length]``
-    * ``attention_mask``   -- ``LongTensor [max_length]``
-    * ``difficulty_label`` -- ``LongTensor []``  (scalar, 0=Easy 1=Medium 2=Hard)
-    * ``evidence_labels``  -- ``FloatTensor [max_markers]``
-      (1.0 at evidence sentence positions, 0.0 elsewhere)
-    * ``marker_mask``      -- ``FloatTensor [max_markers]``
-      (1.0 where a sentence marker exists in the input, 0.0 for padding)
-
-    The tokenizer **must** already have ``[S0]``..``[S30]`` as added special
-    tokens (e.g. via ``tokenizer.add_special_tokens({"additional_special_tokens": MARKER_TOKENS})``).
-    """
-
-    DIFFICULTY_MAP: dict[str, int] = {"Easy": 0, "Medium": 1, "Hard": 2}
+    """PyTorch Dataset for joint difficulty and evidence training."""
 
     def __init__(
         self,
-        records: list[dict],
+        records: list[dict[str, Any]],
         tokenizer: Any,
+        *,
         max_length: int = 512,
-        max_markers: int = _MAX_MARKERS,
+        max_markers: int = DEFAULT_MAX_MARKERS,
     ) -> None:
-        torch = _get_torch()  # noqa: F841 -- validates availability
-
+        _get_torch()
         self.records = records
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.max_markers = max_markers
-
-        # Pre-compute marker token IDs for fast lookup.
-        self._marker_ids: list[int] = [
-            tokenizer.convert_tokens_to_ids(tok)
-            for tok in MARKER_TOKENS[:max_markers]
+        self.marker_tokens = [f"[S{i}]" for i in range(max_markers)]
+        self.marker_token_ids = [
+            tokenizer.convert_tokens_to_ids(token) for token in self.marker_tokens
         ]
-
-    # -- sequence protocol --------------------------------------------------
 
     def __len__(self) -> int:
         return len(self.records)
 
-    def __getitem__(self, idx: int) -> dict:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         torch = _get_torch()
-        rec = self.records[idx]
+        record = self.records[idx]
+        sentence_rows = [
+            (int(item["id"]), str(item["text"])) for item in record["sentences"]
+        ]
+        sentence_rows, evidence_ids, old_to_new = truncate_sentences_for_markers(
+            sentence_rows,
+            parse_sentence_ids(record["evidence_ids"]),
+            self.max_markers,
+        )
 
-        # 1. Split sentences
-        sentences = _split_sentences(rec["story_section"])
-
-        # 2. Truncate to max_markers if necessary
-        evidence_ids = rec.get("required_evidence_sentences", [])
-        bridge_ids = rec.get("bridge_sentence_ids", [])
-
-        # Determine answer sentence ids -- use the first evidence sentence as
-        # the answer sentence when no explicit field is present.
-        answer_ids = rec.get("answer_sentence_ids", evidence_ids[:1])
-
-        if len(sentences) > self.max_markers:
-            keep = evidence_focused_truncation(
-                sentences,
-                answer_sentence_ids=answer_ids,
-                evidence_sentence_ids=evidence_ids,
-                bridge_sentence_ids=bridge_ids,
-                max_sentences=self.max_markers,
-            )
-            # Remap sentence lists after truncation.  ``keep`` is sorted.
-            old_to_new = {old_idx: new_idx for new_idx, old_idx in enumerate(keep)}
-            sentences = [sentences[i] for i in keep]
-            evidence_ids = sorted(
-                old_to_new[i] for i in evidence_ids if i in old_to_new
-            )
-            bridge_ids = sorted(
-                old_to_new[i] for i in bridge_ids if i in old_to_new
-            )
-
-        num_sents = len(sentences)
-
-        # 3. Build marked text and prepend the question
-        marked_parts: list[str] = []
-        for s_idx, sent in enumerate(sentences):
-            marked_parts.append(f"{MARKER_TOKENS[s_idx]} {sent}")
-        marked_text = " ".join(marked_parts)
-
-        # Prepend question so the model sees the query context.
-        input_text = f"{rec['question']} {self.tokenizer.sep_token} {marked_text}"
-
-        # 4. Tokenize
+        marked_context = build_marked_context(sentence_rows)
+        input_text = build_classifier_input(
+            record["question"],
+            record["answer"],
+            marked_context,
+        )
         encoding = self.tokenizer(
             input_text,
             max_length=self.max_length,
@@ -398,45 +514,54 @@ class DifficultyEvidenceDataset:
             truncation=True,
             return_tensors="pt",
         )
-        input_ids = encoding["input_ids"].squeeze(0)        # [max_length]
-        attention_mask = encoding["attention_mask"].squeeze(0)  # [max_length]
+        input_ids = encoding["input_ids"].squeeze(0)
+        attention_mask = encoding["attention_mask"].squeeze(0)
+        input_id_list = input_ids.tolist()
 
-        # 5. Locate marker positions in input_ids
-        #    For each marker [Sn] that should appear (n < num_sents), find its
-        #    token position in input_ids.
-        marker_positions: list[int] = []  # token index for each sentence marker
-        input_ids_list = input_ids.tolist()
-
-        for m_idx in range(num_sents):
-            m_id = self._marker_ids[m_idx]
-            # Find the token position -- should exist unless truncated away.
-            try:
-                pos = input_ids_list.index(m_id)
-            except ValueError:
-                pos = -1  # marker was truncated
-            marker_positions.append(pos)
-
-        # 6. Build evidence_labels: 1.0 at evidence sentence positions
-        evidence_set = set(evidence_ids)
-        evidence_labels = torch.zeros(self.max_markers, dtype=torch.float32)
-        for s_idx in range(num_sents):
-            if s_idx in evidence_set:
-                evidence_labels[s_idx] = 1.0
-
-        # 7. Build marker_mask: 1.0 where a valid marker exists in the tokenized input
+        marker_positions = torch.zeros(self.max_markers, dtype=torch.long)
         marker_mask = torch.zeros(self.max_markers, dtype=torch.float32)
-        for s_idx in range(num_sents):
-            if marker_positions[s_idx] >= 0:
-                marker_mask[s_idx] = 1.0
+        evidence_labels = torch.zeros(self.max_markers, dtype=torch.float32)
+        evidence_set = set(evidence_ids)
 
-        # 8. Difficulty label
-        diff_str = rec.get("difficulty_label", "Easy")
-        diff_label = self.DIFFICULTY_MAP.get(diff_str, 0)
+        for marker_idx, _sentence_text in sentence_rows:
+            if marker_idx >= self.max_markers:
+                continue
+            marker_token_id = self.marker_token_ids[marker_idx]
+            try:
+                token_pos = input_id_list.index(marker_token_id)
+            except ValueError:
+                continue
+            marker_positions[marker_idx] = token_pos
+            marker_mask[marker_idx] = 1.0
+            if marker_idx in evidence_set:
+                evidence_labels[marker_idx] = 1.0
 
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
-            "difficulty_label": torch.tensor(diff_label, dtype=torch.long),
-            "evidence_labels": evidence_labels,
+            "marker_positions": marker_positions,
             "marker_mask": marker_mask,
+            "difficulty_label": torch.tensor(record["difficulty_id"], dtype=torch.long),
+            "evidence_labels": evidence_labels,
+            "metadata": {
+                "sample_id": record.get("sample_id", ""),
+                "story_name": record.get("story_name", ""),
+                "old_to_new_sentence_ids": old_to_new,
+            },
         }
+
+
+def collate_difficulty_evidence(batch: list[dict[str, Any]]) -> dict[str, Any]:
+    """Stack already-tokenized dataset items into a batch."""
+    torch = _get_torch()
+    tensor_keys = [
+        "input_ids",
+        "attention_mask",
+        "marker_positions",
+        "marker_mask",
+        "difficulty_label",
+        "evidence_labels",
+    ]
+    output = {key: torch.stack([item[key] for item in batch]) for key in tensor_keys}
+    output["metadata"] = [item.get("metadata", {}) for item in batch]
+    return output

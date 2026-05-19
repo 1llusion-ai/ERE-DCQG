@@ -1,205 +1,145 @@
-"""Multi-task DeBERTa-v3-base classifier for difficulty + evidence identification.
-
-Architecture
-------------
-DeBERTa-v3-base backbone (184M params)
-  -> [CLS] hidden state -> Linear(768, 3) -> difficulty logits  (Easy / Medium / Hard)
-  -> [Sn] hidden states  -> Linear(768, 1) -> evidence logits   (binary per marker)
-
-Loss: L_diff + lambda * L_evidence
-
-All heavy imports (torch, transformers, sklearn) are deferred to method-call time
-so the module can be imported in non-GPU environments for type checking.
-"""
+"""Multi-task DeBERTa classifier for difficulty and evidence sentences."""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from .data import (
+    DEFAULT_MAX_MARKERS,
+    DIFFICULTY_LABELS,
+    ID2LABEL,
+    LABEL2ID,
+    MARKER_TOKENS,
+    build_classifier_input,
+    build_marked_context,
+    collate_difficulty_evidence,
+)
 
-# ---------------------------------------------------------------------------
-# Public constants (importable without torch)
-# ---------------------------------------------------------------------------
-MAX_MARKERS_DEFAULT = 31
-MARKER_TOKENS: list[str] = [f"[S{i}]" for i in range(MAX_MARKERS_DEFAULT)]
-DIFFICULTY_LABELS: list[str] = ["Easy", "Medium", "Hard"]
-LABEL2ID: dict[str, int] = {lbl: i for i, lbl in enumerate(DIFFICULTY_LABELS)}
-ID2LABEL: dict[int, str] = {i: lbl for i, lbl in enumerate(DIFFICULTY_LABELS)}
+logger = logging.getLogger(__name__)
 
 _CONFIG_FILE = "config.json"
 _WEIGHTS_FILE = "model.pt"
 _TOKENIZER_DIR = "tokenizer"
 
 
-# ── internal nn.Module (built lazily) ──────────────────────────────────────
+def _torch():
+    try:
+        import torch
+
+        return torch
+    except ImportError as exc:
+        raise ImportError(
+            "PyTorch is required for MultiTaskDifficultyClassifier. "
+            "Install the training environment first."
+        ) from exc
+
 
 def _build_model_class():
-    """Return the ``_MultiTaskModel`` class.
-
-    Defers ``import torch.nn`` so the enclosing module stays importable
-    without torch installed.
-    """
     import torch.nn as nn
 
-    class _MultiTaskModel(nn.Module):
-        """Two-head model: difficulty classification + evidence tagging."""
-
-        def __init__(self, backbone: nn.Module, num_classes: int, max_markers: int):
+    class MultiTaskEncoder(nn.Module):
+        def __init__(self, backbone: nn.Module, num_labels: int, dropout: float) -> None:
             super().__init__()
             self.backbone = backbone
-            hidden_size: int = backbone.config.hidden_size
-            self.difficulty_head = nn.Linear(hidden_size, num_classes)
+            hidden_size = int(backbone.config.hidden_size)
+            self.dropout = nn.Dropout(dropout)
+            self.difficulty_head = nn.Linear(hidden_size, num_labels)
             self.evidence_head = nn.Linear(hidden_size, 1)
-            self.max_markers = max_markers
 
         def forward(
             self,
             input_ids,
             attention_mask,
-            marker_positions=None,
-            marker_mask=None,
+            marker_positions,
         ):
-            """Forward pass returning difficulty logits and optional evidence logits.
-
-            Parameters
-            ----------
-            input_ids : Tensor[B, T]
-            attention_mask : Tensor[B, T]
-            marker_positions : Tensor[B, M] | None
-                Token-level indices of ``[Sn]`` markers.  Padded slots use 0.
-            marker_mask : Tensor[B, M] | None
-                1.0 for real markers, 0.0 for padding.
-
-            Returns
-            -------
-            diff_logits : Tensor[B, num_classes]
-            evidence_logits : Tensor[B, M] | None
-            """
             outputs = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
-            hidden = outputs.last_hidden_state  # [B, T, H]
+            hidden = outputs.last_hidden_state
 
-            # ── difficulty from [CLS] token ──
-            cls_hidden = hidden[:, 0]  # [B, H]
-            diff_logits = self.difficulty_head(cls_hidden)  # [B, num_classes]
+            cls_hidden = self.dropout(hidden[:, 0])
+            difficulty_logits = self.difficulty_head(cls_hidden)
 
-            # ── evidence from [Sn] marker positions ──
-            evidence_logits = None
-            if marker_positions is not None:
-                B, M = marker_positions.shape
-                H = hidden.size(-1)
-                safe_pos = marker_positions.clamp(0, hidden.size(1) - 1)
-                idx = safe_pos.unsqueeze(-1).expand(B, M, H)
-                marker_hidden = hidden.gather(1, idx)  # [B, M, H]
-                evidence_logits = self.evidence_head(marker_hidden).squeeze(-1)  # [B, M]
+            batch_size, marker_count = marker_positions.shape
+            hidden_size = hidden.size(-1)
+            safe_positions = marker_positions.clamp(0, hidden.size(1) - 1)
+            gather_index = safe_positions.unsqueeze(-1).expand(
+                batch_size,
+                marker_count,
+                hidden_size,
+            )
+            marker_hidden = hidden.gather(1, gather_index)
+            marker_hidden = self.dropout(marker_hidden)
+            evidence_logits = self.evidence_head(marker_hidden).squeeze(-1)
+            return difficulty_logits, evidence_logits
 
-            return diff_logits, evidence_logits
+    return MultiTaskEncoder
 
-    return _MultiTaskModel
-
-
-# ── public wrapper class ───────────────────────────────────────────────────
 
 class MultiTaskDifficultyClassifier:
-    """High-level training and prediction API for the multi-task DeBERTa model.
+    """High-level training and inference wrapper.
 
-    Usage
-    -----
-    >>> clf = MultiTaskDifficultyClassifier()
-    >>> results = clf.train_fold(train_ds, val_ds, epochs=10)
-    >>> preds = clf.predict(["[S0] Once upon a time ... [S1] The end."])
-    >>> probs = clf.predict_difficulty_probs("[S0] Once upon a time ...")
+    The model uses one encoder backbone and two task heads:
+    - difficulty head over the ``[CLS]`` representation;
+    - evidence head over each ``[Sx]`` marker representation.
     """
-
-    # ------------------------------------------------------------------ init
 
     def __init__(
         self,
         model_name: str = "microsoft/deberta-v3-base",
+        *,
+        tokenizer: Any | None = None,
         lambda_evidence: float = 0.3,
-        num_classes: int = 3,
-        max_markers: int = MAX_MARKERS_DEFAULT,
+        evidence_pos_weight: float = 1.0,
+        max_markers: int = DEFAULT_MAX_MARKERS,
+        dropout: float = 0.1,
         device: str = "cuda",
-    ):
-        """Initialize model, tokenizer, and classification heads.
-
-        Adds ``[S0]`` through ``[S{max_markers-1}]`` as special tokens and
-        resizes the backbone embeddings accordingly.
-        """
-        import torch
+    ) -> None:
+        torch = _torch()
         from transformers import AutoModel, AutoTokenizer
 
         self.model_name = model_name
-        self.lambda_evidence = lambda_evidence
-        self.num_classes = num_classes
-        self.max_markers = max_markers
-
-        # Resolve device
-        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
-        if device == "cuda" and not torch.cuda.is_available():
+        self.lambda_evidence = float(lambda_evidence)
+        self.evidence_pos_weight = float(evidence_pos_weight)
+        self.max_markers = int(max_markers)
+        self.dropout = float(dropout)
+        self.device = torch.device(device if device == "cuda" and torch.cuda.is_available() else "cpu")
+        if device == "cuda" and self.device.type == "cpu":
             logger.warning("CUDA requested but unavailable; falling back to CPU")
 
-        # ── tokenizer with [Sn] marker tokens ──
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        marker_tokens = [f"[S{i}]" for i in range(max_markers)]
-        num_added = self.tokenizer.add_special_tokens(
-            {"additional_special_tokens": marker_tokens}
-        )
-        logger.info("Added %d special marker tokens to tokenizer", num_added)
-
-        self._marker_token_ids: dict[str, int] = {
-            tok: self.tokenizer.convert_tokens_to_ids(tok) for tok in marker_tokens
+        self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_name)
+        marker_tokens = [f"[S{i}]" for i in range(self.max_markers)]
+        self.tokenizer.add_special_tokens({"additional_special_tokens": marker_tokens})
+        self.marker_token_ids = {
+            token: self.tokenizer.convert_tokens_to_ids(token) for token in marker_tokens
         }
 
-        # ── backbone + two heads ──
         backbone = AutoModel.from_pretrained(model_name)
         backbone.resize_token_embeddings(len(self.tokenizer))
-
-        _MultiTaskModel = _build_model_class()
-        self.model = _MultiTaskModel(backbone, num_classes, max_markers)
+        model_cls = _build_model_class()
+        self.model = model_cls(backbone, len(DIFFICULTY_LABELS), self.dropout)
         self.model.to(self.device)
 
-        param_count = sum(p.numel() for p in self.model.parameters()) / 1e6
-        logger.info(
-            "MultiTaskDifficultyClassifier ready  device=%s  backbone=%s  params=%.1fM",
-            self.device,
-            model_name,
-            param_count,
-        )
-
-    # ------------------------------------------------------------- training
+    @property
+    def num_parameters(self) -> int:
+        return sum(parameter.numel() for parameter in self.model.parameters())
 
     def train_fold(
         self,
         train_dataset,
-        val_dataset,
-        epochs: int = 10,
-        batch_size: int = 16,
+        val_dataset=None,
+        *,
+        epochs: int = 3,
+        batch_size: int = 8,
         lr: float = 2e-5,
         warmup_ratio: float = 0.1,
-        patience: int = 3,
+        weight_decay: float = 0.01,
+        patience: int | None = 2,
         seed: int = 42,
+        grad_clip: float = 1.0,
     ) -> dict[str, Any]:
-        """Train one fold with early stopping on validation macro-F1.
-
-        Parameters
-        ----------
-        train_dataset, val_dataset
-            Sequence-like of dicts, each with keys:
-
-            - ``text``             : str  -- input with ``[Sn]`` sentence markers
-            - ``label``            : int  -- difficulty label (0 / 1 / 2)
-            - ``evidence_labels``  : list[int]  -- binary labels aligned to markers
-
-        Returns
-        -------
-        dict
-            ``best_epoch``, ``best_val_macro_f1``, ``val_per_class_f1``,
-            ``val_evidence_f1``, ``train_loss_history``, ``val_loss_history``.
-        """
         import copy
 
         import torch
@@ -209,467 +149,391 @@ class MultiTaskDifficultyClassifier:
         from transformers import get_linear_schedule_with_warmup
 
         torch.manual_seed(seed)
-
-        # ── data loaders ──
         train_loader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
-            collate_fn=self._collate_fn,
+            collate_fn=collate_difficulty_evidence,
         )
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=batch_size,
-            shuffle=False,
-            collate_fn=self._collate_fn,
-        )
+        val_loader = None
+        if val_dataset is not None:
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=batch_size,
+                shuffle=False,
+                collate_fn=collate_difficulty_evidence,
+            )
 
-        # ── optimizer + linear-warmup scheduler ──
-        total_steps = len(train_loader) * epochs
+        total_steps = max(1, len(train_loader) * epochs)
         warmup_steps = int(total_steps * warmup_ratio)
-
-        optimizer = AdamW(self.model.parameters(), lr=lr, weight_decay=0.01)
+        optimizer = AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=warmup_steps,
             num_training_steps=total_steps,
         )
+        difficulty_loss_fn = nn.CrossEntropyLoss()
+        evidence_loss_fn = nn.BCEWithLogitsLoss(
+            reduction="none",
+            pos_weight=torch.tensor(self.evidence_pos_weight, device=self.device),
+        )
 
-        diff_criterion = nn.CrossEntropyLoss()
-        ev_criterion = nn.BCEWithLogitsLoss(reduction="none")
-
-        # ── bookkeeping ──
-        best_val_f1 = -1.0
-        best_epoch = -1
-        best_state: dict | None = None
-        epochs_no_improve = 0
+        best_score = -1.0
+        best_epoch = 0
+        best_state = None
+        best_metrics: dict[str, Any] = {}
+        epochs_without_improvement = 0
         train_loss_history: list[float] = []
-        val_loss_history: list[float] = []
-        best_report: dict[str, Any] = {}
-        best_evidence_f1: float = 0.0
 
-        for epoch in range(epochs):
-            # ── train one epoch ──
+        for epoch in range(1, epochs + 1):
             self.model.train()
             running_loss = 0.0
-            n_batches = 0
-
-            for batch_data in train_loader:
-                optimizer.zero_grad()
-                loss = self._forward_loss(batch_data, diff_criterion, ev_criterion)
+            batch_count = 0
+            for batch in train_loader:
+                batch = self._move_batch(batch)
+                optimizer.zero_grad(set_to_none=True)
+                difficulty_logits, evidence_logits = self.model(
+                    batch["input_ids"],
+                    batch["attention_mask"],
+                    batch["marker_positions"],
+                )
+                loss = self._combined_loss(
+                    difficulty_logits,
+                    evidence_logits,
+                    batch,
+                    difficulty_loss_fn,
+                    evidence_loss_fn,
+                )
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                if grad_clip and grad_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip)
                 optimizer.step()
                 scheduler.step()
-                running_loss += loss.item()
-                n_batches += 1
+                running_loss += float(loss.item())
+                batch_count += 1
 
-            avg_train_loss = running_loss / max(n_batches, 1)
-            train_loss_history.append(avg_train_loss)
+            train_loss = running_loss / max(batch_count, 1)
+            train_loss_history.append(train_loss)
 
-            # ── validate ──
-            val_loss, val_macro_f1, per_class, ev_f1 = self._evaluate(
-                val_loader, diff_criterion, ev_criterion
-            )
-            val_loss_history.append(val_loss)
+            if val_loader is None:
+                logger.info("epoch=%d train_loss=%.4f", epoch, train_loss)
+                best_epoch = epoch
+                best_metrics = {
+                    "final_train_loss": train_loss,
+                    "train_loss_history": train_loss_history,
+                }
+                continue
 
+            val_metrics = self.evaluate(val_loader, difficulty_loss_fn, evidence_loss_fn)
+            score = float(val_metrics.get("difficulty_macro_f1", 0.0))
             logger.info(
-                "Epoch %d/%d  train_loss=%.4f  val_loss=%.4f  "
-                "val_macro_f1=%.4f  val_evidence_f1=%.4f",
-                epoch + 1,
-                epochs,
-                avg_train_loss,
-                val_loss,
-                val_macro_f1,
-                ev_f1,
+                "epoch=%d train_loss=%.4f val_loss=%.4f diff_macro_f1=%.4f evidence_f1=%.4f",
+                epoch,
+                train_loss,
+                val_metrics.get("val_loss", 0.0),
+                score,
+                val_metrics.get("evidence_f1", 0.0),
             )
 
-            # ── early stopping ──
-            if val_macro_f1 > best_val_f1:
-                best_val_f1 = val_macro_f1
-                best_epoch = epoch + 1
+            if score > best_score:
+                best_score = score
+                best_epoch = epoch
                 best_state = copy.deepcopy(self.model.state_dict())
-                best_report = per_class
-                best_evidence_f1 = ev_f1
-                epochs_no_improve = 0
+                best_metrics = dict(val_metrics)
+                epochs_without_improvement = 0
             else:
-                epochs_no_improve += 1
-                if epochs_no_improve >= patience:
-                    logger.info(
-                        "Early stopping at epoch %d (patience=%d)",
-                        epoch + 1,
-                        patience,
-                    )
+                epochs_without_improvement += 1
+                if patience is not None and epochs_without_improvement >= patience:
+                    logger.info("early stopping at epoch %d", epoch)
                     break
 
-        # ── restore best checkpoint ──
         if best_state is not None:
             self.model.load_state_dict(best_state)
-            logger.info(
-                "Restored best model from epoch %d (macro-F1=%.4f)",
-                best_epoch,
-                best_val_f1,
+
+        best_metrics.update(
+            {
+                "best_epoch": best_epoch,
+                "train_loss_history": train_loss_history,
+            }
+        )
+        return best_metrics
+
+    def evaluate(self, dataloader, difficulty_loss_fn=None, evidence_loss_fn=None) -> dict[str, Any]:
+        import torch
+        import torch.nn as nn
+        from sklearn.metrics import accuracy_score, classification_report, f1_score
+
+        if difficulty_loss_fn is None:
+            difficulty_loss_fn = nn.CrossEntropyLoss()
+        if evidence_loss_fn is None:
+            evidence_loss_fn = nn.BCEWithLogitsLoss(
+                reduction="none",
+                pos_weight=torch.tensor(self.evidence_pos_weight, device=self.device),
             )
 
-        return {
-            "best_epoch": best_epoch,
-            "best_val_macro_f1": best_val_f1,
-            "val_per_class_f1": best_report,
-            "val_evidence_f1": best_evidence_f1,
-            "train_loss_history": train_loss_history,
-            "val_loss_history": val_loss_history,
-        }
-
-    # ----------------------------------------------------------- prediction
-
-    def predict(self, texts: list[str], batch_size: int = 32) -> list[dict]:
-        """Predict difficulty and evidence for texts containing ``[Sn]`` markers.
-
-        Parameters
-        ----------
-        texts : list[str]
-        batch_size : int
-
-        Returns
-        -------
-        list[dict]
-            Each dict has:
-
-            - ``predicted_difficulty`` : str  (``"Easy"`` / ``"Medium"`` / ``"Hard"``)
-            - ``difficulty_probs``     : list[float]  ``[P(Easy), P(Medium), P(Hard)]``
-            - ``evidence_sentences``   : list[int]   indices where sigmoid > 0.5
-            - ``evidence_probs``       : dict[int, float]  ``{sent_idx: prob}``
-        """
-        import torch
-
         self.model.eval()
-        all_results: list[dict] = []
-
-        for start in range(0, len(texts), batch_size):
-            chunk = texts[start : start + batch_size]
-            batch_data = self._prepare_inference_batch(chunk)
-
-            with torch.no_grad():
-                diff_logits, ev_logits = self.model(
-                    input_ids=batch_data["input_ids"],
-                    attention_mask=batch_data["attention_mask"],
-                    marker_positions=batch_data["marker_positions"],
-                    marker_mask=batch_data["marker_mask"],
-                )
-
-            diff_probs = torch.softmax(diff_logits, dim=-1).cpu()  # [B, 3]
-            ev_probs_all = None
-            if ev_logits is not None:
-                ev_probs_all = torch.sigmoid(ev_logits).cpu()  # [B, M]
-
-            marker_mask_cpu = batch_data["marker_mask"].cpu()
-            marker_indices = batch_data["marker_indices"]  # list[list[int]]
-
-            for i in range(len(chunk)):
-                probs = diff_probs[i].tolist()
-                pred_id = int(diff_probs[i].argmax())
-                result: dict[str, Any] = {
-                    "predicted_difficulty": ID2LABEL[pred_id],
-                    "difficulty_probs": probs,
-                    "evidence_sentences": [],
-                    "evidence_probs": {},
-                }
-
-                if ev_probs_all is not None:
-                    indices = marker_indices[i]
-                    for j, sent_idx in enumerate(indices):
-                        if marker_mask_cpu[i, j] > 0:
-                            prob = float(ev_probs_all[i, j])
-                            result["evidence_probs"][sent_idx] = prob
-                            if prob > 0.5:
-                                result["evidence_sentences"].append(sent_idx)
-
-                all_results.append(result)
-
-        return all_results
-
-    def predict_difficulty_probs(self, text: str) -> list[float]:
-        """Return ``[P(Easy), P(Medium), P(Hard)]`` for a single text.
-
-        This is the primary interface for the reranker and other downstream
-        consumers that need a quick difficulty distribution.
-        """
-        results = self.predict([text], batch_size=1)
-        return results[0]["difficulty_probs"]
-
-    # ----------------------------------------------------------- save/load
-
-    def save(self, path: str) -> None:
-        """Persist model weights, tokenizer, and config to *path* directory."""
-        import torch
-
-        os.makedirs(path, exist_ok=True)
-
-        torch.save(self.model.state_dict(), os.path.join(path, _WEIGHTS_FILE))
-
-        tok_dir = os.path.join(path, _TOKENIZER_DIR)
-        self.tokenizer.save_pretrained(tok_dir)
-
-        cfg = {
-            "model_name": self.model_name,
-            "lambda_evidence": self.lambda_evidence,
-            "num_classes": self.num_classes,
-            "max_markers": self.max_markers,
-        }
-        with open(os.path.join(path, _CONFIG_FILE), "w") as f:
-            json.dump(cfg, f, indent=2)
-
-        logger.info("Model saved to %s", path)
-
-    @classmethod
-    def load(cls, path: str, device: str = "cuda") -> "MultiTaskDifficultyClassifier":
-        """Load a previously saved model from *path* directory."""
-        import torch
-        from transformers import AutoTokenizer
-
-        with open(os.path.join(path, _CONFIG_FILE)) as f:
-            cfg = json.load(f)
-
-        # Instantiate with the original backbone name (downloads config only;
-        # random head weights are overwritten by the checkpoint below).
-        instance = cls(
-            model_name=cfg["model_name"],
-            lambda_evidence=cfg["lambda_evidence"],
-            num_classes=cfg["num_classes"],
-            max_markers=cfg["max_markers"],
-            device=device,
-        )
-
-        # Overwrite tokenizer with the saved copy (preserves marker tokens
-        # even if the upstream HuggingFace tokenizer changes).
-        tok_dir = os.path.join(path, _TOKENIZER_DIR)
-        instance.tokenizer = AutoTokenizer.from_pretrained(tok_dir)
-        instance._marker_token_ids = {
-            f"[S{i}]": instance.tokenizer.convert_tokens_to_ids(f"[S{i}]")
-            for i in range(instance.max_markers)
-        }
-
-        # Load weights
-        weights_path = os.path.join(path, _WEIGHTS_FILE)
-        state = torch.load(weights_path, map_location=instance.device, weights_only=True)
-        instance.model.load_state_dict(state)
-        instance.model.eval()
-
-        logger.info("Model loaded from %s onto %s", path, instance.device)
-        return instance
-
-    # ====================================================================
-    #  Private helpers
-    # ====================================================================
-
-    # ── collation (training) ──────────────────────────────────────────────
-
-    def _collate_fn(self, batch: list[dict]) -> dict:
-        """Tokenize and pad a list of dataset items into a model-ready batch.
-
-        Expected item keys: ``text``, ``label``, ``evidence_labels``.
-        """
-        import torch
-
-        texts = [item["text"] for item in batch]
-        labels = torch.tensor([item["label"] for item in batch], dtype=torch.long)
-
-        encoding = self.tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            max_length=512,
-            return_tensors="pt",
-        )
-
-        input_ids = encoding["input_ids"]  # [B, T]
-        attention_mask = encoding["attention_mask"]
-        B = input_ids.size(0)
-        M = self.max_markers
-
-        marker_positions = torch.zeros(B, M, dtype=torch.long)
-        marker_mask = torch.zeros(B, M, dtype=torch.float)
-        evidence_labels_t = torch.zeros(B, M, dtype=torch.float)
-
-        for i in range(B):
-            ids_i = input_ids[i].tolist()
-            ev_labels = batch[i].get("evidence_labels", [])
-            slot = 0
-            for s_idx in range(M):
-                tok_id = self._marker_token_ids.get(f"[S{s_idx}]")
-                if tok_id is None:
-                    continue
-                try:
-                    pos = ids_i.index(tok_id)
-                except ValueError:
-                    continue  # marker not present in this sample
-                marker_positions[i, slot] = pos
-                marker_mask[i, slot] = 1.0
-                if slot < len(ev_labels):
-                    evidence_labels_t[i, slot] = float(ev_labels[slot])
-                slot += 1
-
-        dev = self.device
-        return {
-            "input_ids": input_ids.to(dev),
-            "attention_mask": attention_mask.to(dev),
-            "labels": labels.to(dev),
-            "marker_positions": marker_positions.to(dev),
-            "marker_mask": marker_mask.to(dev),
-            "evidence_labels": evidence_labels_t.to(dev),
-        }
-
-    # ── collation (inference) ────────────────────────────────────────────
-
-    def _prepare_inference_batch(self, texts: list[str]) -> dict:
-        """Tokenize texts for inference and locate marker positions.
-
-        Returns a model-ready dict plus ``marker_indices``
-        (``list[list[int]]``) mapping each slot back to its sentence index.
-        """
-        import torch
-
-        encoding = self.tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            max_length=512,
-            return_tensors="pt",
-        )
-        input_ids = encoding["input_ids"]  # [B, T]
-        attention_mask = encoding["attention_mask"]
-        B = input_ids.size(0)
-        M = self.max_markers
-
-        marker_positions = torch.zeros(B, M, dtype=torch.long)
-        marker_mask = torch.zeros(B, M, dtype=torch.float)
-        marker_indices: list[list[int]] = []
-
-        for i in range(B):
-            ids_i = input_ids[i].tolist()
-            indices_i: list[int] = []
-            slot = 0
-            for s_idx in range(M):
-                tok_id = self._marker_token_ids.get(f"[S{s_idx}]")
-                if tok_id is None:
-                    continue
-                try:
-                    pos = ids_i.index(tok_id)
-                except ValueError:
-                    continue
-                marker_positions[i, slot] = pos
-                marker_mask[i, slot] = 1.0
-                indices_i.append(s_idx)
-                slot += 1
-            marker_indices.append(indices_i)
-
-        dev = self.device
-        return {
-            "input_ids": input_ids.to(dev),
-            "attention_mask": attention_mask.to(dev),
-            "marker_positions": marker_positions.to(dev),
-            "marker_mask": marker_mask.to(dev),
-            "marker_indices": marker_indices,
-        }
-
-    # ── loss helpers ─────────────────────────────────────────────────────
-
-    def _forward_loss(self, batch_data: dict, diff_criterion, ev_criterion):
-        """Run a forward pass and return the combined multi-task loss."""
-        diff_logits, ev_logits = self.model(
-            input_ids=batch_data["input_ids"],
-            attention_mask=batch_data["attention_mask"],
-            marker_positions=batch_data["marker_positions"],
-            marker_mask=batch_data["marker_mask"],
-        )
-        return self._combined_loss(
-            diff_logits, ev_logits, batch_data, diff_criterion, ev_criterion
-        )
-
-    def _combined_loss(
-        self, diff_logits, ev_logits, batch_data, diff_criterion, ev_criterion
-    ):
-        """Compute ``L_diff + lambda * L_evidence`` from pre-computed logits."""
-        diff_loss = diff_criterion(diff_logits, batch_data["labels"])
-        total_loss = diff_loss
-
-        if ev_logits is not None and batch_data.get("marker_mask") is not None:
-            mask = batch_data["marker_mask"]           # [B, M]
-            ev_labels = batch_data["evidence_labels"]  # [B, M]
-            ev_loss_raw = ev_criterion(ev_logits, ev_labels)  # [B, M]
-            ev_loss = (ev_loss_raw * mask).sum() / mask.sum().clamp(min=1)
-            total_loss = diff_loss + self.lambda_evidence * ev_loss
-
-        return total_loss
-
-    # ── evaluation ───────────────────────────────────────────────────────
-
-    def _evaluate(self, val_loader, diff_criterion, ev_criterion):
-        """Evaluate on *val_loader* under ``torch.no_grad()``.
-
-        Returns ``(val_loss, macro_f1, per_class_report, evidence_f1)``.
-        """
-        import torch
-        from sklearn.metrics import classification_report, f1_score
-
-        self.model.eval()
-
-        all_diff_true: list[int] = []
-        all_diff_pred: list[int] = []
-        all_ev_true: list[int] = []
-        all_ev_pred: list[int] = []
-        running_loss = 0.0
-        n_batches = 0
+        losses: list[float] = []
+        difficulty_true: list[int] = []
+        difficulty_pred: list[int] = []
+        evidence_true: list[int] = []
+        evidence_pred: list[int] = []
+        evidence_exact: list[int] = []
 
         with torch.no_grad():
-            for batch_data in val_loader:
-                diff_logits, ev_logits = self.model(
-                    input_ids=batch_data["input_ids"],
-                    attention_mask=batch_data["attention_mask"],
-                    marker_positions=batch_data["marker_positions"],
-                    marker_mask=batch_data["marker_mask"],
+            for batch in dataloader:
+                batch = self._move_batch(batch)
+                difficulty_logits, evidence_logits = self.model(
+                    batch["input_ids"],
+                    batch["attention_mask"],
+                    batch["marker_positions"],
                 )
-
                 loss = self._combined_loss(
-                    diff_logits, ev_logits, batch_data, diff_criterion, ev_criterion
+                    difficulty_logits,
+                    evidence_logits,
+                    batch,
+                    difficulty_loss_fn,
+                    evidence_loss_fn,
                 )
-                running_loss += loss.item()
-                n_batches += 1
+                losses.append(float(loss.item()))
 
-                # ── difficulty predictions ──
-                preds = diff_logits.argmax(dim=-1).cpu().tolist()
-                trues = batch_data["labels"].cpu().tolist()
-                all_diff_true.extend(trues)
-                all_diff_pred.extend(preds)
+                difficulty_true.extend(batch["difficulty_label"].cpu().tolist())
+                difficulty_pred.extend(difficulty_logits.argmax(dim=-1).cpu().tolist())
 
-                # ── evidence predictions ──
-                if ev_logits is not None:
-                    mask = batch_data["marker_mask"].cpu()
-                    ev_preds = (torch.sigmoid(ev_logits).cpu() > 0.5).long()
-                    ev_trues = batch_data["evidence_labels"].cpu().long()
-                    for b in range(mask.size(0)):
-                        for m in range(mask.size(1)):
-                            if mask[b, m] > 0:
-                                all_ev_true.append(int(ev_trues[b, m]))
-                                all_ev_pred.append(int(ev_preds[b, m]))
+                probs = torch.sigmoid(evidence_logits)
+                preds = (probs > 0.5).long()
+                labels = batch["evidence_labels"].long()
+                mask = batch["marker_mask"].long()
+                for row_idx in range(mask.size(0)):
+                    row_true: list[int] = []
+                    row_pred: list[int] = []
+                    for marker_idx in range(mask.size(1)):
+                        if int(mask[row_idx, marker_idx]) == 0:
+                            continue
+                        true_value = int(labels[row_idx, marker_idx])
+                        pred_value = int(preds[row_idx, marker_idx])
+                        evidence_true.append(true_value)
+                        evidence_pred.append(pred_value)
+                        if true_value:
+                            row_true.append(marker_idx)
+                        if pred_value:
+                            row_pred.append(marker_idx)
+                    evidence_exact.append(1 if row_true == row_pred else 0)
 
-        val_loss = running_loss / max(n_batches, 1)
-
-        macro_f1 = f1_score(
-            all_diff_true, all_diff_pred, average="macro", zero_division=0
-        )
         report = classification_report(
-            all_diff_true,
-            all_diff_pred,
-            target_names=DIFFICULTY_LABELS[: self.num_classes],
+            difficulty_true,
+            difficulty_pred,
+            labels=list(range(len(DIFFICULTY_LABELS))),
+            target_names=DIFFICULTY_LABELS,
             output_dict=True,
             zero_division=0,
         )
+        metrics = {
+            "val_loss": sum(losses) / max(len(losses), 1),
+            "difficulty_accuracy": accuracy_score(difficulty_true, difficulty_pred),
+            "difficulty_macro_f1": f1_score(
+                difficulty_true,
+                difficulty_pred,
+                labels=list(range(len(DIFFICULTY_LABELS))),
+                average="macro",
+                zero_division=0,
+            ),
+            "difficulty_per_class": {
+                label: report[label]["f1-score"] for label in DIFFICULTY_LABELS
+            },
+            "evidence_f1": f1_score(
+                evidence_true,
+                evidence_pred,
+                average="binary",
+                zero_division=0,
+            ) if evidence_true else 0.0,
+            "evidence_exact_match": sum(evidence_exact) / max(len(evidence_exact), 1),
+        }
+        return metrics
 
-        evidence_f1 = 0.0
-        if all_ev_true:
-            evidence_f1 = f1_score(
-                all_ev_true, all_ev_pred, average="binary", zero_division=0
+    def predict(self, texts: list[str], batch_size: int = 16) -> list[dict[str, Any]]:
+        import torch
+        from torch.utils.data import DataLoader
+
+        dataset = _InferenceDataset(
+            texts,
+            self.tokenizer,
+            self.marker_token_ids,
+            max_markers=self.max_markers,
+        )
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, collate_fn=_collate_inference)
+        self.model.eval()
+        results: list[dict[str, Any]] = []
+        with torch.no_grad():
+            for batch in dataloader:
+                batch = self._move_batch(batch)
+                difficulty_logits, evidence_logits = self.model(
+                    batch["input_ids"],
+                    batch["attention_mask"],
+                    batch["marker_positions"],
+                )
+                difficulty_probs = torch.softmax(difficulty_logits, dim=-1).cpu()
+                evidence_probs = torch.sigmoid(evidence_logits).cpu()
+                marker_mask = batch["marker_mask"].cpu()
+                for row_idx in range(difficulty_probs.size(0)):
+                    probs = difficulty_probs[row_idx].tolist()
+                    pred_id = int(difficulty_probs[row_idx].argmax())
+                    evidence: list[int] = []
+                    evidence_prob_map: dict[int, float] = {}
+                    for marker_idx in range(marker_mask.size(1)):
+                        if int(marker_mask[row_idx, marker_idx]) == 0:
+                            continue
+                        prob = float(evidence_probs[row_idx, marker_idx])
+                        evidence_prob_map[marker_idx] = prob
+                        if prob > 0.5:
+                            evidence.append(marker_idx)
+                    results.append(
+                        {
+                            "predicted_difficulty": ID2LABEL[pred_id],
+                            "difficulty_probs": probs,
+                            "evidence_sentences": evidence,
+                            "evidence_probs": evidence_prob_map,
+                        }
+                    )
+        return results
+
+    def predict_records(self, records: list[dict[str, Any]], batch_size: int = 16) -> list[dict[str, Any]]:
+        texts = []
+        for record in records:
+            sentence_rows = [(int(item["id"]), str(item["text"])) for item in record["sentences"]]
+            texts.append(
+                build_classifier_input(
+                    record["question"],
+                    record["answer"],
+                    build_marked_context(sentence_rows),
+                )
             )
+        return self.predict(texts, batch_size=batch_size)
 
-        return val_loss, macro_f1, report, evidence_f1
+    def predict_difficulty_probs(self, text: str) -> list[float]:
+        return self.predict([text], batch_size=1)[0]["difficulty_probs"]
+
+    def save(self, path: str | Path) -> None:
+        torch = _torch()
+        output_dir = Path(path)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        torch.save(self.model.state_dict(), output_dir / _WEIGHTS_FILE)
+        tokenizer_dir = output_dir / _TOKENIZER_DIR
+        self.tokenizer.save_pretrained(tokenizer_dir)
+        config = {
+            "model_name": self.model_name,
+            "lambda_evidence": self.lambda_evidence,
+            "evidence_pos_weight": self.evidence_pos_weight,
+            "max_markers": self.max_markers,
+            "dropout": self.dropout,
+        }
+        with (output_dir / _CONFIG_FILE).open("w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+
+    @classmethod
+    def load(cls, path: str | Path, device: str = "cuda") -> "MultiTaskDifficultyClassifier":
+        torch = _torch()
+        model_dir = Path(path)
+        with (model_dir / _CONFIG_FILE).open(encoding="utf-8") as f:
+            config = json.load(f)
+        instance = cls(
+            model_name=config["model_name"],
+            lambda_evidence=config.get("lambda_evidence", 0.3),
+            evidence_pos_weight=config.get("evidence_pos_weight", 1.0),
+            max_markers=config.get("max_markers", DEFAULT_MAX_MARKERS),
+            dropout=config.get("dropout", 0.1),
+            device=device,
+        )
+        tokenizer_path = model_dir / _TOKENIZER_DIR
+        from transformers import AutoTokenizer
+
+        instance.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        instance.marker_token_ids = {
+            f"[S{i}]": instance.tokenizer.convert_tokens_to_ids(f"[S{i}]")
+            for i in range(instance.max_markers)
+        }
+        state = torch.load(model_dir / _WEIGHTS_FILE, map_location=instance.device)
+        instance.model.load_state_dict(state)
+        instance.model.eval()
+        return instance
+
+    def _move_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
+        moved = {}
+        for key, value in batch.items():
+            if hasattr(value, "to"):
+                moved[key] = value.to(self.device)
+            else:
+                moved[key] = value
+        return moved
+
+    def _combined_loss(
+        self,
+        difficulty_logits,
+        evidence_logits,
+        batch: dict[str, Any],
+        difficulty_loss_fn,
+        evidence_loss_fn,
+    ):
+        difficulty_loss = difficulty_loss_fn(difficulty_logits, batch["difficulty_label"])
+        evidence_loss_raw = evidence_loss_fn(evidence_logits, batch["evidence_labels"])
+        evidence_mask = batch["marker_mask"]
+        evidence_loss = (evidence_loss_raw * evidence_mask).sum() / evidence_mask.sum().clamp(min=1.0)
+        return difficulty_loss + self.lambda_evidence * evidence_loss
+
+
+class _InferenceDataset:
+    def __init__(
+        self,
+        texts: list[str],
+        tokenizer: Any,
+        marker_token_ids: dict[str, int],
+        *,
+        max_length: int = 512,
+        max_markers: int = DEFAULT_MAX_MARKERS,
+    ) -> None:
+        self.texts = texts
+        self.tokenizer = tokenizer
+        self.marker_token_ids = marker_token_ids
+        self.max_length = max_length
+        self.max_markers = max_markers
+
+    def __len__(self) -> int:
+        return len(self.texts)
+
+    def __getitem__(self, idx: int) -> dict[str, Any]:
+        torch = _torch()
+        encoding = self.tokenizer(
+            self.texts[idx],
+            max_length=self.max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+        )
+        input_ids = encoding["input_ids"].squeeze(0)
+        attention_mask = encoding["attention_mask"].squeeze(0)
+        input_id_list = input_ids.tolist()
+        marker_positions = torch.zeros(self.max_markers, dtype=torch.long)
+        marker_mask = torch.zeros(self.max_markers, dtype=torch.float32)
+        for marker_idx in range(self.max_markers):
+            marker_id = self.marker_token_ids.get(f"[S{marker_idx}]")
+            if marker_id is None:
+                continue
+            try:
+                position = input_id_list.index(marker_id)
+            except ValueError:
+                continue
+            marker_positions[marker_idx] = position
+            marker_mask[marker_idx] = 1.0
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "marker_positions": marker_positions,
+            "marker_mask": marker_mask,
+        }
+
+
+def _collate_inference(batch: list[dict[str, Any]]) -> dict[str, Any]:
+    torch = _torch()
+    return {
+        key: torch.stack([item[key] for item in batch])
+        for key in ["input_ids", "attention_mask", "marker_positions", "marker_mask"]
+    }

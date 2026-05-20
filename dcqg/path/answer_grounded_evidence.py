@@ -21,10 +21,9 @@ from dcqg.difficulty.definitions import (
 # ── Sentence splitting ────────────────────────────────────────────
 
 def _split_sentences(text):
-    if not text:
-        return []
-    parts = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in parts if s.strip()]
+    """Dialogue-aware sentence splitter. Delegates to dcqg.utils.text.split_sentences."""
+    from dcqg.utils.text import split_sentences
+    return split_sentences(text)
 
 
 # ── Prompt ────────────────────────────────────────────────────────

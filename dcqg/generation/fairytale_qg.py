@@ -505,40 +505,51 @@ def select_graph_substructure(nodes, edges, difficulty, target_answer):
 
 NARRATIVE_ICL_EXAMPLES = {
     "Easy": """Example:
-Story: [S0] The princess lived in a small castle by the river. [S1] Every morning she walked along the water.
-Target answer: "in a small castle by the river"
-Output: {"question": "Where did the princess live?", "answer": "in a small castle by the river", "reasoning_type": "direct"}""",
+Context:
+[S0] The old fisherman lived alone in a tiny cottage by the sea.
+[S1] Every morning he sailed out to catch fish for the market.
+[S2] One day the old fisherman caught a large golden fish in his net.
+Target answer: "a large golden fish"
+Output: {"question": "What did the old fisherman catch in his net?", "answer": "a large golden fish", "reasoning_type": "direct"}
+Reasoning: direct — the answer is fully stated in [S2]. The subject "the old fisherman" is explicit, and no other sentence is needed to answer or justify.""",
 
-    "Medium": """Example 1:
-Story: [S0] The child pulled his cloak tighter, and his teeth chattered all morning. [S1] His sister ran ahead down the road.
-Target answer: "he was cold"
-Output: {"question": "How did the child feel that morning?", "answer": "he was cold", "reasoning_type": "chain"}
+    "Medium": """Example 1 (answer not directly found, 1 evidence sentence + inference):
+Context:
+[S0] The child pulled his cloak tighter, and his teeth chattered all morning.
+[S1] His sister ran ahead down the road, laughing and waving.
+[S2] Their mother watched them from the cottage window.
+Target answer: "He was cold"
+Output: {"question": "How did the child feel that morning?", "answer": "He was cold", "reasoning_type": "chain"}
+Reasoning: inference — "teeth chattered" and "pulled his cloak tighter" imply he was cold, but the word "cold" never appears in the text.
 
-Example 2:
-Story: [S0] The king announced a contest. [S1] The bravest knight would win the princess's hand. [S2] Sir Arthur volunteered first.
+Example 2 (answer directly found, but requires synthesizing multiple sentences):
+Context:
+[S0] The king announced a contest for the bravest knight.
+[S1] Sir Arthur was known throughout the kingdom for his courage.
+[S2] He volunteered first, before any other knight stepped forward.
+[S3] The king smiled and handed him a golden sword.
 Target answer: "Sir Arthur"
-Output: {"question": "Who was the first to volunteer for the king's contest?", "answer": "Sir Arthur", "reasoning_type": "cross_sentence"}""",
+Output: {"question": "Who was the first knight to volunteer for the king's contest?", "answer": "Sir Arthur", "reasoning_type": "cross_sentence"}
+Reasoning: cross_sentence — the answer "Sir Arthur" appears in [S2], but connecting "first to volunteer" with the contest announced in [S0] requires synthesizing two sentences.""",
 
-    "Hard": """Example 1:
-Story: [S0] The queen locked the garden gate before sunrise. [S1] The gardener found the key missing from its hook. [S2] Without anyone opening the gate, no one could water the roses. [S3] By evening, every rose had withered.
-Target answer: "because the locked gate kept anyone from watering the roses"
-Output: {"question": "Why had every rose withered by evening?", "answer": "because the locked gate kept anyone from watering the roses", "reasoning_type": "cross_sentence"}
-
-Example 2:
-Story: [S0] The old soldier promised to guard the bridge until the prince returned. [S1] At midnight he heard the prince's horn from the forest. [S2] He left the bridge to follow the sound. [S3] While the bridge was empty, the robbers crossed it.
-Target answer: "because the soldier left his post after hearing the prince's horn"
-Output: {"question": "Why were the robbers able to cross the bridge?", "answer": "because the soldier left his post after hearing the prince's horn", "reasoning_type": "cross_sentence"}""",
+    "Hard": """Example:
+Context:
+[S0] The baker noticed that several loaves of bread disappeared overnight.
+[S1] He set a trap near the oven and hid behind the counter.
+[S2] In the middle of the night, he caught the neighbor's cat stealing the bread.
+[S3] The next morning, the baker found crumbs leading to the neighbor's house.
+Target answer: "Because loaves of bread kept disappearing overnight and he wanted to find out who was taking them"
+Output: {"question": "Why did the baker set a trap near the oven?", "answer": "Because loaves of bread kept disappearing overnight and he wanted to find out who was taking them", "reasoning_type": "cross_sentence"}
+Reasoning: inference — the reader must connect the problem ([S0]) with the baker's response ([S1]). The answer is not stated in any single sentence; [S0] provides the motive and [S1] provides the action, and the reader must infer the causal link.""",
 }
 
 
 # ── Format helpers ─────────────────────────────────────────────
 
 def _split_sentences(text):
-    """Split text into sentences."""
-    if not text:
-        return []
-    parts = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in parts if s.strip()]
+    """Dialogue-aware sentence splitter. Delegates to dcqg.utils.text.split_sentences."""
+    from dcqg.utils.text import split_sentences
+    return split_sentences(text)
 
 
 def _format_story_context(story_section, sentence_ids=None, show_only_selected=False):
@@ -702,6 +713,11 @@ Requirements:
 6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
 7. Output exactly one JSON object, nothing else.
 
+CRITICAL CONSTRAINTS:
+- Do NOT use any knowledge about the story or characters beyond what is explicitly stated in the context above.
+- Every person, object, and event mentioned in your question and answer MUST directly appear in the context.
+- If the context does not contain enough information for the target difficulty, choose a different answer that IS clearly supported by the context.
+
 Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""
 
@@ -771,6 +787,11 @@ Requirements:
 5. The answer must be clear, concrete, and well-justified based on the context.
 6. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
 7. Output exactly one JSON object, nothing else.
+
+CRITICAL CONSTRAINTS:
+- Do NOT use any knowledge about the story or characters beyond what is explicitly stated in the context above.
+- Every person, object, and event mentioned in your question and answer MUST directly appear in the context.
+- If the context does not contain enough information for the target difficulty, choose a different answer that IS clearly supported by the context.
 
 Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""
@@ -869,6 +890,11 @@ Requirements:
 7. The answer must be clear, concrete, and well-justified based on the context.
 8. The question must start with a question word (Who/What/Where/When/Why/How) and end with "?".
 9. Output exactly one JSON object, nothing else.
+
+CRITICAL CONSTRAINTS:
+- Do NOT use any knowledge about the story or characters beyond what is explicitly stated in the context above.
+- Every person, object, and event mentioned in your question and answer MUST directly appear in the context.
+- If the previous QA references entities not in the context, you MUST replace them with entities that ARE in the context.
 
 Output Format:
 {{"question": "...", "answer": "...", "reasoning_type": "direct|chain|cross_sentence"}}"""

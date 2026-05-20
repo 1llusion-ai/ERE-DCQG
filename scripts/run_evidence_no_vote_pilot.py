@@ -12,7 +12,7 @@ import os
 import random
 import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -21,7 +21,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from dcqg.datasets.fairytaleqa_loader import load_fairytaleqa
-from dcqg.path.no_vote_evidence import NoVoteEvidenceAuditor
+from dcqg.path.no_vote_evidence import NoVoteEvidenceAuditor, _difficulty_from_ids
 from dcqg.utils.config import get_api_config
 from dcqg.utils.jsonl import read_jsonl, write_jsonl
 
@@ -50,15 +50,24 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="No-vote evidence selection + blind verification pilot"
     )
-    parser.add_argument("--split", default="train")
+    parser.add_argument("--split", default="train",
+                        help="Dataset split, or 'all' to load train+val+test")
     parser.add_argument("--output_dir", required=True)
-    parser.add_argument("--implicit_limit", type=int, default=100)
+    parser.add_argument("--record_type", choices=["implicit", "explicit", "all"],
+                        default="implicit",
+                        help="Which record type to process")
+    parser.add_argument("--implicit_limit", type=int, default=0,
+                        help="Max implicit records (0=all)")
+    parser.add_argument("--per_story_limit", type=int, default=0,
+                        help="Max records per story (0=no limit, use with explicit)")
     parser.add_argument("--sample_mode", choices=["first", "random"], default="first")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch_size", type=int, default=10)
     parser.add_argument("--model", default=None)
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--skip_verification", action="store_true",
+                        help="Skip blind verifier and removal checks; use selector output directly as labels.")
     return parser.parse_args()
 
 
@@ -82,6 +91,28 @@ def select_implicit_records(records, limit, sample_mode, seed):
         item["sample_seed"] = seed if sample_mode == "random" else None
         output.append(item)
     return output, total
+
+
+def select_per_story_records(records, per_story_limit, sample_mode, seed):
+    """Select up to N records per story."""
+    by_story = defaultdict(list)
+    for r in records:
+        by_story[r["story_name"]].append(r)
+
+    rng = random.Random(seed)
+    output = []
+    for story in sorted(by_story.keys()):
+        story_records = by_story[story]
+        if per_story_limit and len(story_records) > per_story_limit:
+            if sample_mode == "random":
+                picked = rng.sample(story_records, per_story_limit)
+            else:
+                picked = story_records[:per_story_limit]
+        else:
+            picked = story_records
+        for r in picked:
+            output.append(dict(r))
+    return output
 
 
 def run_selector(records, auditor, output_path, batch_size, resume):
@@ -136,13 +167,17 @@ def run_verifier(candidates, auditor, output_path, resume):
 
 def write_summary(output_dir, selector_path, verification_path, labels_path,
                   auditor, records, total_implicit_records, sample_mode,
-                  sample_seed):
+                  sample_seed, skip_verification=False):
     selector_rows = read_jsonl(selector_path) if os.path.exists(selector_path) else []
-    verification_rows = (
-        read_jsonl(verification_path) if os.path.exists(verification_path) else []
-    )
-    labels = [r for r in verification_rows if r.get("difficulty_label") != "Invalid"]
-    write_jsonl(labels_path, labels)
+    if skip_verification:
+        labels = read_jsonl(labels_path) if os.path.exists(labels_path) else []
+        verification_rows = []
+    else:
+        verification_rows = (
+            read_jsonl(verification_path) if os.path.exists(verification_path) else []
+        )
+        labels = [r for r in verification_rows if r.get("difficulty_label") != "Invalid"]
+        write_jsonl(labels_path, labels)
 
     summary = {
         "timestamp": _timestamp(),
@@ -200,32 +235,58 @@ def main():
     print("No-Vote Evidence Pilot")
     print("=" * 70)
     print(f"Split:          {args.split}")
+    print(f"Record type:    {args.record_type}")
     print(f"Output dir:     {args.output_dir}")
     print(f"Model:          {model}")
     print(f"Implicit limit: {args.implicit_limit}")
+    print(f"Per-story limit:{args.per_story_limit}")
     print(f"Sample mode:    {args.sample_mode}")
     print(f"Sample seed:    {args.seed if args.sample_mode == 'random' else 'n/a'}")
     print(f"Batch size:     {args.batch_size}")
     print(f"Timeout:        {args.timeout}s")
     print(f"Resume:         {args.resume}")
+    print(f"Skip verify:    {args.skip_verification}")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    all_records = load_fairytaleqa(split=args.split, limit=None)
-    implicit = [
-        record for record in all_records
-        if record.get("ex_or_im", "").lower() == "implicit"
-    ]
-    implicit, total_implicit_records = select_implicit_records(
-        implicit,
-        args.implicit_limit,
-        args.sample_mode,
-        args.seed,
-    )
-    print(
-        f"Loaded implicit records: {len(implicit)} "
-        f"(total available: {total_implicit_records})"
-    )
+    # Load records
+    if args.split == "all":
+        all_records = []
+        for s in ["train", "validation", "test"]:
+            all_records.extend(load_fairytaleqa(split=s, limit=None))
+    else:
+        all_records = load_fairytaleqa(split=args.split, limit=None)
+
+    # Filter by record type
+    if args.record_type == "implicit":
+        records = [
+            r for r in all_records
+            if r.get("ex_or_im", "").lower() == "implicit"
+        ]
+        total_available = len(records)
+        if args.implicit_limit:
+            records, total_available = select_implicit_records(
+                records, args.implicit_limit, args.sample_mode, args.seed
+            )
+    elif args.record_type == "explicit":
+        records = [
+            r for r in all_records
+            if r.get("ex_or_im", "").lower() == "explicit"
+        ]
+        total_available = len(records)
+        if args.per_story_limit:
+            records = select_per_story_records(
+                records, args.per_story_limit, args.sample_mode, args.seed
+            )
+    else:  # all
+        records = all_records
+        total_available = len(records)
+        if args.implicit_limit:
+            records, total_available = select_implicit_records(
+                records, args.implicit_limit, args.sample_mode, args.seed
+            )
+
+    print(f"Loaded {args.record_type} records: {len(records)} (total available: {total_available})")
 
     auditor = NoVoteEvidenceAuditor(
         batch_size=args.batch_size,
@@ -235,18 +296,44 @@ def main():
 
     selector_path = os.path.join(args.output_dir, "selector_candidates.jsonl")
     verification_path = os.path.join(args.output_dir, "blind_verification.jsonl")
-    labels_path = os.path.join(args.output_dir, "labels_implicit.jsonl")
+    labels_path = os.path.join(args.output_dir, f"labels_{args.record_type}.jsonl")
 
     candidates = run_selector(
-        implicit, auditor, selector_path, args.batch_size, args.resume
+        records, auditor, selector_path, args.batch_size, args.resume
     )
-    verified = run_verifier(candidates, auditor, verification_path, args.resume)
-    if len(verified) != len(candidates):
-        print(f"WARNING: verified {len(verified)} of {len(candidates)} candidates")
+
+    if args.skip_verification:
+        print("Skipping blind verification; using selector output as labels.")
+        labels = []
+        for c in candidates:
+            row = dict(c)
+            if row.get("section_sufficient") == "yes" and row.get("selected_evidence_sentences"):
+                sel = row["selected_evidence_sentences"]
+                direct = row.get("answer_directly_found", "no")
+                row["difficulty_label"] = _difficulty_from_ids(sel, direct)
+                row["required_evidence_sentences"] = sel
+                row["num_required_sentences"] = len(sel)
+                row["final_answer_directly_found"] = direct
+                row["final_reasoning_level"] = row.get("reasoning_level", "unknown")
+                row["verification_status"] = "skipped"
+            else:
+                row["difficulty_label"] = "Invalid"
+                row["verification_status"] = "selector_invalid_or_empty"
+            labels.append(row)
+        write_jsonl(labels_path, labels)
+        valid = [r for r in labels if r.get("difficulty_label") != "Invalid"]
+        print(f"Labels: {len(valid)} valid / {len(labels)} total")
+        dist = Counter(r.get("difficulty_label") for r in labels)
+        print(f"Distribution: {dict(dist)}")
+    else:
+        verified = run_verifier(candidates, auditor, verification_path, args.resume)
+        if len(verified) != len(candidates):
+            print(f"WARNING: verified {len(verified)} of {len(candidates)} candidates")
 
     write_summary(
         args.output_dir, selector_path, verification_path, labels_path,
-        auditor, implicit, total_implicit_records, args.sample_mode, args.seed
+        auditor, records, total_available, args.sample_mode, args.seed,
+        skip_verification=args.skip_verification,
     )
 
 

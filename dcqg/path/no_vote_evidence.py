@@ -94,7 +94,37 @@ SELECTOR_REQUIREMENTS = """Requirements:
    - "complex": multi-step reasoning, aggregation, comparison, causal/temporal chaining, or tracking multiple entities is needed.
    - "unknown": use only when section_sufficient="no".
 7. If Context is insufficient, set section_sufficient="no" and selected_evidence_sentences=[].
-8. Return only valid JSON."""
+8. Return only valid JSON.
+
+Detailed guidance:
+
+A. Difficulty-aware selection strategy:
+   - If the answer is directly stated (or a close paraphrase) in ONE sentence: select only that sentence,
+     set answer_directly_found="yes", reasoning_level="direct". This is the Easy path.
+   - If the answer can be inferred from ONE sentence with a simple inference (e.g., "trembled" -> "frightened"):
+     select that sentence, set answer_directly_found="no", reasoning_level="simple". This is Medium Case 1.
+   - If the answer is directly stated but requires information from MULTIPLE sentences (e.g., listing items
+     across sentences, or a direct answer that also needs a temporal/constraint sentence):
+     select all necessary sentences, set answer_directly_found="yes", reasoning_level="simple". This is Medium Case 2.
+   - If the answer requires reasoning across MULTIPLE sentences and is NOT directly stated:
+     select all necessary sentences, set answer_directly_found="no", reasoning_level="complex". This is the Hard path.
+
+B. What counts as "directly found":
+   - Pronouns and coreference: if the answer uses a pronoun (e.g., "she") that clearly refers to a named
+     entity (e.g., "the princess") within the selected evidence, this counts as directly found.
+   - Close paraphrases: "held onto the fairy's gown" matches "had tight hold of the fairy's ash-grey gown".
+   - The answer does NOT need to be word-for-word identical to the text.
+   - If the answer requires ANY inference or combination beyond what one sentence states, it is NOT directly found.
+
+C. Dialogue handling:
+   - One quoted speech act (including its speech tag, e.g., "dialogue," said X) is ONE sentence = ONE evidence unit.
+   - If the answer is contained within dialogue, select the dialogue sentence as evidence.
+
+D. Minimal set discipline — do NOT include:
+   - Background or setting sentences unless removing them makes the answer ambiguous or unsupported.
+   - Sentences that merely provide context for understanding but are not needed to JUSTIFY the answer.
+   - A sentence is necessary only if, without it, the answer cannot be determined or would be ambiguous.
+   - When in doubt, prefer fewer sentences. Only add a sentence if removing it would break the answer."""
 
 
 BLIND_VERIFIER_FEW_SHOTS = """Few-shot examples:

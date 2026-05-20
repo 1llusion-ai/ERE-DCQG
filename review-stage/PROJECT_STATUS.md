@@ -1,7 +1,7 @@
 # DCQG Project Status
 
-**Last updated:** 2026-05-19
-**Status:** Evidence audit pipeline (Stage A) complete on 2166 implicit train items. No-vote labeling pilots done (100, 500 items). CrossQG eval with story-matched selection smoke-tested. Legacy MAVEN-ERE code and outputs cleaned up. DeBERTa-v3-base two-head classifier training scaffold and local virtual environment smoke tests are now in place. Next: finish human annotation, prepare merged classifier labels, then run full classifier CV on GPU/server.
+**Last updated:** 2026-05-20
+**Status:** Full-scale annotation pipeline ready. Explicit labels (533 valid, 2 per story) exported to Label Studio for human annotation. Implicit full run (2166 train) has 1141 records being rerun with fixed sentence splitter. Sentence splitter upgraded with dialogue-aware splitting and quoted-name fix. Chinese translation pipeline operational. Next: complete implicit rerun, merge implicit+explicit, begin human annotation in Label Studio.
 
 **Maintenance rule:** Update this file whenever path sampling/filtering, question generation, question filtering, evaluation, baselines, or main experiment outputs change. Future diagnosis must start from trace logs and JSONL examples, not from aggregate numbers alone.
 
@@ -1316,3 +1316,89 @@ Result: completed 2-fold, 1-epoch smoke training with
 - The classifier implementation and environment are now runnable locally.
 - Full DeBERTa-v3-base training should still be treated as a GPU/server job
   because CPU training is slow, but the code path has been verified locally.
+
+---
+
+## 28. Full-Scale Annotation Pipeline (2026-05-20)
+
+**Goal:** Prepare 2500-3000 labeled records for classifier training, split by
+story name using the original FairytaleQA train/val/test splits.
+
+### 28.1 Sentence Splitter Upgrade
+
+**Problem:** Original splitter treated quoted names (e.g., `" hark ! "`) as
+dialogue sentences, creating fragmented evidence units. Also lacked
+dialogue-aware splitting for interrupted speech.
+
+**Fix in `dcqg/utils/text.py`:**
+- Added `_is_speech_tag()`, `_find_dialogue_spans()`, `_build_dialogue_units()`
+  for dialogue-aware splitting.
+- One complete quoted speech act = one evidence unit.
+- Interrupted dialogue (`"dialogue," said X, "continuation"`) merged into one
+  sentence when the tag ends with a comma.
+- Post-processing step merges short quoted fragments back into their parent
+  sentence (fixes 14 "hark"-type cases across the dataset).
+
+**Validation:** 14 cases found and fixed. All 10580 records re-split and saved
+to `data/sentences/all_story_sentences.jsonl`.
+
+### 28.2 Enhanced Selector Standards
+
+**Change in `dcqg/path/no_vote_evidence.py`:**
+- Added detailed guidance sections A-D to `SELECTOR_REQUIREMENTS`:
+  - A: Difficulty-aware selection strategy (Easy/Medium/Hard paths)
+  - B: What counts as "directly found" (pronouns, paraphrases OK)
+  - C: Dialogue handling (one quote = one evidence unit)
+  - D: Minimal set discipline (no background sentences unless necessary)
+
+### 28.3 Explicit Labels Run
+
+- Script: `scripts/run_evidence_no_vote_pilot.py --record_type explicit --per_story_limit 2 --split all --skip_verification`
+- Input: 7880 explicit records, sampled 2 per story → 556 records
+- Output: 533 valid labels (Easy 513, Medium 15, Hard 5, Invalid 23)
+- Run dir: `outputs/runs/explicit_all_2perstory/`
+- Saved to: `data/explicit/labels.jsonl`, `data/explicit/labels_zh.jsonl`
+
+### 28.4 Chinese Translation Pipeline
+
+**New script:** `scripts/translate_evidence_labels.py`
+- Reads selector output JSONL, builds review records with numbered sentences
+  and evidence highlighting.
+- Translates to Chinese via LLM API (default DeepSeek-V3).
+- Supports `--resume` for incremental translation.
+- Outputs JSONL with bilingual fields: question/answer (en+zh), full_context
+  (en+zh), evidence_context (en+zh), difficulty_hint_zh.
+
+**New script:** `scripts/export_ls_tasks_from_jsonl.py`
+- Converts translated JSONL to Label Studio `{"data": {...}}` task format.
+- Extracts selected evidence sentences by ID (not ★ markers).
+- Generates `model_suggestion` summary in Chinese for annotators.
+
+### 28.5 Label Studio Annotation Setup
+
+- Template: `label_studio/evidence_review_config.xml`
+- Layout: 核心定义 → 模型建议 → Full Context + QA → 中文上下文 → 中文QA → 证据句 → 人工标注
+- Annotation fields: sentence split validity, QA validity, difficulty label,
+  answer directly found, evidence sentence IDs, notes.
+- All hotkeys disabled per user request.
+
+### 28.6 Implicit Rerun Status
+
+- Previous full run: `outputs/runs/no_vote_full_implicit_storysplit_qwen3_32b_think_fewshot_v2/`
+  (2166 train implicit, 1968 valid, used old splitter)
+- After splitter upgrade: 1141/2166 records have different sentence splits.
+- Rerun in progress: `outputs/runs/implicit_changed_split/` (1141 records)
+- Remaining: 534 implicit records from val+test splits (not yet run)
+- Merge plan: old unchanged 1025 + rerun 1141 + new 534 + explicit 533 ≈ 3233 total
+
+### 28.7 Data Directory Structure
+
+```text
+data/
+├── explicit/
+│   ├── labels.jsonl          # 556 raw selector output
+│   ├── labels_zh.jsonl       # 533 valid translated
+│   └── ls_tasks.json         # 533 Label Studio tasks
+└── sentences/
+    └── all_story_sentences.jsonl  # 10580 records, all splits
+```

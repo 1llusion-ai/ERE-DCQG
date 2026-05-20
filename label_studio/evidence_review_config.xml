@@ -31,34 +31,35 @@
   </View>
 
   <View className="ls-block">
-    <Header value="完整上下文与问答"/>
-    <Text name="context" value="$full_context_qa" className="ls-main-text"/>
+    <Header value="Full Context + QA"/>
+    <Text name="qa_en" value="Q: $question&#10;A: $answer" className="ls-main-text"/>
+    <Text name="context" value="$full_context" className="ls-main-text"/>
   </View>
 
   <View className="ls-block">
-    <Header value="完整上下文中文辅助"/>
+    <Header value="中文完整上下文"/>
     <Text name="full_context_zh" value="$full_context_zh" className="ls-main-text"/>
+  </View>
+
+  <View className="ls-block">
+    <Header value="中文QA"/>
+    <Text name="qa_zh" value="$qa_zh" className="ls-main-text"/>
   </View>
 
   <View className="ls-block">
     <Header value="模型建议证据句"/>
     <Text name="evidence_context" value="$evidence_context" className="ls-main-text"/>
-  </View>
-
-  <View className="ls-block">
-    <Header value="中文辅助信息"/>
     <Text name="evidence_context_zh" value="$evidence_context_zh" className="ls-main-text"/>
-    <Text name="qa_zh" value="$qa_zh" className="ls-main-text"/>
   </View>
 
   <View className="ls-block">
     <Header value="人工标注"/>
 
     <Header value="0. 句子切分是否基本正确？"/>
-    <Choices name="human_sentence_split_ok" toName="context" choice="single" required="true" showInLine="true">
-      <Choice value="yes"/>
-      <Choice value="no"/>
-      <Choice value="unclear"/>
+    <Choices name="human_sentence_split_ok" toName="context" choice="single" required="true" showInLine="true" hotkey="false">
+      <Choice value="yes" hotkey=""/>
+      <Choice value="no" hotkey=""/>
+      <Choice value="unclear" hotkey=""/>
     </Choices>
 
     <Header value="如果分句有误，请记录问题和建议修正"/>
@@ -71,27 +72,27 @@
 
     <View visibleWhen="choice-selected" whenTagName="human_sentence_split_ok" whenChoiceValue="yes">
       <Header value="1. 这个 QA 是否有效，并且能从给出的上下文中回答？"/>
-      <Choices name="human_valid" toName="context" choice="single" required="true" showInLine="true">
-        <Choice value="yes"/>
-        <Choice value="no"/>
-        <Choice value="unclear"/>
+      <Choices name="human_valid" toName="context" choice="single" required="true" showInLine="true" hotkey="false">
+        <Choice value="yes" hotkey=""/>
+        <Choice value="no" hotkey=""/>
+        <Choice value="unclear" hotkey=""/>
       </Choices>
 
       <View visibleWhen="choice-selected" whenTagName="human_valid" whenChoiceValue="yes">
         <Header value="2. 人工判断的难度标签是什么？"/>
-        <Choices name="human_difficulty_label" toName="context" choice="single" required="true" showInLine="true">
-          <Choice value="Easy"/>
-          <Choice value="Medium"/>
-          <Choice value="Hard"/>
-          <Choice value="Unclear"/>
-          <Choice value="Invalid"/>
+        <Choices name="human_difficulty_label" toName="context" choice="single" required="true" showInLine="true" hotkey="false">
+          <Choice value="Easy" hotkey=""/>
+          <Choice value="Medium" hotkey=""/>
+          <Choice value="Hard" hotkey=""/>
+          <Choice value="Unclear" hotkey=""/>
+          <Choice value="Invalid" hotkey=""/>
         </Choices>
 
         <Header value="3. 答案是否能在文本中直接找到？"/>
-        <Choices name="human_answer_directly_found" toName="context" choice="single" required="true" showInLine="true">
-          <Choice value="yes"/>
-          <Choice value="no"/>
-          <Choice value="unclear"/>
+        <Choices name="human_answer_directly_found" toName="context" choice="single" required="true" showInLine="true" hotkey="false">
+          <Choice value="yes" hotkey=""/>
+          <Choice value="no" hotkey=""/>
+          <Choice value="unclear" hotkey=""/>
         </Choices>
 
         <Header value="4. 哪些句子编号是必要证据？"/>

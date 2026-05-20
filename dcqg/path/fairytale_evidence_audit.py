@@ -17,13 +17,9 @@ from dcqg.utils.config import get_api_config
 
 
 def _split_sentences(text):
-    """Split text into sentences. Simple heuristic for narrative text."""
-    if not text:
-        return []
-    # Split on sentence-ending punctuation followed by space or end
-    parts = re.split(r'(?<=[.!?])\s+', text.strip())
-    # Filter empty
-    return [s.strip() for s in parts if s.strip()]
+    """Dialogue-aware sentence splitter. Delegates to dcqg.utils.text.split_sentences."""
+    from dcqg.utils.text import split_sentences
+    return split_sentences(text)
 
 
 def _build_evidence_prompt(qa_records):

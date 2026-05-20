@@ -33,11 +33,9 @@ VALID_CONFIDENCE = {"high", "medium", "low"}
 
 
 def _split_sentences(text):
-    """Split text into sentences. Same as fairytale_evidence_audit._split_sentences."""
-    if not text:
-        return []
-    parts = re.split(r'(?<=[.!?])\s+', text.strip())
-    return [s.strip() for s in parts if s.strip()]
+    """Dialogue-aware sentence splitter. Delegates to dcqg.utils.text.split_sentences."""
+    from dcqg.utils.text import split_sentences
+    return split_sentences(text)
 
 
 def _build_graph_prompt(candidate, difficulty="Hard"):
